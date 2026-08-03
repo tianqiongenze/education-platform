@@ -1,0 +1,30 @@
+# build artifacts
+target/
+dist/
+*.class
+*.jar
+*.war
+
+# go
+*.test
+*.out
+gateway-go/src/gateway-go
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# logs / runtime
+logs/
+*.log
+
+# secrets (never commit)
+*.pem
+*.key
+.env
+.env.local
+
+# superpowers SDD workspace (scratch, per-plan)
+.superpowers/sdd/
