@@ -325,6 +325,8 @@ class RwIntegrationTest {
 
 ## 6. 性能测试(Locust)
 
+> **ESP 血泪铁律**：禁止单节点 Locust 压测推断生产容量。ESP 曾用单节点 Locust 压测推断 5000 CCU 可行，实际多实例部署后因连接池/线程池/缓存竞争失败（3 倍差距）。所有 ≥1 万 CCU 场景必须使用 **Locust 分布式独立节点**（master + ≥3 worker，独立 K8s 命名空间），且 worker 节点资源与被测目标隔离。
+
 ### 6.1 SLO 对齐
 
 | SLO 编号 | 指标 | 目标 | 测试场景 |

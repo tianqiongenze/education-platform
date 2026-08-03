@@ -7,10 +7,11 @@
 > 关联：SRS `sp04-srs.md`、SAD `sp04-sad.md`；ADR-A01..A04；D-010/018/019/020
 
 ## 1. 设计范围与约定
-- 主语言 Python 3.11（D-009）。
-- Agent 编排：LangGraph 0.2+，checkpointer = RedisClusterSaver。
-- 模型网关：Kong AI 主，LiteLLM sidecar 起步。
-- 向量库：Milvus 2.4+（知识库层）、pgvector 0.7+（租户小集合）。
+- 主语言 Python 3.11（D-009）；Web 框架 Litestar 2.x + Granian 1.x（Rust ASGI，承接 ESP ADR-09 替代 FastAPI/Uvicorn）。
+- Agent 编排：LangGraph ≥1.0（对齐 ESP 验证版本 1.2.10，含 interrupt_before + Command(resume) HITL），checkpointer = RedisClusterSaver（修复 ESP RedisSaver 未实现遗留）。
+- 模型网关：Kong AI 主，LiteLLM sidecar 起步（D-018）。
+- 向量库：Milvus 2.5+（对齐 ESP 验证 2.5.0，知识库层）、pgvector 0.7+（租户小集合）。
+- Python pulsar-client：optional extra，需检查 arm64/cp311 wheel 可用性（ESP 踩坑：无 arm64 wheel）；`PULSAR_ENABLED=false` 降级开关必须实现。
 - 命名：Redis key 前缀 `zcode:aigraph:*`；Milvus collection `aigraph_*`。
 - 状态序列化：JSON + schema 版本号字段 `_v`。
 
@@ -108,8 +109,33 @@ if state.next == ("teacher_review",):
 - 重算触发：每 N 次练习或掌握度变化 >阈值。
 
 ### 2.5 数字人
-- 事件驱动：业务中台直播事件 → 文本 → TTS + 口型脚本 → 推流（直播平台）。
-- 脚本模板 ≥20 套；多语言切换 ≤2s。
+
+> **ESP 经验吸收**：ESP 仅做了 TTS + 口型脚本的事件驱动骨架，未引入实时渲染。EP 在此基础上补全渲染技术栈，使数字人可用于直播讲解、AI 答疑视频生成等场景。
+
+**技术栈**：
+| 层 | 技术 | 版本 | 说明 |
+|----|------|------|------|
+| 文本驱动 | LLM + TTS | / | 业务中台直播事件 → LLM 生成文本 → TTS 合成语音 |
+| 语音合成 | CosyVoice / Edge-TTS | 2.x | 中文情感 TTS，SSML 标注停顿/语速/情感；备选 Edge-TTS 低成本 |
+| 口型同步 | Wav2Lip / SadTalker | 1.x | 音频→口型帧映射；SadTalker 适合照片驱动（低成本虚拟教师） |
+| 实时渲染 | Unity + uOSC | 2022 LTS+ | 3D 数字人模型渲染，OSC 协议接收口型/表情参数（Live2D 备选） |
+| 推流 | SRS v7 + LL-HLS | 7.x | 渲染帧 → SRS RTMP 推流 → LL-HLS CDN 分发（对齐 D-021 直播两层混合） |
+| 模板引擎 | Jinja2 + JSON | / | 脚本模板 ≥20 套（讲解/答疑/公告/鼓励...），JSON 参数化 |
+
+**事件驱动流程**：
+```
+业务中台直播事件 → Agent(LLM 生成讲解文本)
+    → TTS(语音合成 + SSML 标注)
+    → Wav2Lip(口型帧生成)
+    → Unity(渲染 + 背景合成)
+    → SRS(RTMP 推流)
+    → CDN(LL-HLS 分发)
+    → 学员端(HLS 播放器)
+```
+
+- 脚本模板 ≥20 套；多语言切换 ≤2s（TTS 引擎热切换，不重建渲染管线）。
+- 降级：TTS 不可用时 → 预录音频 + 文字字幕；渲染不可用时 → PPT + 语音（退化为图文直播）。
+- 成本控制：非直播时段用照片驱动（SadTalker），直播时段用 3D 模型（Unity）。
 
 ## 3. 模型网关 API 设计
 

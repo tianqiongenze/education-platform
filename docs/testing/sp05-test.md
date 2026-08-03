@@ -291,6 +291,8 @@
 | R-TEST-02 | AI 网关 mock 不等于真实 LLM | mock 验证链路，真实 LLM 抽样验证 |
 | R-TEST-03 | 混沌测试可能影响共享环境 | 独立 chaos 命名空间，限定爆炸半径 |
 | R-TEST-04 | 1 万 CCU 压测需独立节点 | Locust 分布式独立部署 |
+| R-TEST-05 | **禁单节点 Locust 推断生产容量**（ESP 血泪：单节点 5000 CCU 推断 → 实际多实例 3 倍差距失败） | 所有 ≥1 万 CCU 场景强制 master + ≥3 worker 分布式，独立 K8s 命名空间，与被测目标资源隔离 |
+| R-TEST-06 | **Locust 脚本须用 RS256 JWT**（ESP 踩坑：HS256 伪造 token → 下游验签 100% 401） | CI 校验 locustfile 使用 RS256 + JWKS 获取 token，禁止 HS256 |
 | O-TEST-01 | 小程序自动化工具选型 | 评估 miniprogram-automator |
 
 ---

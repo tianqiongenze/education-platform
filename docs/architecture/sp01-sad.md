@@ -89,12 +89,15 @@
 | 基础设施 | 复用方式 | 技术中台组件 |
 |---------|---------|------------|
 | K8s 1.28+ | Deployment/HPA/PDB | 所有组件 |
-| TiDB 7.x | 读写分离目标 | ep-rw-java |
-| Redis Cluster 7.x | L2 缓存/会话/路由表/JWKS | ep-cache/网关/CellRouter |
-| Pulsar 3.3.x | 事件总线 | ep-cache 广播/EDA |
-| Nacos 2.x | 配置/服务发现 | CellRouter/网关/Sentinel |
-| Loki/Prom/Tempo | 可观测后端 | OTel SDK |
-| Sentinel 1.8+ | 限流降级 | 网关+服务双层 |
+| TiDB 8.5 LTS | 读写分离目标(对齐 ESP v8.5.7 验证) | ep-rw-java |
+| Redis Cluster 7.x | L2 缓存/会话/路由表/JWKS(真集群 3主3从→30节点) | ep-cache/网关/CellRouter |
+| Pulsar 3.3.x | 事件总线(承接 ESP ADR-02, 不用 Kafka) | ep-cache 广播/EDA |
+| Nacos 2.4.3 | 配置/服务发现(pin ESP 验证版, 不升 v3) | CellRouter/网关/Sentinel |
+| Dubbo 3.3.6 | Triple RPC(契约先行, pin ESP 验证版) | 服务间 RPC |
+| Loki/Prom/Tempo | 可观测后端(承接 ESP 双层 Collector) | OTel SDK |
+| Sentinel 1.8+ | 限流降级(规则走 Nacos 分布式下发, 禁本地内存) | 网关+服务双层 |
+| Spring Cloud | 2025.1.2 + SCA 2025.1.0.0 | BFF/服务治理 |
+| Litestar+Granian | Python AI 服务(承接 ESP ADR-09 Rust ASGI) | AI 中台 |
 
 ---
 
@@ -277,6 +280,42 @@
 | **依据** | ESP 架构评分与重构方向 + EP-TOGAF §6.6 |
 | **状态** | Accepted |
 | **关联需求** | NFR-A-01 / NFR-M-03 |
+
+### 3.6 ADR-T06 不引入 Seata，分布式一致性由幂等键 + 乐观锁 + Pulsar at-least-once 保证(ESP 踩坑)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 引入 Seata AT 模式后，SCA 2025.1.0.0 → spring-boot-webclient:4.0.0 → CodecsAutoConfiguration 与 SB3.5.16 bean 冲突，需 `allow-bean-definition-overriding=true` 绕过；Seata 2.5.0+ 升级受阻（需 jdk17 variant），与当前 SB 4.0.7/Jetty 17 体系不兼容。Seata 全局锁在高并发写场景成为吞吐瓶颈。 |
+| **决策** | **不引入 Seata**。分布式一致性通过以下组合保证：<br>① **幂等键**：写请求携带 client-side UUID，Redis SETNX + TiDB 唯一索引双写去重（ADR-T07）；<br>② **乐观锁**：领域聚合根 `@Version` 字段，CAS 更新，冲突重试 ≤3 次；<br>③ **Pulsar at-least-once + 幂等消费者**：事件 `event_id` 雪花 ID 去重，消费者维护 24h 已处理集合（Redis Bitmap）；<br>④ **Saga 编排**：跨服务长事务用 Pulsar 事件 choreography（非 Seata TCC/Saga），补偿事件显式定义。 |
+| **理由** | Seata AT 的全局锁在 100 万 CCU 场景下是单点瓶颈；SCA bean 冲突是 Spring 生态已知问题，override 仅是 workaround；Pulsar at-least-once + 幂等消费者已能覆盖 99.99% 的一致性需求，且无侵入式代理；乐观锁对领域模型友好（DDD 聚合根天然支持 Version）。 |
+| **实现** | `IdempotentInterceptor`（Java）/ `idempotency_middleware`（Python Litestar）/ `IdempotencyFilter`（Go）；`@Version` JPA 注解；Pulsar consumer `dedup_window=24h`；Saga 事件定义在 `EventTopics.java`。 |
+| **依据** | ESP ADR-11（Seata SCA bean 冲突踩坑）+ EP-TOGAF §6.1 中间件选型 |
+| **状态** | Accepted |
+| **关联需求** | NFR-A-01 / NFR-S-01..03 |
+
+### 3.7 ADR-T07 网关选 Spring Cloud Gateway 而非 Netty 手写(ESP 验证)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 曾考虑 Netty 手写网关以追求极致性能，但发现 Filter 链（鉴权/限流/灰度/trace/CellRouter）手写维护成本高，且 SCG 底层即 Reactor Netty，性能差异 <5%，可接受。 |
+| **决策** | API 网关使用 **Spring Cloud Gateway 2025.1.2**（基于 Reactor Netty），不手写 Netty。WS/实时长连接网关使用 **Go 1.25** 独立部署（SCG 不擅长长连接）。 |
+| **理由** | SCG 的 GlobalFilter + Predicate 机制成熟，Filter 链可组合；CellRouter、Sentinel、JWKS、Trace 均以 Filter 接入；Reactor Netty 已足够支撑 10 万 QPS/网关实例。Go WS 网关独立处理长连接（10 万 CCU/实例），避免 SCG 的 WebSocket backpressure 问题。 |
+| **实现** | `docs/design/sp01-sdd.md §5 API 网关/BFF`；Go WS 网关 `gateway-go/` |
+| **依据** | ESP 架构评分 + EP-TOGAF §6.1 |
+| **状态** | Accepted |
+| **关联需求** | FR-GW-01..05 / NFR-A-01 |
+
+### 3.8 ADR-T08 Sentinel 限流规则走 Nacos 分布式下发，禁本地内存(ESP 踩坑)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 早期 Sentinel 规则仅存本地内存，多实例规则不一致导致部分实例过载。后改为 Nacos 动态数据源，但曾因 Nacos 配置格式错误导致规则全量失效。 |
+| **决策** | Sentinel 1.8+ 规则**必须走 Nacos 分布式数据源**，禁止 `loadRules()` 本地内存加载。规则变更经 Nacos 控制台 → 全实例秒级生效。CI 校验 Sentinel 规则 JSON schema 合法性。 |
+| **理由** | 本地规则在多实例环境下不可维护；Nacos 数据源提供 watch 机制，规则变更秒级推送；但需 schema 校验防止格式错误导致全量失效（ESP 血泪）。 |
+| **实现** | `sentinel-datasource-nacos` 依赖；`@SentinelResource` 注解；Nacos dataId=`ep-sentinel-rules.json`；CI 步骤 `sentinel-rule-validator`。 |
+| **依据** | ESP 踩坑记录 P-14 + EP-TOGAF §6.1 |
+| **状态** | Accepted |
+| **关联需求** | NFR-A-01 / NFR-S-04 |
 
 ---
 

@@ -701,9 +701,10 @@ com.ep.gateway
 ├── AuthFilter.java             // JWT 验签 + 头覆盖
 ├── TraceFilter.java            // W3C traceparent
 ├── GrayFilter.java             // 灰度分流
-├── SentinelGatewayFilter.java // 限流
+├── SentinelGatewayFilter.java // 限流(Nacos 分布式数据源, 禁本地内存 — ADR-T08/ESP 踩坑)
 ├── JwksVerifier.java           // JWKS 验签 + 缓存
 ├── JwtIssuer.java              // JWT 签发(登录后)
+├── IdempotentInterceptor.java  // 幂等键拦截器(UUID SETNX 去重 — ADR-T06 替代 Seata)
 └── GatewayConfig.java          // 路由配置(Nacos 监听)
 ```
 
@@ -797,6 +798,8 @@ com.ep.eda
 
 ### 7.2 事件信封
 
+> **ESP 踩坑铁律**：`user_id` 为**必传字段**，禁止默认 0 或省略。ESP 曾因 `writing.graded` 事件无 user_id（默认 0）导致 teacher-java 消费者无法回写 mastery，链路断裂。EP 所有领域事件必须包含 `user_id`（string 类型，跨语言统一，避免 ESP 的 String vs number ClassCastException）。
+
 ```json
 {
   "event_id": "snowflake-1234567890",
@@ -805,9 +808,24 @@ com.ep.eda
   "timestamp": "2026-08-03T10:00:00Z",
   "trace_id": "w3c-trace-id",
   "tenant_id": "it-backend",
+  "user_id": "123",
   "payload": { ... }
 }
 ```
+
+**字段约束**：
+| 字段 | 类型 | 必传 | 说明 |
+|------|------|------|------|
+| event_id | string | ✅ | 雪花 ID，消费者幂等去重 |
+| domain | string | ✅ | 领域(order/user/learning/...) |
+| action | string | ✅ | 动作(paid/graded/registered/...) |
+| timestamp | string(ISO-8601) | ✅ | 事件时间 |
+| trace_id | string | ✅ | W3C traceparent |
+| tenant_id | string | ✅ | 事业群标识 |
+| user_id | **string** | **✅ 必传** | ESP 教训：禁止默认 0；类型必须 string（避免跨语言 ClassCastException） |
+| payload | object | ✅ | 领域特定数据 |
+
+**CI 强制校验**：事件 schema 用 Avro/JSON Schema 注册到 Schema Registry，CI 流水线扫描所有事件类，缺失 user_id 字段 → 编译失败。
 
 ### 7.3 发布时序
 

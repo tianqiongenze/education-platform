@@ -73,7 +73,7 @@ SP-02 覆盖数据中台六大职责层：
 | C-07 | Avro+Schema Registry 强制，禁 JSON CDC | D-016 |
 
 ### 2.4 假设与依赖
-- 假设：TiDB 7.5+ 已部署并开启 TiCDC；S3/MinIO bucket 已创建；Kafka 3.x 集群可用；K8s 1.28+ + Flink K8s Operator 1.7+ 可用。
+- 假设：TiDB 8.5 LTS 已部署并开启 TiCDC(对齐 ESP v8.5.7 3-region Raft 验证)；S3/MinIO bucket 已创建；Kafka 3.x 集群可用(仅 CDC 缓冲)；K8s 1.28+ + Flink K8s Operator 1.7+ 可用。
 - 依赖：SP-01 技术中台提供 Kafka/Pulsar/可观测；业务中台 SP-03 提供领域表（订单/用户/课程）；AI 中台 SP-04 消费 Feature Store。
 
 ---
