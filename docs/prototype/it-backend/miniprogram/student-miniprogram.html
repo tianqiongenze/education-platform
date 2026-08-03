@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>IT后端学院 - 小程序原型</title>
+<style>
+:root{
+  --wx-green:#07c160; --wx-bg:#ededed; --wx-card:#fff;
+  --text:#1a1a1a; --text2:#888; --text3:#5c5c5c;
+  --primary:#1f6feb; --danger:#fa5151; --warning:#ffc300; --orange:#ff976a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:var(--wx-bg);color:var(--text);font-size:14px;line-height:1.5;max-width:375px;margin:0 auto;min-height:100vh;position:relative}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+/* 微信小程序状态栏胶囊 */
+.wx-bar{height:44px;background:var(--wx-card);display:flex;align-items:center;justify-content:space-between;padding:0 16px;position:sticky;top:0;z-index:100;border-bottom:1px solid #eee}
+.wx-bar .title{font-size:16px;font-weight:600;flex:1;text-align:center}
+.wx-capsule{display:flex;align-items:center;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden}
+.wx-capsule .btn{width:40px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#333}
+.wx-capsule .divider{width:1px;height:14px;background:#e0e0e0}
+/* pages */
+.page{display:none;padding-bottom:56px;min-height:100vh}
+.page.active{display:block}
+/* 搜索 */
+.wx-search{background:var(--wx-card);padding:8px 16px;display:flex;align-items:center;gap:8px}
+.wx-search .box{flex:1;background:var(--wx-bg);border-radius:16px;padding:7px 14px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px}
+/* 轮播 */
+.swiper{margin:10px 12px;border-radius:10px;overflow:hidden;height:130px;background:linear-gradient(135deg,#1f6feb,#7c5cfc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600;position:relative}
+.swiper .dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px}
+.swiper .dots span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.5)}
+.swiper .dots span.active{background:#fff;width:14px;border-radius:3px}
+/* 宫格导航 */
+.grid-nav{background:var(--wx-card);margin:10px 12px;border-radius:10px;padding:14px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid-nav .item{text-align:center}
+.grid-nav .item .icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 4px}
+.grid-nav .item .t{font-size:11px;color:var(--text3)}
+/* 卡片标题 */
+.card-title{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px}
+.card-title h3{font-size:15px;font-weight:600}
+.card-title .more{font-size:12px;color:var(--text2)}
+/* 课程卡片 */
+.wx-course{background:var(--wx-card);margin:0 12px 8px;border-radius:10px;overflow:hidden;display:flex;padding:10px;gap:10px}
+.wx-course .cover{width:90px;height:60px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0}
+.wx-course .body{flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.wx-course .body .t{font-size:14px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wx-course .body .d{font-size:11px;color:var(--text2)}
+.wx-course .body .price{color:var(--danger);font-weight:600}
+.wx-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;margin-right:3px}
+.wx-tag.live{background:#fff0f0;color:var(--danger)}
+.wx-tag.hot{background:#fff7e6;color:var(--warning)}
+/* 横向滚动 */
+.scroll-x{display:flex;gap:10px;overflow-x:auto;padding:0 12px 8px;scrollbar-width:none}
+.scroll-x::-webkit-scrollbar{display:none}
+.scroll-x .item{min-width:120px;background:var(--wx-card);border-radius:10px;overflow:hidden;flex-shrink:0}
+.scroll-x .item .cover{height:70px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px}
+.scroll-x .item .body{padding:8px}
+.scroll-x .item .body .t{font-size:12px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px}
+.scroll-x .item .body .d{font-size:10px;color:var(--text2)}
+/* 课程详情封面 */
+.detail-cover{height:180px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:34px;font-weight:700}
+.detail-info{background:var(--wx-card);padding:14px 16px}
+.detail-info .t{font-size:17px;font-weight:600;margin-bottom:8px}
+.detail-info .price{font-size:20px;color:var(--danger);font-weight:700}
+.detail-info .meta{font-size:12px;color:var(--text2);margin-top:4px}
+/* tab */
+.wx-tabs{display:flex;background:var(--wx-card);border-bottom:1px solid #eee;position:sticky;top:44px;z-index:99}
+.wx-tabs .tab{flex:1;text-align:center;padding:12px;font-size:14px;color:var(--text2);position:relative}
+.wx-tabs .tab.active{color:var(--wx-green);font-weight:600}
+.wx-tabs .tab.active::after{content:"";position:absolute;bottom:0;left:35%;right:35%;height:2px;background:var(--wx-green);border-radius:1px}
+/* 章节列表 */
+.wx-chapter{background:var(--wx-card);padding:14px 16px;border-bottom:1px solid #f5f5f5;display:flex;gap:10px;align-items:center}
+.wx-chapter .num{width:24px;height:24px;border-radius:50%;background:var(--wx-bg);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text2);flex-shrink:0}
+.wx-chapter.active .num{background:var(--wx-green);color:#fff}
+.wx-chapter .info{flex:1}
+.wx-chapter .info .t{font-size:14px}
+.wx-chapter .info .d{font-size:11px;color:var(--text2)}
+.wx-chapter .status{font-size:11px;color:var(--wx-green)}
+/* 视频播放 */
+.wx-video{background:#000;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;position:relative}
+.wx-video .play{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff}
+.wx-video .bar{position:absolute;bottom:0;left:0;right:0;padding:8px 12px;background:linear-gradient(transparent,rgba(0,0,0,.7));display:flex;align-items:center;gap:8px;color:#fff;font-size:11px}
+.wx-video .progress{flex:1;height:2px;background:rgba(255,255,255,.3);border-radius:1px}
+.wx-video .progress .p{height:100%;background:var(--wx-green);border-radius:1px;width:48%}
+/* 我的 */
+.wx-profile-head{background:var(--wx-card);padding:20px 16px;display:flex;align-items:center;gap:14px}
+.wx-profile-head .avatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1f6feb,#7c5cfc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700}
+.wx-profile-head .info .n{font-size:17px;font-weight:600}
+.wx-profile-head .info .id{font-size:12px;color:var(--text2);margin-top:2px}
+.wx-stat-card{background:var(--wx-card);margin:10px 12px;border-radius:10px;padding:14px;display:flex}
+.wx-stat-card .s{flex:1;text-align:center}
+.wx-stat-card .s .v{font-size:18px;font-weight:700;color:var(--wx-green)}
+.wx-stat-card .s .l{font-size:11px;color:var(--text2);margin-top:2px}
+.wx-cell{background:var(--wx-card);margin:0 12px 10px;border-radius:10px;overflow:hidden}
+.wx-cell-item{padding:13px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f5f5f5}
+.wx-cell-item:last-child{border-bottom:none}
+.wx-cell-item .icon{width:22px;text-align:center;font-size:17px}
+.wx-cell-item .t{flex:1;font-size:14px}
+.wx-cell-item .arrow{color:#ccc;font-size:14px}
+.wx-cell-item .badge{background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px}
+/* 底部 tabBar */
+.wx-tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:375px;max-width:100%;background:var(--wx-card);border-top:1px solid #e0e0e0;display:flex;height:52px;z-index:100}
+.wx-tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--text2);font-size:10px}
+.wx-tabbar .tab.active{color:var(--wx-green)}
+.wx-tabbar .tab .icon{font-size:20px}
+/* 微信按钮 */
+.wx-btn-primary{background:var(--wx-green);color:#fff;border-radius:20px;padding:10px;font-size:14px;font-weight:600;width:100%}
+.wx-btn-outline{background:var(--wx-card);color:var(--wx-green);border:1px solid var(--wx-green);border-radius:20px;padding:10px;font-size:14px;width:100%}
+/* 弹窗模拟 */
+.wx-modal-mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;z-index:200}
+.wx-modal-mask.show{display:flex;align-items:center;justify-content:center}
+.wx-modal{background:#fff;border-radius:12px;width:80%;max-width:300px;overflow:hidden}
+.wx-modal .h{padding:16px;font-size:16px;font-weight:600;text-align:center;border-bottom:1px solid #eee}
+.wx-modal .b{padding:20px 16px;font-size:13px;color:var(--text3);text-align:center;line-height:1.8}
+.wx-modal .f{display:flex;border-top:1px solid #eee}
+.wx-modal .f button{flex:1;padding:12px;font-size:15px}
+.wx-modal .f .cancel{color:var(--text2);border-right:1px solid #eee}
+.wx-modal .f .ok{color:var(--wx-green);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- 首页 -->
+<section class="page active" id="page-home">
+  <div class="wx-bar">
+    <span style="width:52px"></span>
+    <span class="title">IT后端学院</span>
+    <div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div>
+  </div>
+  <div class="wx-search"><div class="box">🔍 搜索课程 / 讲师</div></div>
+  <div class="swiper">
+    Java高并发编程实战 · 新课上线
+    <div class="dots"><span class="active"></span><span></span><span></span></div>
+  </div>
+  <div class="grid-nav">
+    <div class="item" onclick="showPage('courselist')"><div class="icon" style="background:#e8f3ff;color:#1f6feb">📚</div><div class="t">课程</div></div>
+    <div class="item" onclick="showPage('live')"><div class="icon" style="background:#fff0f0;color:#fa5151">🔴</div><div class="t">直播</div></div>
+    <div class="item" onclick="showPage('video')"><div class="icon" style="background:#fff7e6;color:#fa9d3b">▶</div><div class="t">学习</div></div>
+    <div class="item"><div class="icon" style="background:#f0f5ff;color:#7c5cfc">📝</div><div class="t">作业</div></div>
+    <div class="item"><div class="icon" style="background:#e8fff0;color:#07c160">📋</div><div class="t">考试</div></div>
+    <div class="item"><div class="icon" style="background:#fff0f5;color:#fa5151">⭐</div><div class="t">收藏</div></div>
+    <div class="item"><div class="icon" style="background:#f5f0ff;color:#7c5cfc">🏆</div><div class="t">排行</div></div>
+    <div class="item"><div class="icon" style="background:#fff7e6;color:#fa9d3b">🎁</div><div class="t">福利</div></div>
+  </div>
+  <div class="card-title"><h3>🔴 直播预告</h3><span class="more">更多 ›</span></div>
+  <div class="scroll-x">
+    <div class="item" onclick="showPage('live')"><div class="cover" style="background:linear-gradient(135deg,#fa5151,#fa9d3b)">TiDB</div><div class="body"><div class="t">TiDB分布式事务深度</div><div class="d"><span class="wx-tag live">直播中</span>248人</div></div></div>
+    <div class="item"><div class="cover" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">K8s</div><div class="body"><div class="t">K8s Operator实战</div><div class="d">19:30开播</div></div></div>
+    <div class="item"><div class="cover" style="background:linear-gradient(135deg,#07c160,#1f6feb)">Flink</div><div class="body"><div class="t">Flink状态调优</div><div class="d">明日20:00</div></div></div>
+  </div>
+  <div class="card-title"><h3>🔥 精品课程</h3><span class="more" onclick="showPage('courselist')">全部 ›</span></div>
+  <div class="wx-course" onclick="showPage('coursedetail')">
+    <div class="cover" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">Java</div>
+    <div class="body"><div class="t">Java高并发编程实战</div><div><span class="wx-tag hot">热门</span><span class="d">张老师 · 42课时</span></div><div class="price">¥299</div></div>
+  </div>
+  <div class="wx-course" onclick="showPage('coursedetail')">
+    <div class="cover" style="background:linear-gradient(135deg,#07c160,#1f6feb)">K8s</div>
+    <div class="body"><div class="t">云原生与Kubernetes实战</div><div><span class="d">李老师 · 36课时</span></div><div class="price">¥259</div></div>
+  </div>
+  <div class="wx-course" onclick="showPage('coursedetail')">
+    <div class="cover" style="background:linear-gradient(135deg,#fa9d3b,#fa5151)">TiDB</div>
+    <div class="body"><div class="t">分布式数据库TiDB深度</div><div><span class="d">王老师 · 28课时</span></div><div class="price">¥199</div></div>
+  </div>
+  <div class="wx-course" onclick="showPage('coursedetail')">
+    <div class="cover" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">DDD</div>
+    <div class="body"><div class="t">领域驱动设计落地</div><div><span class="d">赵老师 · 24课时</span></div><div class="price">¥179</div></div>
+  </div>
+</section>
+
+<!-- 课程列表 -->
+<section class="page" id="page-courselist">
+  <div class="wx-bar"><span style="width:52px;color:#1f6feb;font-size:20px" onclick="showPage('home')">‹</span><span class="title">全部课程</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div style="background:var(--wx-card);padding:10px 16px;display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid #eee">
+    <span style="white-space:nowrap;padding:4px 14px;background:var(--wx-green);color:#fff;border-radius:14px;font-size:12px">全部</span>
+    <span style="white-space:nowrap;padding:4px 14px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">Java</span>
+    <span style="white-space:nowrap;padding:4px 14px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">分布式</span>
+    <span style="white-space:nowrap;padding:4px 14px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">数据库</span>
+    <span style="white-space:nowrap;padding:4px 14px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">云原生</span>
+  </div>
+  <div class="wx-course" onclick="showPage('coursedetail')"><div class="cover" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">Java</div><div class="body"><div class="t">Java高并发编程实战</div><div><span class="d">张老师 · 42课时 · 4.9分</span></div><div class="price">¥299</div></div></div>
+  <div class="wx-course" onclick="showPage('coursedetail')"><div class="cover" style="background:linear-gradient(135deg,#07c160,#1f6feb)">K8s</div><div class="body"><div class="t">云原生与K8s实战</div><div><span class="d">李老师 · 36课时 · 4.8分</span></div><div class="price">¥259</div></div></div>
+  <div class="wx-course" onclick="showPage('coursedetail')"><div class="cover" style="background:linear-gradient(135deg,#fa9d3b,#fa5151)">TiDB</div><div class="body"><div class="t">分布式数据库TiDB</div><div><span class="d">王老师 · 28课时 · 5.0分</span></div><div class="price">¥199</div></div></div>
+  <div class="wx-course" onclick="showPage('coursedetail')"><div class="cover" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">Go</div><div class="body"><div class="t">Go高性能后端开发</div><div><span class="d">陈老师 · 32课时 · 4.7分</span></div><div class="price">¥219</div></div></div>
+</section>
+
+<!-- 课程详情 -->
+<section class="page" id="page-coursedetail">
+  <div class="wx-bar" style="background:rgba(0,0,0,.3);color:#fff;border:none;position:absolute;width:100%;z-index:10"><span style="width:52px;font-size:20px;color:#fff" onclick="showPage('courselist')">‹</span><span class="title" style="color:#fff">课程详情</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="detail-cover" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc);margin-top:0">Java</div>
+  <div class="detail-info">
+    <div class="t">Java高并发编程实战</div>
+    <div class="meta">张老师 · 42课时 · 4.9分 · 1.2万人学</div>
+    <div class="price" style="margin-top:8px">¥299 <span style="font-size:13px;color:var(--text2);text-decoration:line-through;font-weight:400">¥499</span></div>
+  </div>
+  <div class="wx-tabs">
+    <div class="tab active">详情</div>
+    <div class="tab">目录</div>
+    <div class="tab">评价</div>
+  </div>
+  <div style="background:var(--wx-card);padding:14px 16px">
+    <p style="font-size:13px;color:var(--text3);line-height:1.8">从JMM到Disruptor高并发实战,覆盖虚拟线程Loom、CAS、线程池调优。每章配套编程作业+自动评测,直通大厂面试。</p>
+  </div>
+  <div style="background:var(--wx-card)">
+    <div class="wx-chapter" onclick="showPage('video')"><div class="num">1</div><div class="info"><div class="t">并发基础与线程模型</div><div class="d">28:15</div></div><span class="status">已学</span></div>
+    <div class="wx-chapter" onclick="showPage('video')"><div class="num">2</div><div class="info"><div class="t">JMM 与 volatile</div><div class="d">32:40</div></div><span class="status">已学</span></div>
+    <div class="wx-chapter active" onclick="showPage('video')"><div class="num">3</div><div class="info"><div class="t">Disruptor 环形缓冲区</div><div class="d">36:20</div></div><span class="status">学习中</span></div>
+    <div class="wx-chapter"><div class="num">4</div><div class="info"><div class="t">CompletableFuture 异步</div><div class="d">29:50</div></div><span class="status">未学</span></div>
+    <div class="wx-chapter"><div class="num">5</div><div class="info"><div class="t">虚拟线程 Loom</div><div class="d">34:10</div></div><span class="status">未学</span></div>
+  </div>
+  <div style="padding:16px"><button class="wx-btn-primary" onclick="showPage('video')">继续学习</button></div>
+</section>
+
+<!-- 视频学习 -->
+<section class="page" id="page-video">
+  <div class="wx-bar"><span style="width:52px;font-size:20px;color:#1f6feb" onclick="showPage('coursedetail')">‹</span><span class="title">第3章 Disruptor</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="wx-video">
+    <div class="play">▶</div>
+    <div class="bar"><span>15:22</span><div class="progress"><div class="p"></div></div><span>36:20</span><span>1.0x</span></div>
+  </div>
+  <div style="background:var(--wx-card);padding:14px 16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Disruptor 环形缓冲区原理</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Java高并发编程 · 第3章 · 张老师</div>
+    <div style="display:flex;gap:16px;font-size:12px;color:var(--text2)">
+      <span>👁 1234</span><span>👍 89</span><span>💬 42</span><span>⭐ 收藏</span>
+    </div>
+  </div>
+  <div style="background:var(--wx-card);margin-top:8px;padding:14px 16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">章节列表</div>
+    <div class="wx-chapter" style="border-bottom:1px solid #f5f5f5;padding:10px 0"><div class="num">1</div><div class="info"><div class="t">并发基础</div><div class="d">28:15</div></div><span class="status">已学</span></div>
+    <div class="wx-chapter" style="border-bottom:1px solid #f5f5f5;padding:10px 0"><div class="num">2</div><div class="info"><div class="t">JMM</div><div class="d">32:40</div></div><span class="status">已学</span></div>
+    <div class="wx-chapter active" style="border-bottom:1px solid #f5f5f5;padding:10px 0"><div class="num">3</div><div class="info"><div class="t">Disruptor</div><div class="d">36:20</div></div><span class="status">播放中</span></div>
+    <div class="wx-chapter" style="padding:10px 0"><div class="num">4</div><div class="info"><div class="t">异步编排</div><div class="d">29:50</div></div><span class="status">未学</span></div>
+  </div>
+</section>
+
+<!-- 直播 -->
+<section class="page" id="page-live">
+  <div class="wx-bar" style="background:rgba(0,0,0,.3);color:#fff;border:none;position:absolute;width:100%;z-index:10"><span style="width:52px;font-size:20px;color:#fff" onclick="showPage('home')">‹</span><span class="title" style="color:#fff">直播中</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="wx-video" style="aspect-ratio:3/4;max-height:480px">
+    <div style="position:absolute;top:50px;left:12px;background:var(--danger);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#fff;animation:blink 1s infinite"></span>直播</div>
+    <div style="position:absolute;top:50px;right:12px;background:rgba(0,0,0,.5);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">👁 248</div>
+    <div style="color:#fff;font-size:13px;opacity:.8">王老师 · 1080p</div>
+    <div style="position:absolute;bottom:50px;left:0;right:0;padding:0 12px" id="live-danmaku">
+      <div style="color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)"><span style="color:#ffc300;font-weight:600">[教师]王老师:</span>TSO是全局时钟</div>
+      <div style="color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)"><span style="color:#7c5cfc;font-weight:600">学员A:</span>Percolator和TSO?</div>
+      <div style="color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)"><span style="color:#7c5cfc;font-weight:600">学员B:</span>延迟好低</div>
+    </div>
+    <div style="position:absolute;bottom:8px;left:12px;right:12px;display:flex;gap:8px">
+      <input style="flex:1;background:rgba(255,255,255,.2);border:none;border-radius:16px;padding:6px 12px;color:#fff;font-size:13px" placeholder="发弹幕..." id="live-input">
+      <button style="background:var(--wx-green);color:#fff;border-radius:16px;padding:6px 14px;font-size:13px" onclick="sendLive()">发送</button>
+    </div>
+  </div>
+  <div style="background:var(--wx-card);padding:14px 16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">TiDB分布式事务深度剖析</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:12px">深入Percolator模型,TSO授时、2PC提交、乐观/悲观切换。WebRTC互动延迟&lt;800ms。</div>
+    <button class="wx-btn-outline">预约回放</button>
+  </div>
+</section>
+
+<!-- 我的 -->
+<section class="page" id="page-profile">
+  <div class="wx-bar"><span style="width:52px"></span><span class="title">我的</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="wx-profile-head">
+    <div class="avatar">J</div>
+    <div class="info"><div class="n">学员J</div><div class="id">ID: 88290123</div></div>
+  </div>
+  <div class="wx-stat-card">
+    <div class="s"><div class="v">5</div><div class="l">课程</div></div>
+    <div class="s"><div class="v">87.5</div><div class="l">平均分</div></div>
+    <div class="s"><div class="v">42h</div><div class="l">本月时长</div></div>
+    <div class="s"><div class="v">23</div><div class="l">作业</div></div>
+  </div>
+  <div class="wx-cell">
+    <div class="wx-cell-item"><span class="icon">📚</span><span class="t">我的课程</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">📝</span><span class="t">我的作业</span><span class="badge">2</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">📋</span><span class="t">我的考试</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">⭐</span><span class="t">我的收藏</span><span class="arrow">›</span></div>
+  </div>
+  <div class="wx-cell">
+    <div class="wx-cell-item"><span class="icon">💳</span><span class="t">订单</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">🎫</span><span class="t">优惠券</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">🔔</span><span class="t">消息</span><span class="badge">3</span><span class="arrow">›</span></div>
+  </div>
+  <div class="wx-cell">
+    <div class="wx-cell-item"><span class="icon">📞</span><span class="t">联系客服</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">⚙</span><span class="t">设置</span><span class="arrow">›</span></div>
+  </div>
+  <div style="text-align:center;padding:16px;color:var(--text2);font-size:11px">SP-05 MVP v1.0 · 微信小程序端</div>
+</section>
+
+<!-- 底部 TabBar -->
+<nav class="wx-tabbar">
+  <div class="tab active" data-page="home" onclick="showPage('home')"><span class="icon">🏠</span>首页</div>
+  <div class="tab" data-page="courselist" onclick="showPage('courselist')"><span class="icon">📚</span>课程</div>
+  <div class="tab" data-page="video" onclick="showPage('video')"><span class="icon">▶</span>学习</div>
+  <div class="tab" data-page="profile" onclick="showPage('profile')"><span class="icon">👤</span>我的</div>
+</nav>
+
+<script>
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const target=document.getElementById('page-'+name);
+  if(target) target.classList.add('active');
+  window.scrollTo(0,0);
+  document.querySelectorAll('.wx-tabbar .tab').forEach(t=>{
+    t.classList.toggle('active',t.dataset.page===name);
+  });
+}
+function sendLive(){
+  const input=document.getElementById('live-input');
+  if(input.value.trim()){
+    const list=document.getElementById('live-danmaku');
+    const div=document.createElement('div');
+    div.style.cssText='color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)';
+    div.innerHTML='<span style="color:#07c160;font-weight:600">我:</span>'+input.value;
+    list.appendChild(div);
+    input.value='';
+  }
+}
+</script>
+</body>
+</html>

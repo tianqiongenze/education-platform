@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据中台管理控制台 - SP-02</title>
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#121829; --panel:#1a2138; --panel2:#222b45;
+  --border:#2d3656; --text:#e4e9f2; --muted:#8a93a8; --accent:#4f8cff;
+  --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --cyan:#06b6d4; --purple:#a855f7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+/* layout */
+.app{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;position:fixed;height:100vh;overflow-y:auto}
+.sidebar .logo{padding:12px 20px 20px;font-size:16px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.sidebar .logo span{color:var(--accent)}
+.nav-item{padding:10px 20px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:10px;border-left:3px solid transparent;font-size:13px}
+.nav-item:hover{background:var(--panel);color:var(--text)}
+.nav-item.active{background:var(--panel);color:var(--accent);border-left-color:var(--accent)}
+.nav-item .ico{width:16px;text-align:center}
+.main{margin-left:220px;flex:1;padding:24px 32px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.topbar h1{font-size:20px;font-weight:600}
+.topbar .meta{color:var(--muted);font-size:12px}
+.topbar .actions{display:flex;gap:8px}
+.btn{padding:6px 14px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:6px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+/* cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px}
+.kpi .label{color:var(--muted);font-size:12px;margin-bottom:8px}
+.kpi .val{font-size:24px;font-weight:600}
+.kpi .sub{font-size:11px;margin-top:6px}
+.up{color:var(--green)} .down{color:var(--red)} .warn{color:var(--amber)}
+/* panel */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;margin-bottom:24px}
+.panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.panel-head h2{font-size:14px;font-weight:600}
+.panel-body{padding:18px}
+/* table */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover{background:var(--panel2)}
+.tag{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;display:inline-block}
+.tag.green{background:rgba(34,197,94,.15);color:var(--green)}
+.tag.red{background:rgba(239,68,68,.15);color:var(--red)}
+.tag.amber{background:rgba(245,158,11,.15);color:var(--amber)}
+.tag.cyan{background:rgba(6,182,212,.15);color:var(--cyan)}
+.tag.purple{background:rgba(168,85,247,.15);color:var(--purple)}
+/* chart bars */
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:140px;padding:8px 0}
+.bar{flex:1;background:linear-gradient(180deg,var(--accent),rgba(79,140,255,.3));border-radius:4px 4px 0 0;position:relative;min-width:14px}
+.bar:hover::after{content:attr(data-v);position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text);white-space:nowrap}
+/* two col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+/* progress */
+.progress{height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:4px}
+.progress>div{height:100%;background:var(--accent);border-radius:3px}
+/* tabs */
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;cursor:pointer;color:var(--muted);font-size:13px;border-bottom:2px solid transparent}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text)}
+/* feature */
+.feat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.feat-row:last-child{border:none}
+.feat-name{font-weight:500}
+.feat-meta{color:var(--muted);font-size:11px}
+/* status dot */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)}
+/* hidden sections */
+.section{display:none}
+.section.active{display:block}
+/* scrollbar */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+/* alert */
+.alert-item{padding:10px 14px;border-left:3px solid var(--red);background:var(--panel2);border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px}
+.alert-item .t{color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="logo">数据中台 <span>SP-02</span></div>
+    <div class="nav-item active" data-nav="realtime"><span class="ico">📊</span>实时指标看板</div>
+    <div class="nav-item" data-nav="cdc"><span class="ico">🔄</span>CDC pipeline 监控</div>
+    <div class="nav-item" data-nav="iceberg"><span class="ico">🧊</span>Iceberg 表管理</div>
+    <div class="nav-item" data-nav="feature"><span class="ico">🧠</span>Feature Store 特征</div>
+    <div class="nav-item" data-nav="quality"><span class="ico">✅</span>数据质量监控</div>
+    <div class="nav-item" data-nav="alert"><span class="ico">🚨</span>告警中心</div>
+    <div class="nav-item" data-nav="ops"><span class="ico">⚙️</span>运维 Runbook</div>
+    <div style="padding:16px 20px;margin-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:11px">
+      <div>环境: <span style="color:var(--green)">prod</span></div>
+      <div>区域: 国内多活 (华北主)</div>
+      <div>版本: v1.0</div>
+    </div>
+  </div>
+  <div class="main">
+    <!-- 实时指标看板 -->
+    <div class="section active" id="realtime">
+      <div class="topbar">
+        <div><h1>实时指标看板</h1><div class="meta">Flink Job 状态 / 吞吐 / 延迟 · 数据更新于 <span id="now1"></span></div></div>
+        <div class="actions"><button class="btn">导出</button><button class="btn primary">刷新</button></div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">运行中 Flink Job</div><div class="val up">9</div><div class="sub up">全部健康</div></div>
+        <div class="kpi"><div class="label">总吞吐 (ev/s)</div><div class="val">86,420</div><div class="sub up">↑ 12.4% vs 1h前</div></div>
+        <div class="kpi"><div class="label">入湖延迟 P95</div><div class="val up">3m18s</div><div class="sub">SLO <5min ✓</div></div>
+        <div class="kpi"><div class="label">Checkpoint 失败率</div><div class="val up">0.02%</div><div class="sub">阈值 <1%</div></div>
+        <div class="kpi"><div class="label">Kafka 积压</div><div class="val">1,240</div><div class="sub warn">监控中</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Flink Job 实时状态</h2><span class="tag green">9/9 运行中</span></div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>Job ID</th><th>类型</th><th>状态</th><th>并行度</th><th>吞吐 (ev/s)</th><th>Checkpoint</th><th>最后 commit</th><th>操作</th></tr></thead>
+            <tbody id="jobTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><h2>近 12 小时吞吐趋势 (ev/s)</h2></div>
+          <div class="panel-body"><div class="bar-chart" id="throughputChart"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>入湖延迟分布 (P95, 秒)</h2></div>
+          <div class="panel-body"><div class="bar-chart" id="latencyChart"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>实时业务指标（分钟窗口）</h2></div>
+        <div class="panel-body">
+          <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="kpi"><div class="label">在线学习人数</div><div class="val" style="color:var(--cyan)">42,318</div></div>
+            <div class="kpi"><div class="label">视频完播率</div><div class="val">68.2%</div></div>
+            <div class="kpi"><div class="label">GMV (实时)</div><div class="val" style="color:var(--green)">¥1,284,930</div></div>
+            <div class="kpi"><div class="label">风控命中</div><div class="val" style="color:var(--amber)">37</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CDC pipeline 监控 -->
+    <div class="section" id="cdc">
+      <div class="topbar"><div><h1>CDC pipeline 监控</h1><div class="meta">TiDB → TiCDC → Kafka → Flink → Iceberg · ADR-D01</div></div>
+        <div class="actions"><button class="btn">新建 changefeed</button></div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">CDC changefeed</div><div class="val">12</div><div class="sub up">全部运行</div></div>
+        <div class="kpi"><div class="label">TiCDC lag</div><div class="val up">2.1s</div><div class="sub">阈值 <60s</div></div>
+        <div class="kpi"><div class="label">Avro schema 版本</div><div class="val">v38</div><div class="sub">Registry 在线</div></div>
+        <div class="kpi"><div class="label">分库分表合并</div><div class="val">1,024→1</div><div class="sub">order_group</div></div>
+        <div class="kpi"><div class="label">CDC 入湖 P95</div><div class="val up">3m18s</div><div class="sub">SLO <5min</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>CDC changefeed 列表</h2></div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>Changefeed</th><th>源表组</th><th>Kafka topic</th><th>同步延迟</th><th>数据量(今日)</th><th>Schema</th><th>状态</th></tr></thead>
+            <tbody id="cdcTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Schema 演化历史</h2></div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>时间</th><th>表</th><th>变更</th><th>兼容性</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr><td>2026-08-03 09:12</td><td>ods_order</td><td>ADD COLUMN coupon_id BIGINT</td><td><span class="tag green">BACKWARD</span></td><td><span class="tag green">已全量</span></td></tr>
+              <tr><td>2026-08-02 14:30</td><td>ods_learning_event</td><td>ADD COLUMN session_id STRING</td><td><span class="tag green">BACKWARD</span></td><td><span class="tag green">已全量</span></td></tr>
+              <tr><td>2026-08-01 10:05</td><td>ods_user</td><td>RENAME region TO region_code</td><td><span class="tag amber">需适配</span></td><td><span class="tag amber">灰度中(50%)</span></td></tr>
+              <tr><td>2026-07-30 16:22</td><td>ods_order</td><td>amount DECIMAL(10,2)→(12,2)</td><td><span class="tag red">拒绝</span></td><td><span class="tag red">已回滚</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Iceberg 表管理 -->
+    <div class="section" id="iceberg">
+      <div class="topbar"><div><h1>Iceberg 表管理</h1><div class="meta">湖仓一体 · ADR-D02 · catalog=JDBC</div></div>
+        <div class="actions"><button class="btn">建表</button><button class="btn primary">触发 compaction</button></div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">Iceberg 表总数</div><div class="val">48</div><div class="sub">ODS 12 / DWS 28 / FS 8</div></div>
+        <div class="kpi"><div class="label">存储总量</div><div class="val">1.7 PB</div><div class="sub">zstd 压缩后</div></div>
+        <div class="kpi"><div class="label">小文件数(待合并)</div><div class="val warn">312</div><div class="sub warn">>50 阈值告警</div></div>
+        <div class="kpi"><div class="label">Compaction 作业</div><div class="val up">运行中 3</div><div class="sub">链式 SinkV2</div></div>
+        <div class="kpi"><div class="label">Time-travel 快照</div><div class="val">1,840</div><div class="sub">保留 7 天</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Iceberg 表列表</h2>
+          <div><select class="btn"><option>全部层</option><option>ODS</option><option>DWS</option><option>Feature</option></select></div>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>表名</th><th>层</th><th>分区</th><th>文件数</th><th>大小</th><th>快照数</th><th>小文件</th><th>Compaction</th><th>状态</th></tr></thead>
+            <tbody id="icebergTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><h2>Compaction 任务</h2></div>
+          <div class="panel-body" style="padding:0">
+            <table>
+              <thead><tr><th>表</th><th>类型</th><th>进度</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>ods_learning_event</td><td>rewrite_data_files</td><td><div class="progress"><div style="width:68%"></div></div></td><td><span class="tag cyan">运行中 68%</span></td></tr>
+                <tr><td>ods_order</td><td>expire_snapshots</td><td><div class="progress"><div style="width:100%"></div></div></td><td><span class="tag green">完成</span></td></tr>
+                <tr><td>dws_trade_metric_min</td><td>remove_orphan_files</td><td><div class="progress"><div style="width:32%"></div></div></td><td><span class="tag cyan">运行中 32%</span></td></tr>
+                <tr><td>ods_user</td><td>convertEquality</td><td><div class="progress"><div style="width:90%"></div></div></td><td><span class="tag cyan">运行中 90%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>表健康度</h2></div>
+          <div class="panel-body" id="healthList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature Store -->
+    <div class="section" id="feature">
+      <div class="topbar"><div><h1>Feature Store 特征管理</h1><div class="meta">在线/离线一致性 · ADR-D03 · Hopsworks/Feast 模式</div></div>
+        <div class="actions"><button class="btn">定义特征</button><button class="btn primary">触发对账</button></div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">特征组</div><div class="val">14</div><div class="sub">learner_activity 等</div></div>
+        <div class="kpi"><div class="label">在线查询 P99</div><div class="val up">3.2ms</div><div class="sub">SLO <5ms</div></div>
+        <div class="kpi"><div class="label">在线/离线 skew</div><div class="val up">0.04%</div><div class="sub">SLO <0.1%</div></div>
+        <div class="kpi"><div class="label">特征查询 QPS</div><div class="val">38,210</div><div class="sub up">↑ 8%</div></div>
+        <div class="kpi"><div class="label">训练数据切片</div><div class="val">26</div><div class="sub">snapshot-id</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>特征组列表</h2></div>
+        <div class="panel-body">
+          <div class="feat-row"><div><div class="feat-name">learner_activity</div><div class="feat-meta">4 特征 · owner: ai-platform · 在线 Redis + 离线 Iceberg</div></div><div><span class="tag green">在线/离线一致</span> <span class="tag cyan">v3</span></div></div>
+          <div class="feat-row"><div><div class="feat-name">trader_profile</div><div class="feat-meta">6 特征 · owner: ai-platform · 30d/7d 窗口</div></div><div><span class="tag green">一致</span> <span class="tag cyan">v2</span></div></div>
+          <div class="feat-row"><div><div class="feat-name">live_engagement</div><div class="feat-meta">5 特征 · 直播互动特征 · Flink 在线</div></div><div><span class="tag amber">skew 0.12%</span> <span class="tag cyan">v1</span></div></div>
+          <div class="feat-row"><div><div class="feat-name">risk_behavior</div><div class="feat-meta">8 特征 · 风控行为特征</div></div><div><span class="tag green">一致</span> <span class="tag cyan">v5</span></div></div>
+          <div class="feat-row"><div><div class="feat-name">course_progress</div><div class="feat-meta">3 特征 · 课程进度</div></div><div><span class="tag green">一致</span> <span class="tag cyan">v2</span></div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>特征: learner_activity (展开)</h2></div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>特征名</th><th>类型</th><th>转换</th><th>窗口</th><th>在线 TTL</th><th>在线值示例</th><th>离线值示例</th><th>一致</th></tr></thead>
+            <tbody>
+              <tr><td>user_30d_login_count</td><td>INT</td><td>count(login)</td><td>30d</td><td>3600s</td><td>42</td><td>42</td><td><span class="tag green">✓</span></td></tr>
+              <tr><td>user_7d_video_complete_rate</td><td>DOUBLE</td><td>complete/count</td><td>7d</td><td>3600s</td><td>0.682</td><td>0.682</td><td><span class="tag green">✓</span></td></tr>
+              <tr><td>user_avg_session_duration_30d</td><td>DOUBLE</td><td>avg(session)</td><td>30d</td><td>3600s</td><td>1820.4</td><td>1821.1</td><td><span class="tag amber">0.04%</span></td></tr>
+              <tr><td>user_course_completion_30d</td><td>INT</td><td>count_distinct(course)</td><td>30d</td><td>3600s</td><td>7</td><td>7</td><td><span class="tag green">✓</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据质量 -->
+    <div class="section" id="quality">
+      <div class="topbar"><div><h1>数据质量监控</h1><div class="meta">Avro schema 校验 · 行数/空值/枚举漂移</div></div></div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">DQ 规则数</div><div class="val">186</div><div class="sub">覆盖 48 表</div></div>
+        <div class="kpi"><div class="label">今日通过率</div><div class="val up">99.6%</div><div class="sub up">2 warning 0 critical</div></div>
+        <div class="kpi"><div class="label">Avro schema 失败</div><div class="val up">0</div><div class="sub">今日</div></div>
+        <div class="kpi"><div class="label">行数漂移告警</div><div class="val warn">2</div><div class="sub">ods_learning_event ±22%</div></div>
+        <div class="kpi"><div class="label">枚举漂移</div><div class="val up">0</div><div class="sub">今日</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>DQ 校验结果（今日）</h2></div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead><tr><th>表</th><th>规则</th><th>期望</th><th>实际</th><th>结果</th><th>时间</th></tr></thead>
+            <tbody id="dqTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 告警中心 -->
+    <div class="section" id="alert">
+      <div class="topbar"><div><h1>告警中心</h1><div class="meta">Prometheus AlertManager</div></div></div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">活跃告警</div><div class="val warn">3</div></div>
+        <div class="kpi"><div class="label">严重</div><div class="val down">0</div></div>
+        <div class="kpi"><div class="label">警告</div><div class="val warn">3</div></div>
+        <div class="kpi"><div class="label">今日恢复</div><div class="val up">12</div></div>
+        <div class="kpi"><div class="label">MTTR</div><div class="val">4m20s</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>活跃告警</h2></div>
+        <div class="panel-body">
+          <div class="alert-item"><div><b>IcebergSmallFiles</b> · ods_learning_event 分区 dt=2026-08-02 小文件数 78 > 50</div><div class="t">2026-08-03 10:22 · severity=warning · 已触发 compaction</div></div>
+          <div class="alert-item" style="border-left-color:var(--amber)"><div><b>FeatureSkewHigh</b> · live_engagement 特征组 skew 0.12% > 0.1%</div><div class="t">2026-08-03 09:45 · severity=warning · 对账作业排查中</div></div>
+          <div class="alert-item" style="border-left-color:var(--amber)"><div><b>RowCountDrift</b> · ods_learning_event 行数较昨日 +22%（超 ±20%）</div><div class="t">2026-08-03 08:10 · severity=warning · 活动 promotion 预期</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 运维 Runbook -->
+    <div class="section" id="ops">
+      <div class="topbar"><div><h1>运维 Runbook</h1><div class="meta">SP-02-DEPLOY §10</div></div></div>
+      <div class="panel">
+        <div class="panel-head"><h2>常用 Runbook</h2></div>
+        <div class="panel-body">
+          <div class="feat-row"><div><div class="feat-name">10.1 Checkpoint 失败处理</div><div class="feat-meta">现象/排查/处理/验证 · RTO<60s</div></div><button class="btn">查看</button></div>
+          <div class="feat-row"><div><div class="feat-name">10.2 Compaction 调度</div><div class="feat-meta">小文件告警 → 手动触发 rewrite/expire/orphan</div></div><button class="btn">查看</button></div>
+          <div class="feat-row"><div><div class="feat-name">10.3 Schema Evolution 流程</div><div class="feat-meta">DDL → Registry → 灰度 → 全量/回滚</div></div><button class="btn">查看</button></div>
+          <div class="feat-row"><div><div class="feat-name">10.4 Flink Job savepoint 恢复</div><div class="feat-meta">savepoint → stop → start from savepoint</div></div><button class="btn">查看</button></div>
+          <div class="feat-row"><div><div class="feat-name">10.5 对象存储故障</div><div class="feat-meta">S3/MinIO 5xx → 切备份/stop 作业</div></div><button class="btn">查看</button></div>
+          <div class="feat-row"><div><div class="feat-name">10.6 Trino 大查询拖垮</div><div class="feat-meta">资源组限流 + kill + 物化视图</div></div><button class="btn">查看</button></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>容量水位</h2></div>
+        <div class="panel-body">
+          <div class="feat-row"><div><div class="feat-name">Flink TM 利用率</div><div class="feat-meta">M1 目标 10,000 ev/s · 当前 86,420 ev/s</div></div><div style="width:200px"><div class="progress"><div style="width:62%"></div></div></div></div>
+          <div class="feat-row"><div><div class="feat-name">Kafka 分区</div><div class="feat-meta">12/48 分区 · 当前吞吐 86k ev/s</div></div><div style="width:200px"><div class="progress"><div style="width:25%"></div></div></div></div>
+          <div class="feat-row"><div><div class="feat-name">Iceberg 存储</div><div class="feat-meta">1.7 PB · bucket 配额 5 PB</div></div><div style="width:200px"><div class="progress"><div style="width:34%"></div></div></div></div>
+          <div class="feat-row"><div><div class="feat-name">Trino Worker</div><div class="feat-meta">5 worker · 并发 18/50</div></div><div style="width:200px"><div class="progress"><div style="width:36%"></div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// 导航切换
+document.querySelectorAll('.nav-item').forEach(n=>{
+  n.onclick=()=>{
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+    n.classList.add('active');
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById(n.dataset.nav).classList.add('active');
+  };
+});
+
+document.getElementById('now1').textContent=new Date().toLocaleString('zh-CN');
+
+// Flink job 数据
+const jobs=[
+  ['J-CDC-ORDER','CDC pipeline','运行',32,'12,400','5min','10:21:08'],
+  ['J-CDC-LEARN','CDC pipeline','运行',64,'38,200','5min','10:21:12'],
+  ['J-CDC-USER','CDC pipeline','运行',8,'820','5min','10:20:55'],
+  ['J-RT-LEARN','Flink SQL','运行',16,'38,200','1min','10:21:30'],
+  ['J-RT-LIVE','Flink CEP','运行',16,'9,800','30s','10:21:45'],
+  ['J-RT-TRADE','Flink SQL','运行',16,'12,400','1min','10:21:28'],
+  ['J-RT-RISK','Flink CEP','运行',32,'38,200','10s','10:21:50'],
+  ['J-RT-BILL','Flink SQL','运行',8,'1,200','1min','10:21:20'],
+  ['J-FS-ONLINE','Feature online','运行',32,'38,200','30s','10:21:40']
+];
+document.getElementById('jobTable').innerHTML=jobs.map(j=>
+  `<tr><td>${j[0]}</td><td>${j[1]}</td><td><span class="dot g"></span><span class="tag green">${j[2]}</span></td><td>${j[3]}</td><td>${j[4]}</td><td>${j[5]}</td><td>${j[6]}</td><td><a href="#">详情</a></td></tr>`
+).join('');
+
+// CDC 表
+const cdc=[
+  ['cf_order','order_0000..1023','cdc.order_group','2.1s','1.2M 行','v38','运行'],
+  ['cf_learning','learning_event_*','cdc.learning_event_group','1.8s','4.8M 行','v22','运行'],
+  ['cf_user','user','cdc.user_group','0.9s','12K 行','v9','运行'],
+  ['cf_live','live_room/live_event','cdc.live_group','2.4s','320K 行','v15','运行'],
+  ['cf_billing','billing','cdc.billing_group','1.2s','88K 行','v7','运行'],
+  ['cf_course','course/chapter','cdc.course_group','0.6s','4K 行','v5','运行']
+];
+document.getElementById('cdcTable').innerHTML=cdc.map(c=>
+  `<tr><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td><span class="up">${c[3]}</span></td><td>${c[4]}</td><td>v${c[5]}</td><td><span class="dot g"></span><span class="tag green">${c[6]}</span></td></tr>`
+).join('');
+
+// Iceberg 表
+const ice=[
+  ['ods_order','ODS','days(created_at)','1,240','420 GB','18','12','运行中'],
+  ['ods_learning_event','ODS','days+hours','8,420','1.1 TB','32','78','待compaction'],
+  ['ods_user','ODS','days','180','12 GB','8','3','运行中'],
+  ['dws_learning_metric_min','DWS','days','4,200','88 GB','7','21','待compaction'],
+  ['dws_trade_metric_min','DWS','days','1,800','42 GB','7','9','运行中'],
+  ['dws_live_metric','DWS','days','920','18 GB','7','4','运行中'],
+  ['dws_risk_event','DWS','days','2,400','62 GB','7','11','待compaction'],
+  ['feature_offline.learner_activity','FS','days','620','8 GB','5','2','运行中']
+];
+document.getElementById('icebergTable').innerHTML=ice.map(t=>{
+  const small=t[6]>50;
+  return `<tr><td>${t[0]}</td><td><span class="tag ${t[1]==='ODS'?'cyan':t[1]==='DWS'?'purple':'green'}">${t[1]}</span></td><td>${t[2]}</td><td>${t[3]}</td><td>${t[4]}</td><td>${t[5]}</td><td class="${small?'warn':''}">${t[6]}</td><td>${small?'<span class="tag amber">待合并</span>':'<span class="tag green">健康</span>'}</td><td><span class="dot g"></span>${t[7]}</td></tr>`;
+}).join('');
+
+// 健康度
+const health=[
+  ['ods_order','良好','92'],
+  ['ods_learning_event','需关注','74'],
+  ['ods_user','良好','96'],
+  ['dws_learning_metric_min','良好','90'],
+  ['dws_trade_metric_min','良好','95']
+];
+document.getElementById('healthList').innerHTML=health.map(h=>
+  `<div class="feat-row"><div><div class="feat-name">${h[0]}</div><div class="feat-meta">健康度 ${h[2]}/100</div></div><div style="width:160px"><div class="progress"><div style="width:${h[2]}%;background:${h[2]>85?'var(--green)':h[2]>75?'var(--amber)':'var(--red)'}"></div></div></div></div>`
+).join('');
+
+// DQ 表
+const dq=[
+  ['ods_order','row_count','10k~10M','1,240,000','通过','10:00'],
+  ['ods_order','not_null(order_id)','0 nulls','0','通过','10:00'],
+  ['ods_order','status in set','4 values','4','通过','10:00'],
+  ['ods_learning_event','row_count drift','±20%','+22%','警告','10:00'],
+  ['ods_user','not_null(user_id)','0 nulls','0','通过','10:00'],
+  ['ods_learning_event','avro_schema','v22','v22','通过','10:05'],
+  ['dws_trade_metric_min','amount range','0~1e8','0~9.8e7','通过','10:10'],
+  ['feature_offline.learner_activity','skew<0.1%','0.04%','0.04%','通过','09:30']
+];
+document.getElementById('dqTable').innerHTML=dq.map(d=>
+  `<tr><td>${d[0]}</td><td>${d[1]}</td><td>${d[2]}</td><td>${d[3]}</td><td>${d[4]==='通过'?'<span class="tag green">通过</span>':'<span class="tag amber">警告</span>'}</td><td>${d[5]}</td></tr>`
+).join('');
+
+// 吞吐图
+function bars(id,data,color){
+  const max=Math.max(...data);
+  document.getElementById(id).innerHTML=data.map(v=>
+    `<div class="bar" data-v="${v.toLocaleString()}" style="height:${v/max*100}%;background:linear-gradient(180deg,${color},${color}33)"></div>`
+  ).join('');
+}
+bars('throughputChart',[42,38,45,52,61,68,74,80,86,82,79,86],'#4f8cff');
+bars('latencyChart',[210,198,225,240,195,188,202,198,178,185,205,198],'#22c55e');
+</script>
+</body>
+</html>

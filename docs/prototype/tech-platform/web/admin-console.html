@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SP-01 技术中台 · 管理控制台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0d1117; color: #c9d1d9; font-size: 14px; }
+a { color: #58a6ff; text-decoration: none; }
+
+/* 顶部导航 */
+.navbar { height: 56px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+.navbar .logo { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-right: 32px; }
+.navbar .logo span { color: #58a6ff; }
+.navbar .nav-links { display: flex; gap: 24px; flex: 1; }
+.navbar .nav-links a { color: #8b949e; font-size: 14px; padding: 8px 4px; }
+.navbar .nav-links a.active { color: #f0f6fc; border-bottom: 2px solid #f78166; }
+.navbar .nav-right { display: flex; align-items: center; gap: 16px; }
+.navbar .user { display: flex; align-items: center; gap: 8px; color: #8b949e; }
+.navbar .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #f78166, #bc8cff); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; }
+
+/* 布局 */
+.layout { display: flex; min-height: calc(100vh - 56px); }
+
+/* 侧边栏 */
+.sidebar { width: 220px; background: #161b22; border-right: 1px solid #30363d; padding: 16px 0; flex-shrink: 0; }
+.sidebar .group-title { font-size: 11px; color: #6e7681; text-transform: uppercase; padding: 8px 20px; letter-spacing: 0.5px; }
+.sidebar .menu-item { padding: 10px 20px; color: #8b949e; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 14px; border-left: 3px solid transparent; }
+.sidebar .menu-item:hover { background: #1f2937; color: #f0f6fc; }
+.sidebar .menu-item.active { background: #1f6feb22; color: #58a6ff; border-left-color: #58a6ff; }
+.sidebar .icon { width: 16px; text-align: center; }
+
+/* 主内容 */
+.main { flex: 1; padding: 24px; overflow-y: auto; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h1 { font-size: 22px; color: #f0f6fc; font-weight: 600; }
+.page-header .actions { display: flex; gap: 12px; }
+
+/* 卡片 */
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 15px; font-weight: 600; color: #f0f6fc; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+
+/* 统计卡片 */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; }
+.stat-card .label { color: #8b949e; font-size: 13px; margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: #f0f6fc; }
+.stat-card .delta { font-size: 12px; margin-top: 8px; }
+.stat-card .delta.up { color: #3fb950; }
+.stat-card .delta.down { color: #f85149; }
+
+/* 表格 */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid #21262d; font-size: 13px; }
+th { color: #8b949e; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover td { background: #1f2937; }
+
+/* 徽章 */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge.green { background: #23863633; color: #3fb950; }
+.badge.yellow { background: #d2992233; color: #d29922; }
+.badge.red { background: #da363333; color: #f85149; }
+.badge.blue { background: #1f6feb33; color: #58a6ff; }
+.badge.gray { background: #6e768133; color: #8b949e; }
+
+/* 按钮 */
+.btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 13px; }
+.btn:hover { background: #30363d; border-color: #8b949e; }
+.btn.primary { background: #238636; border-color: #238636; color: #fff; }
+.btn.primary:hover { background: #2ea043; }
+.btn.danger { background: #da3633; border-color: #da3633; color: #fff; }
+
+/* 图表占位 */
+.chart-placeholder { height: 200px; background: #0d1117; border: 1px dashed #30363d; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #6e7681; font-size: 13px; position: relative; overflow: hidden; }
+.chart-placeholder .bars { display: flex; align-items: flex-end; gap: 8px; height: 140px; }
+.chart-placeholder .bar { width: 24px; background: linear-gradient(180deg, #1f6feb, #1158c7); border-radius: 3px 3px 0 0; opacity: 0.7; }
+.chart-placeholder .line-chart { width: 80%; height: 140px; position: relative; }
+
+/* 表单 */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; color: #8b949e; font-size: 13px; margin-bottom: 6px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 13px;
+}
+.form-group input:focus, .form-group select:focus { border-color: #58a6ff; outline: none; box-shadow: 0 0 0 3px #1f6feb33; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* 模态框 */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(1,4,9,0.7); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 520px; max-height: 80vh; overflow-y: auto; }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 16px; color: #f0f6fc; }
+.modal-close { color: #8b949e; cursor: pointer; font-size: 20px; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 16px 20px; border-top: 1px solid #30363d; display: flex; justify-content: flex-end; gap: 12px; }
+
+/* 页面切换 */
+.page { display: none; }
+.page.active { display: block; }
+
+/* 两栏布局 */
+.two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* 状态点 */
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.status-dot.up { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.status-dot.down { background: #f85149; box-shadow: 0 0 6px #f85149; }
+.status-dot.warn { background: #d29922; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* 开关 */
+.switch { position: relative; width: 40px; height: 22px; display: inline-block; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background: #30363d; border-radius: 22px; transition: 0.2s; }
+.switch .slider:before { content:""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #8b949e; border-radius: 50%; transition: 0.2s; }
+.switch input:checked + .slider { background: #238636; }
+.switch input:checked + .slider:before { transform: translateX(18px); background: #fff; }
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<div class="navbar">
+  <div class="logo">EP<span> · 技术中台</span></div>
+  <div class="nav-links">
+    <a href="#" class="active">控制台</a>
+    <a href="#" onclick="switchPage('health');return false;">服务健康</a>
+    <a href="#" onclick="switchPage('routing');return false;">路由管理</a>
+    <a href="#" onclick="switchPage('cache');return false;">缓存监控</a>
+    <a href="#" onclick="switchPage('ratelimit');return false;">限流配置</a>
+    <a href="#" onclick="switchPage('eventbus');return false;">事件总线</a>
+  </div>
+  <div class="nav-right">
+    <span style="color:#8b949e;font-size:13px;">单元: <strong style="color:#f0f6fc;">cell-0</strong></span>
+    <div class="user">
+      <div class="avatar">ZC</div>
+      <span>admin</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="group-title">运维监控</div>
+    <div class="menu-item active" onclick="switchPage('health')"><span class="icon">●</span> 服务健康</div>
+    <div class="menu-item" onclick="switchPage('routing')"><span class="icon">⇄</span> 路由表管理</div>
+    <div class="menu-item" onclick="switchPage('cache')"><span class="icon">▦</span> 缓存监控</div>
+    <div class="menu-item" onclick="switchPage('ratelimit')"><span class="icon">⚡</span> 限流规则</div>
+    <div class="menu-item" onclick="switchPage('eventbus')"><span class="icon"> envelopes at <a href="https://example.com/envelope"> envelopes at example.com</a></span> 事件总线</div>
+    <div class="group-title">系统</div>
+    <div class="menu-item"><span class="icon">⚙</span> 全局配置</div>
+    <div class="menu-item"><span class="icon">Key</span> 密钥管理</div>
+    <div class="menu-item"><span class="icon">⊕</span> 审计日志</div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main">
+
+    <!-- ===== 服务健康 ===== -->
+    <div class="page active" id="page-health">
+      <div class="page-header">
+        <h1>服务健康总览</h1>
+        <div class="actions">
+          <button class="btn" onclick="refreshHealth()">刷新</button>
+          <button class="btn primary">导出报告</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">在线服务</div>
+          <div class="value">13/13</div>
+          <div class="delta up">▲ 全部健康</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">P99 延迟(网关)</div>
+          <div class="value">82ms</div>
+          <div class="delta up">▼ 8% vs 1h前</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">请求 QPS</div>
+          <div class="value">48,329</div>
+          <div class="delta up">▲ 12% vs 1h前</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">错误率</div>
+          <div class="value">0.02%</div>
+          <div class="delta up">▼ 低于阈值 0.1%</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">QPS 趋势(最近1小时)
+            <span class="badge green">实时</span>
+          </div>
+          <div class="chart-placeholder">
+            <div class="bars">
+              <div class="bar" style="height:60%"></div>
+              <div class="bar" style="height:45%"></div>
+              <div class="bar" style="height:70%"></div>
+              <div class="bar" style="height:55%"></div>
+              <div class="bar" style="height:80%"></div>
+              <div class="bar" style="height:65%"></div>
+              <div class="bar" style="height:90%"></div>
+              <div class="bar" style="height:75%"></div>
+              <div class="bar" style="height:85%"></div>
+              <div class="bar" style="height:95%"></div>
+              <div class="bar" style="height:70%"></div>
+              <div class="bar" style="height:88%"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">SLO 达标率</div>
+          <table>
+            <tr><th>SLO</th><th>目标</th><th>当前</th><th>状态</th></tr>
+            <tr><td>G-01 网关P99</td><td>&lt;100ms</td><td>82ms</td><td><span class="badge green">达标</span></td></tr>
+            <tr><td>G-04 缓存P99</td><td>&lt;5ms</td><td>3.2ms</td><td><span class="badge green">达标</span></td></tr>
+            <tr><td>G-05 事件P99</td><td>&lt;10ms</td><td>7.1ms</td><td><span class="badge green">达标</span></td></tr>
+            <tr><td>G-07 风控P99</td><td>&lt;1ms</td><td>0.8ms</td><td><span class="badge green">达标</span></td></tr>
+            <tr><td>G-09 可用性</td><td>99.95%</td><td>99.98%</td><td><span class="badge green">达标</span></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">服务实例列表
+          <button class="btn primary" onclick="openModal('addService')">+ 注册服务</button>
+        </div>
+        <table>
+          <tr><th>服务名</th><th>实例数</th><th>版本</th><th>P99</th><th>QPS</th><th>错误率</th><th>状态</th></tr>
+          <tr><td>api-gateway</td><td>6/6</td><td>v1.0.0</td><td>82ms</td><td>48329</td><td>0.02%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>ws-gateway</td><td>4/4</td><td>v1.0.0</td><td>45ms</td><td>12000</td><td>0.01%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>ucm-service</td><td>4/4</td><td>v1.0.0</td><td>35ms</td><td>8200</td><td>0.00%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>cmp-service</td><td>4/4</td><td>v1.0.0</td><td>42ms</td><td>6500</td><td>0.03%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>order-service</td><td>4/4</td><td>v1.0.0</td><td>55ms</td><td>3200</td><td>0.05%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>rust-risk-service</td><td>2/2</td><td>v1.0.0</td><td>0.8ms</td><td>4500</td><td>0.00%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>cell-router</td><td>3/3</td><td>v1.0.0</td><td>0.5ms</td><td>48000</td><td>0.01%</td><td><span class="status-dot up"></span><span class="badge green">健康</span></td></tr>
+          <tr><td>billing-service</td><td>3/3</td><td>v1.0.0</td><td>28ms</td><td>1800</td><td>0.02%</td><td><span class="status-dot warn"></span><span class="badge yellow">警告</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 路由表管理 ===== -->
+    <div class="page" id="page-routing">
+      <div class="page-header">
+        <h1>单元路由表管理</h1>
+        <div class="actions">
+          <button class="btn" onclick="syncNacos()">从 Nacos 同步</button>
+          <button class="btn primary" onclick="openModal('addRoute')">+ 新增路由规则</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">活跃 Cell 数</div>
+          <div class="value">5</div>
+          <div class="delta up">cell-0 ~ cell-4</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">流量纠正次数(1h)</div>
+          <div class="value">127</div>
+          <div class="delta down">▲ 均在限额内</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">写挂起用户</div>
+          <div class="value">3</div>
+          <div class="delta">failover 进行中</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">路由表版本</div>
+          <div class="value">v23</div>
+          <div class="delta">2026-08-03 09:15</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">路由规则列表</div>
+        <table>
+          <tr><th>规则ID</th><th>用户ID范围</th><th>目标 Cell</th><th>权重</th><th>写挂起</th><th>状态</th><th>操作</th></tr>
+          <tr><td>R-001</td><td>0 ~ 20%</td><td>cell-0</td><td>100%</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRoute('R-001');return false;">编辑</a></td></tr>
+          <tr><td>R-002</td><td>20% ~ 40%</td><td>cell-1</td><td>100%</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRoute('R-002');return false;">编辑</a></td></tr>
+          <tr><td>R-003</td><td>40% ~ 60%</td><td>cell-2</td><td>100%</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRoute('R-003');return false;">编辑</a></td></tr>
+          <tr><td>R-004</td><td>60% ~ 80%</td><td>cell-3</td><td>70%</td><td><strong style="color:#f85149">是</strong></td><td><span class="badge yellow">Failover</span></td><td><a href="#" onclick="editRoute('R-004');return false;">编辑</a></td></tr>
+          <tr><td>R-005</td><td>80% ~ 100%</td><td>cell-4</td><td>100%</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRoute('R-005');return false;">编辑</a></td></tr>
+          <tr><td>R-006</td><td>灰度: tag=beta</td><td>cell-0</td><td>100%</td><td>否</td><td><span class="badge blue">灰度</span></td><td><a href="#" onclick="editRoute('R-006');return false;">编辑</a></td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Cell 列表</div>
+        <table>
+          <tr><th>Cell ID</th><th>区域</th><th>服务数</th><th>实例数</th><th>QPS</th><th>健康</th><th>状态</th></tr>
+          <tr><td>cell-0</td><td>北京-A</td><td>13</td><td>42</td><td>12000</td><td>13/13</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>cell-1</td><td>北京-B</td><td>13</td><td>38</td><td>10500</td><td>13/13</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>cell-2</td><td>上海-A</td><td>13</td><td>40</td><td>9800</td><td>13/13</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>cell-3</td><td>上海-B</td><td>13</td><td>35</td><td>8200</td><td>12/13</td><td><span class="badge yellow">降级</span></td></tr>
+          <tr><td>cell-4</td><td>深圳-A</td><td>13</td><td>36</td><td>7829</td><td>13/13</td><td><span class="badge green">正常</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 缓存监控 ===== -->
+    <div class="page" id="page-cache">
+      <div class="page-header">
+        <h1>多级缓存监控</h1>
+        <div class="actions">
+          <button class="btn">手动预热</button>
+          <button class="btn danger" onclick="confirmEvict()">批量失效</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">L1 命中率</div>
+          <div class="value">78.3%</div>
+          <div class="delta up">Caffeine 本地缓存</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">L2 命中率</div>
+          <div class="value">95.8%</div>
+          <div class="delta up">Redis Cluster</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">综合 P99</div>
+          <div class="value">3.2ms</div>
+          <div class="delta up">低于 SLO 5ms</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">广播失效(1h)</div>
+          <div class="value">2,341</div>
+          <div class="delta">Pulsar 正常</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">缓存命中率趋势
+            <span class="badge green">实时</span>
+          </div>
+          <div class="chart-placeholder">
+            <div class="bars">
+              <div class="bar" style="height:75%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:80%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:78%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:85%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:82%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:90%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:88%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:92%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:95%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+              <div class="bar" style="height:96%;background:linear-gradient(180deg,#3fb950,#238636)"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">L2 Redis 集群</div>
+          <table>
+            <tr><th>节点</th><th>内存</th><th>QPS</th><th>状态</th></tr>
+            <tr><td>redis-0(master)</td><td>12.3G/32G</td><td>8500</td><td><span class="status-dot up"></span>正常</td></tr>
+            <tr><td>redis-1(master)</td><td>10.8G/32G</td><td>7200</td><td><span class="status-dot up"></span>正常</td></tr>
+            <tr><td>redis-2(master)</td><td>11.5G/32G</td><td>6800</td><td><span class="status-dot up"></span>正常</td></tr>
+            <tr><td>redis-3(slave)</td><td>12.1G/32G</td><td>-</td><td><span class="status-dot up"></span>同步中</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">缓存注册表</div>
+        <table>
+          <tr><th>缓存名</th><th>Owner 服务</th><th>TTL(秒)</th><th>L1 大小</th><th>L2 大小</th><th>命中率</th><th>操作</th></tr>
+          <tr><td>course</td><td>cmp-service</td><td>3600</td><td>8,234</td><td>145,678</td><td>96.2%</td><td><a href="#" onclick="evictCache('course');return false;">失效</a></td></tr>
+          <tr><td>user_profile</td><td>ucm-service</td><td>1800</td><td>12,456</td><td>234,890</td><td>94.8%</td><td><a href="#" onclick="evictCache('user_profile');return false;">失效</a></td></tr>
+          <tr><td>question</td><td>cmp-service</td><td>7200</td><td>5,678</td><td>89,234</td><td>98.1%</td><td><a href="#" onclick="evictCache('question');return false;">失效</a></td></tr>
+          <tr><td>order_summary</td><td>order-service</td><td>600</td><td>3,456</td><td>45,678</td><td>91.5%</td><td><a href="#" onclick="evictCache('order_summary');return false;">失效</a></td></tr>
+          <tr><td>risk_rule</td><td>rust-risk-service</td><td>300</td><td>1,234</td><td>5,678</td><td>99.2%</td><td><a href="#" onclick="evictCache('risk_rule');return false;">失效</a></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 限流规则 ===== -->
+    <div class="page" id="page-ratelimit">
+      <div class="page-header">
+        <h1>限流规则配置</h1>
+        <div class="actions">
+          <button class="btn">推送 Sentinel</button>
+          <button class="btn primary" onclick="openModal('addRule')">+ 新增规则</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">活跃规则数</div>
+          <div class="value">24</div>
+          <div class="delta">Sentinel 已同步</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">触发限流(1h)</div>
+          <div class="value">562</div>
+          <div class="delta down">▲ 0.01% 请求</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">熔断次数(1h)</div>
+          <div class="value">3</div>
+          <div class="delta">billing-service</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">规则推送延迟</div>
+          <div class="value">120ms</div>
+          <div class="delta up">Nacos 实时</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">限流规则列表</div>
+        <table>
+          <tr><th>规则ID</th><th>资源名</th><th>类型</th><th>阈值</th><th>行为</th><th>集群</th><th>状态</th><th>操作</th></tr>
+          <tr><td>RL-001</td><td>ucm-api</td><td>QPS</td><td>5000</td><td>直接拒绝</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRule('RL-001');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+          <tr><td>RL-002</td><td>cmp-api</td><td>QPS</td><td>8000</td><td>直接拒绝</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRule('RL-002');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+          <tr><td>RL-003</td><td>order-create</td><td>QPS</td><td>2000</td><td>匀速排队</td><td>是</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRule('RL-003');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+          <tr><td>RL-004</td><td>ws-connect</td><td>并发线程</td><td>10000</td><td>直接拒绝</td><td>是</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRule('RL-004');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+          <tr><td>RL-005</td><td>billing-api</td><td>QPS</td><td>1000</td><td>直接拒绝</td><td>否</td><td><span class="badge yellow">观察</span></td><td><a href="#" onclick="editRule('RL-005');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+          <tr><td>RL-006</td><td>risk-check</td><td>QPS</td><td>5000</td><td>直接拒绝</td><td>否</td><td><span class="badge green">启用</span></td><td><a href="#" onclick="editRule('RL-006');return false;">编辑</a> | <a href="#">禁用</a></td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">熔断规则</div>
+        <table>
+          <tr><th>规则ID</th><th>资源名</th><th>策略</th><th>触发条件</th><th>恢复</th><th>状态</th></tr>
+          <tr><td>CB-001</td><td>billing-service</td><td>慢调用比例</td><td>RT>500ms 比例>50%</td><td>10s 半开</td><td><span class="badge yellow">观察</span></td></tr>
+          <tr><td>CB-002</td><td>ucm-service</td><td>异常比例</td><td>异常>30%</td><td>5s 半开</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>CB-003</td><td>order-service</td><td>异常数</td><td>5min 异常>100</td><td>15s 半开</td><td><span class="badge green">正常</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 事件总线 ===== -->
+    <div class="page" id="page-eventbus">
+      <div class="page-header">
+        <h1>事件总线监控</h1>
+        <div class="actions">
+          <button class="btn">重放死信</button>
+          <button class="btn primary">+ 新建 Topic</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">发布 TPS</div>
+          <div class="value">12,450</div>
+          <div class="delta up">▲ 正常水位</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">消费 TPS</div>
+          <div class="value">12,380</div>
+          <div class="delta up">积压健康</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">总积压</div>
+          <div class="value">2,103</div>
+          <div class="delta">可控范围</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">死信队列</div>
+          <div class="value">17</div>
+          <div class="delta down">需人工处理</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">生产/消费速率(最近1h)</div>
+          <div class="chart-placeholder">
+            <div class="bars">
+              <div class="bar" style="height:55%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:60%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:70%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:65%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:80%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:75%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:88%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:82%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:90%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+              <div class="bar" style="height:85%;background:linear-gradient(180deg,#58a6ff,#1158c7)"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Pulsar Broker</div>
+          <table>
+            <tr><th>Broker</th><th>连接数</th><th>TPS</th><th>CPU</th><th>状态</th></tr>
+            <tr><td>broker-0</td><td>342</td><td>4200</td><td>45%</td><td><span class="status-dot up"></span>正常</td></tr>
+            <tr><td>broker-1</td><td>318</td><td>3800</td><td>38%</td><td><span class="status-dot up"></span>正常</td></tr>
+            <tr><td>broker-2</td><td>305</td><td>4450</td><td>42%</td><td><span class="status-dot up"></span>正常</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Topic 列表</div>
+        <table>
+          <tr><th>Topic</th><th>订阅者</th><th>生产 TPS</th><th>消费 TPS</th><th>积压</th><th>DLQ</th><th>状态</th></tr>
+          <tr><td>order.paid</td><td>billing,course-access</td><td>850</td><td>848</td><td>23</td><td>2</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>course.published</td><td>search,notification</td><td>120</td><td>120</td><td>0</td><td>0</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>user.registered</td><td>profile,welcome-email</td><td>340</td><td>338</td><td>12</td><td>1</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>ep-cache-invalidate</td><td>all-pods</td><td>2341</td><td>2341</td><td>0</td><td>0</td><td><span class="badge green">正常</span></td></tr>
+          <tr><td>class.started</td><td>attendance,recording</td><td>56</td><td>54</td><td>2010</td><td>14</td><td><span class="badge yellow">积压</span></td></tr>
+          <tr><td>payment.refunded</td><td>billing,notification</td><td>45</td><td>45</td><td>0</td><td>0</td><td><span class="badge green">正常</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 模态框: 新增路由规则 -->
+<div class="modal-overlay" id="modal-addRoute">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>新增路由规则</h3>
+      <span class="modal-close" onclick="closeModal('addRoute')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>规则 ID</label>
+        <input type="text" placeholder="R-007">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>用户 ID 起始(%)</label>
+          <input type="number" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>用户 ID 结束(%)</label>
+          <input type="number" placeholder="20">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>目标 Cell</label>
+          <select><option>cell-0</option><option>cell-1</option><option>cell-2</option><option>cell-3</option><option>cell-4</option></select>
+        </div>
+        <div class="form-group">
+          <label>权重(%)</label>
+          <input type="number" value="100">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>标签(灰度,可选)</label>
+        <input type="text" placeholder="beta">
+      </div>
+      <div class="form-group">
+        <label>说明</label>
+        <textarea rows="2" placeholder="规则说明..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('addRoute')">取消</button>
+      <button class="btn primary" onclick="saveRoute()">保存并推送 Nacos</button>
+    </div>
+  </div>
+</div>
+
+<!-- 模态框: 新增限流规则 -->
+<div class="modal-overlay" id="modal-addRule">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>新增限流规则</h3>
+      <span class="modal-close" onclick="closeModal('addRule')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>规则 ID</label>
+        <input type="text" placeholder="RL-007">
+      </div>
+      <div class="form-group">
+        <label>资源名</label>
+        <input type="text" placeholder="ucm-api">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>限流类型</label>
+          <select><option>QPS</option><option>并发线程</option></select>
+        </div>
+        <div class="form-group">
+          <label>阈值</label>
+          <input type="number" value="5000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>流控行为</label>
+          <select><option>直接拒绝</option><option>匀速排队</option><option>预热</option></select>
+        </div>
+        <div class="form-group">
+          <label>集群模式</label>
+          <select><option>否</option><option>是</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;">
+          <span class="switch"><input type="checkbox" checked><span class="slider"></span></span>
+          立即启用
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('addRule')">取消</button>
+      <button class="btn primary" onclick="saveRule()">保存并推送 Sentinel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+  event && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.add('active');
+}
+
+function openModal(name) { document.getElementById('modal-' + name).classList.add('show'); }
+function closeModal(name) { document.getElementById('modal-' + name).classList.remove('show'); }
+
+function refreshHealth() {
+  alert('正在刷新服务健康状态...');
+  // 模拟刷新
+  setTimeout(function() { alert('刷新完成: 13/13 服务在线'); }, 800);
+}
+
+function syncNacos() {
+  alert('从 Nacos 同步路由表...');
+  setTimeout(function() { alert('同步完成: 路由表版本 v23'); }, 800);
+}
+
+function editRoute(id) { alert('编辑路由规则: ' + id); }
+function editRule(id) { alert('编辑限流规则: ' + id); }
+function evictCache(name) {
+  if (confirm('确认失效缓存: ' + name + ' ?\n将触发: L1 evict → L2 delete → Pulsar 广播 → 延迟双删')) {
+    alert('缓存 ' + name + ' 失效完成');
+  }
+}
+function confirmEvict() {
+  if (confirm('确认批量失效所有缓存? 此操作影响全站!')) {
+    alert('批量失效已触发');
+  }
+}
+function saveRoute() { alert('路由规则已保存并推送到 Nacos'); closeModal('addRoute'); }
+function saveRule() { alert('限流规则已保存并推送到 Sentinel'); closeModal('addRule'); }
+</script>
+
+</body>
+</html>

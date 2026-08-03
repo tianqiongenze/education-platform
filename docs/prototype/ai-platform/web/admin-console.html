@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI中台管理控制台</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2029; --panel2:#212a36; --border:#2c3744;
+    --text:#e4e7eb; --muted:#8b97a5; --accent:#4f9eff; --accent2:#36c5a0;
+    --warn:#f5a623; --danger:#f56c6c; --ok:#36c5a0;
+    --chart1:#4f9eff; --chart2:#36c5a0; --chart3:#b07cff; --chart4:#f5a623;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+  a{color:var(--accent);text-decoration:none}
+  /* layout */
+  .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .side{background:var(--panel);border-right:1px solid var(--border);padding:16px 0;position:sticky;top:0;height:100vh;overflow:auto}
+  .side .logo{padding:8px 20px 20px;font-size:16px;font-weight:600;color:var(--accent);letter-spacing:.5px}
+  .nav-item{padding:10px 20px;cursor:pointer;color:var(--muted);border-left:3px solid transparent;transition:.15s}
+  .nav-item:hover{background:var(--panel2);color:var(--text)}
+  .nav-item.active{background:var(--panel2);color:var(--accent);border-left-color:var(--accent)}
+  .main{padding:24px 32px;max-width:1400px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .topbar h1{font-size:20px;font-weight:600}
+  .topbar .meta{color:var(--muted);font-size:12px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--panel2);color:var(--muted)}
+  .badge.ok{background:rgba(54,197,160,.15);color:var(--ok)}
+  .badge.warn{background:rgba(245,166,35,.15);color:var(--warn)}
+  .badge.danger{background:rgba(245,108,108,.15);color:var(--danger)}
+  /* cards */
+  .grid{display:grid;gap:16px}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px}
+  .card h3{font-size:14px;color:var(--muted);font-weight:500;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+  .kpi{font-size:26px;font-weight:600}
+  .kpi .unit{font-size:13px;color:var(--muted);margin-left:4px}
+  .delta{font-size:12px;margin-top:6px}
+  .delta.up{color:var(--ok)} .delta.down{color:var(--danger)}
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  tr:hover td{background:var(--panel2)}
+  .tag{padding:2px 8px;border-radius:4px;font-size:11px;background:var(--panel2)}
+  /* charts */
+  .bar-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .bar-row .lbl{width:90px;color:var(--muted);font-size:12px}
+  .bar-track{flex:1;height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px;background:var(--chart1)}
+  .bar-row .val{width:60px;text-align:right;font-size:12px;color:var(--muted)}
+  .donut{width:120px;height:120px;border-radius:50%;background:conic-gradient(var(--chart1) 0 62%, var(--chart2) 62% 78%, var(--chart3) 78% 90%, var(--chart4) 90% 100%);
+         display:flex;align-items:center;justify-content:center;margin:0 auto}
+  .donut::after{content:"";width:80px;height:80px;background:var(--panel);border-radius:50%}
+  .donut-wrap{position:relative;display:inline-block}
+  .donut-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  .donut-label .v{font-size:20px;font-weight:600}
+  .donut-label .l{font-size:11px;color:var(--muted)}
+  .legend{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .tab{padding:8px 16px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .panel{display:none}.panel.active{display:block}
+  /* form */
+  input,select,textarea,button{font-family:inherit;font-size:13px}
+  input[type=text],input[type=search],select,textarea{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+     padding:7px 10px;border-radius:5px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  button{background:var(--accent);color:#0f1419;border:none;padding:7px 14px;border-radius:5px;cursor:pointer;font-weight:500}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+  button:hover{opacity:.9}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .stat-line{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:4px 0}
+  .code{background:#0b0f14;border:1px solid var(--border);border-radius:5px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fe6b3;white-space:pre-wrap;max-height:200px;overflow:auto}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--accent);padding:12px 18px;border-radius:6px;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.4);display:none;z-index:99}
+  .toast.show{display:block}
+  .meter{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:4px}
+  .meter>span{display:block;height:100%;background:var(--accent2)}
+  .pill{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .pill.ok{background:var(--ok)}.pill.warn{background:var(--warn)}.pill.down{background:var(--danger)}
+  .scroll{max-height:340px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">◆ AI中台控制台</div>
+    <div class="nav-item active" data-nav="gateway">模型网关监控</div>
+    <div class="nav-item" data-nav="agents">Agent 管理</div>
+    <div class="nav-item" data-nav="rag">RAG 知识库</div>
+    <div class="nav-item" data-nav="tenant">多租户管理</div>
+    <div class="nav-item" data-nav="eval">LLM 评测看板</div>
+    <div style="padding:16px 20px;margin-top:20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+      区域: 国内主cell-A<br>LLM_MODE: <span class="badge ok">real</span><br>版本: v1.0.0
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div><h1 id="title">模型网关监控</h1><div class="meta">数据更新: 2026-08-03 14:32 · 采样窗口 15min</div></div>
+      <div class="row">
+        <select id="win"><option>最近 15 分钟</option><option>最近 1 小时</option><option>最近 24 小时</option></select>
+        <button class="ghost" onclick="toast('已刷新')">刷新</button>
+      </div>
+    </div>
+
+    <!-- ===== 模型网关 ===== -->
+    <section class="panel active" id="p-gateway">
+      <div class="grid g4">
+        <div class="card"><h3>缓存命中率 <span class="badge ok">达标</span></h3>
+          <div class="kpi">67.4<span class="unit">%</span></div>
+          <div class="delta up">↑ 3.2% vs 昨日 · 目标 ≥60%</div>
+        </div>
+        <div class="card"><h3>P95 延迟 <span class="badge ok">达标</span></h3>
+          <div class="kpi">2.1<span class="unit">s</span></div>
+          <div class="delta up">↓ 0.3s · 目标 &lt;3s (G-10)</div>
+        </div>
+        <div class="card"><h3>单调用成本降幅 <span class="badge ok">达标</span></h3>
+          <div class="kpi">52.8<span class="unit">%</span></div>
+          <div class="delta up">↑ 1.8% · 目标 ≥45% (ADR-A01)</div>
+        </div>
+        <div class="card"><h3>fallback RTO <span class="badge ok">达标</span></h3>
+          <div class="kpi">1.8<span class="unit">s</span></div>
+          <div class="delta up">目标 ≤3s (NFR-07)</div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>成本栈分布（请求去向）</h3>
+          <div class="donut-wrap" style="margin:8px 0">
+            <div class="donut"></div>
+            <div class="donut-label"><div class="v">12.4k</div><div class="l">总请求/15min</div></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--chart1)"></i>缓存命中 62%</span>
+            <span><i style="background:var(--chart2)"></i>小模型 16%</span>
+            <span><i style="background:var(--chart3)"></i>旗舰级联 12%</span>
+            <span><i style="background:var(--chart4)"></i>fallback 10%</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>路由统计（按 Agent）</h3>
+          <div class="bar-row"><div class="lbl">批改</div><div class="bar-track"><div class="bar-fill" style="width:78%;background:var(--chart1)"></div></div><div class="val">4.8k</div></div>
+          <div class="bar-row"><div class="lbl">出题</div><div class="bar-track"><div class="bar-fill" style="width:52%;background:var(--chart2)"></div></div><div class="val">3.2k</div></div>
+          <div class="bar-row"><div class="lbl">答疑</div><div class="bar-track"><div class="bar-fill" style="width:90%;background:var(--chart3)"></div></div><div class="val">5.6k</div></div>
+          <div class="bar-row"><div class="lbl">学习路径</div><div class="bar-track"><div class="bar-fill" style="width:28%;background:var(--chart4)"></div></div><div class="val">1.7k</div></div>
+          <div class="bar-row"><div class="lbl">数字人</div><div class="bar-track"><div class="bar-fill" style="width:18%;background:#6b7a8f"></div></div><div class="val">1.1k</div></div>
+          <div class="stat-line" style="margin-top:10px"><span>路由准确率</span><span style="color:var(--ok)">92.4% (≥90%)</span></div>
+          <div class="stat-line"><span>级联率</span><span>12.0%</span></div>
+          <div class="stat-line"><span>fallback 率</span><span style="color:var(--warn)">10.0%</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>provider 健康与延迟</h3>
+        <table>
+          <thead><tr><th>provider</th><th>模型</th><th>状态</th><th>P50</th><th>P95</th><th>错误率</th><th>成本/千次</th><th>流量占比</th></tr></thead>
+          <tbody>
+            <tr><td>qwen</td><td>qwen-small</td><td><span class="pill ok"></span>健康</td><td>320ms</td><td>780ms</td><td>0.2%</td><td>¥0.8</td><td>16%</td></tr>
+            <tr><td>azure</td><td>gpt4-class</td><td><span class="pill ok"></span>健康</td><td>1.1s</td><td>2.4s</td><td>0.4%</td><td>¥12.0</td><td>12%</td></tr>
+            <tr><td>openai</td><td>gpt4-class</td><td><span class="pill warn"></span>降级</td><td>1.8s</td><td>3.6s</td><td>4.8%</td><td>¥12.0</td><td>10%</td></tr>
+            <tr><td>mock</td><td>—</td><td><span class="pill ok"></span>就绪</td><td>2ms</td><td>5ms</td><td>0%</td><td>¥0</td><td>0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>路由表（热更新）</h3>
+          <table>
+            <thead><tr><th>规则</th><th>Agent</th><th>条件</th><th>目标模型</th><th>级联 τ</th></tr></thead>
+            <tbody>
+              <tr><td>R01</td><td>批改</td><td>简单文本</td><td>qwen-small</td><td>0.7</td></tr>
+              <tr><td>R02</td><td>批改</td><td>代码+高权重</td><td>gpt4-class</td><td>不级联</td></tr>
+              <tr><td>R03</td><td>答疑</td><td>闲聊</td><td>qwen-small</td><td>0.6</td></tr>
+              <tr><td>R04</td><td>出题</td><td>生成</td><td>gpt4-class</td><td>0.65</td></tr>
+            </tbody>
+          </table>
+          <div class="row" style="margin-top:10px">
+            <button onclick="toast('路由表已热更新，5s 内生效')">更新路由表</button>
+            <button class="ghost" onclick="toast('已切 qwen→azure 灰度 10%')">灰度切换</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>缓存管理</h3>
+          <div class="stat-line"><span>缓存键数量</span><span>128,402</span></div>
+          <div class="stat-line"><span>内存占用</span><span>3.4 GB / 16 GB</span></div>
+          <div class="stat-line"><span>相似度阈值</span><span>0.92</span></div>
+          <div class="stat-line"><span>TTL</span><span>3600s</span></div>
+          <div class="stat-line"><span>当前 kb_version</span><span>v20260803</span></div>
+          <div class="row" style="margin-top:10px">
+            <button class="ghost" onclick="toast('已按 kb_version 失效旧缓存')">按版本失效</button>
+            <button class="ghost" onclick="toast('已清空全量缓存（需二次审批）')">全量清空</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Agent 管理 ===== -->
+    <section class="panel" id="p-agents">
+      <div class="grid g4">
+        <div class="card"><h3>在线 Agent</h3><div class="kpi">5<span class="unit">/5</span></div><div class="delta up">全部在线</div></div>
+        <div class="card"><h3>Agent 调用量(15min)</h3><div class="kpi">16.4k</div><div class="delta up">↑ 6.2%</div></div>
+        <div class="card"><h3>interrupt 待复核</h3><div class="kpi">37</div><div class="delta down">↑ 12 (教师待处理)</div></div>
+        <div class="card"><h3>resume 成功率</h3><div class="kpi">99.6<span class="unit">%</span></div><div class="delta up">目标 ≥99%</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>Agent 状态总览</h3>
+        <table>
+          <thead><tr><th>Agent</th><th>状态</th><th>调用/15min</th><th>P95</th><th>interrupt 次数</th><th>MAE(周)</th><th>主模型</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>批改 Agent</td><td><span class="pill ok"></span>运行中</td><td>4.8k</td><td>2.4s</td><td>37</td><td style="color:var(--ok)">0.38</td><td>gpt4-class</td><td><a onclick="toast('打开批改 Agent 详情')">详情</a></td></tr>
+            <tr><td>出题 Agent</td><td><span class="pill ok"></span>运行中</td><td>3.2k</td><td>2.0s</td><td>0</td><td>—</td><td>gpt4-class</td><td><a onclick="toast('打开出题 Agent 详情')">详情</a></td></tr>
+            <tr><td>答疑 Agent</td><td><span class="pill ok"></span>运行中</td><td>5.6k</td><td>1.6s</td><td>0</td><td>引用率 96.2%</td><td>qwen-small</td><td><a onclick="toast('打开答疑 Agent 详情')">详情</a></td></tr>
+            <tr><td>学习路径 Agent</td><td><span class="pill ok"></span>运行中</td><td>1.7k</td><td>2.8s</td><td>4</td><td>—</td><td>gpt4-class</td><td><a onclick="toast('打开学习路径 Agent 详情')">详情</a></td></tr>
+            <tr><td>数字人</td><td><span class="pill warn"></span>降级(TTS慢)</td><td>1.1k</td><td>1.4s</td><td>0</td><td>—</td><td>qwen-small</td><td><a onclick="toast('打开数字人详情')">详情</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>批改 Agent · 教师复核队列（HITL, ADR-A03）</h3>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>thread_id</th><th>租户</th><th>作业</th><th>风险</th><th>LLM 预分</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>th_8801</td><td>t_103</td><td>IT-链表反转</td><td><span class="badge danger">high</span></td><td>72</td><td>待复核</td><td><a onclick="toast('进入复核界面')">复核</a></td></tr>
+            <tr><td>th_8802</td><td>t_103</td><td>IT-二分边界</td><td><span class="badge warn">mid</span></td><td>65</td><td>抽样待复核</td><td><a onclick="toast('进入复核界面')">复核</a></td></tr>
+            <tr><td>th_8803</td><td>t_209</td><td>考公-申论</td><td><span class="badge danger">high</span></td><td>78</td><td>待复核</td><td><a onclick="toast('进入复核界面')">复核</a></td></tr>
+            <tr><td>th_8804</td><td>t_103</td><td>考研-论述</td><td><span class="badge danger">high</span></td><td>81</td><td>待复核</td><td><a onclick="toast('进入复核界面')">复核</a></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button onclick="toast('已批量改分并 Command(resume)')">批量通过</button>
+          <button class="ghost" onclick="toast('已驳回重批')">批量驳回</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== RAG 知识库 ===== -->
+    <section class="panel" id="p-rag">
+      <div class="grid g4">
+        <div class="card"><h3>知识库数</h3><div class="kpi">128</div><div class="delta up">本周 +3</div></div>
+        <div class="card"><h3>文档总数</h3><div class="kpi">86.2k</div><div class="delta up">+1.2k</div></div>
+        <div class="card"><h3>chunk 数</h3><div class="kpi">1.04M</div><div class="delta up">+14k</div></div>
+        <div class="card"><h3>索引速率</h3><div class="kpi">112<span class="unit">doc/s</span></div><div class="delta up">目标 ≥100</div></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>文档入库</h3>
+          <div class="row">
+            <select style="flex:1"><option>选择知识库: IT后端-数据结构</option><option>考公-行测</option><option>考研-政治</option></select>
+          </div>
+          <div class="row">
+            <input type="text" placeholder="粘贴文本或拖拽文件..." style="flex:1">
+            <button onclick="toast('已提交入库，分块中...')">入库</button>
+          </div>
+          <div class="stat-line"><span>分块策略</span><span>语义分块 512±128</span></div>
+          <div class="stat-line"><span>嵌入模型</span><span>bge-large-zh (1024)</span></div>
+          <div class="stat-line"><span>当前 kb_version</span><span>v20260803</span></div>
+        </div>
+        <div class="card">
+          <h3>索引状态</h3>
+          <table>
+            <thead><tr><th>文档</th><th>租户</th><th>状态</th><th>进度</th></tr></thead>
+            <tbody>
+              <tr><td>链表章节.pdf</td><td>t_103</td><td><span class="pill ok"></span>ready</td><td>100%</td></tr>
+              <tr><td>申论范文.docx</td><td>t_209</td><td><span class="pill warn"></span>indexing</td><td>64%</td></tr>
+              <tr><td>政治考点.pdf</td><td>t_312</td><td><span class="pill warn"></span>indexing</td><td>22%</td></tr>
+              <tr><td>养生基础.docx</td><td>t_455</td><td><span class="pill down"></span>failed</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>检索测试台</h3>
+        <div class="row">
+          <input type="search" id="ragq" placeholder="输入 query，例如：二分查找边界怎么处理" style="flex:1">
+          <select id="ragt"><option>租户 t_103</option><option>租户 t_209</option><option>租户 t_312</option></select>
+          <button onclick="runRag()">检索</button>
+        </div>
+        <div class="stat-line"><span>检索路径</span><span>BM25 + Milvus 向量 + metadata → RRF 融合 → Reranker top-10</span></div>
+        <div id="ragResult">
+          <div class="code">点击「检索」查看召回结果（含 chunk_id / 分数 / 来源）</div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:16px">
+        <div class="card"><h3>召回@10</h3><div class="kpi">0.88</div><div class="delta up">目标 ≥0.85</div></div>
+        <div class="card"><h3>nDCG@10</h3><div class="kpi">0.79</div><div class="delta up">Reranker 提升 +0.09</div></div>
+        <div class="card"><h3>Reranker 模式</h3><div class="kpi" style="font-size:18px">GPU cross-encoder</div><div class="delta">可降级 API</div></div>
+      </div>
+    </section>
+
+    <!-- ===== 多租户 ===== -->
+    <section class="panel" id="p-tenant">
+      <div class="grid g4">
+        <div class="card"><h3>租户总数</h3><div class="kpi">1,284</div><div class="delta up">+24 本周</div></div>
+        <div class="card"><h3>Milvus namespace</h3><div class="kpi">1,284</div><div class="delta up">全量隔离</div></div>
+        <div class="card"><h3>pgvector schema</h3><div class="kpi">482</div><div class="delta">小集合租户</div></div>
+        <div class="card"><h3>跨租户泄漏事故 <span class="badge ok">0</span></h3><div class="kpi">0</div><div class="delta up">目标 0 (ADR-A02)</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>namespace 列表</h3>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>tenant_id</th><th>事业群</th><th>隔离方式</th><th>chunks</th><th>FGAC 拒绝/24h</th><th>最近渗透测试</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>t_103</td><td>IT后端</td><td>Milvus namespace</td><td>184k</td><td>3</td><td>2026-08-02 通过</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_209</td><td>考公</td><td>Milvus namespace</td><td>96k</td><td>1</td><td>2026-08-02 通过</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_312</td><td>考研</td><td>Milvus namespace</td><td>112k</td><td>0</td><td>2026-08-02 通过</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_455</td><td>养生</td><td>pgvector schema</td><td>8k</td><td>0</td><td>2026-08-02 通过</td><td><span class="pill warn"></span>入库失败</td></tr>
+            <tr><td>t_502</td><td>IT前端</td><td>pgvector schema</td><td>12k</td><td>0</td><td>2026-08-02 通过</td><td><span class="pill ok"></span>正常</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>隔离验证（渗透测试）</h3>
+          <div class="row">
+            <select id="ptA"><option>持租户 A 的 JWT (t_103)</option></select>
+            <select id="ptB"><option>查询租户 B namespace (t_209)</option></select>
+            <button onclick="runPen()">执行渗透</button>
+          </div>
+          <div id="penResult"><div class="code">预期：0 返回，FGAC 拒绝并审计</div></div>
+        </div>
+        <div class="card">
+          <h3>FGAC 配置</h3>
+          <div class="stat-line"><span>tenant_id 来源</span><span>JWT claim tid（仅网关解析）</span></div>
+          <div class="stat-line"><span>注入位置</span><span>X-Tenant-Id 头（只读）</span></div>
+          <div class="stat-line"><span>静态扫描规则</span><span style="color:var(--ok)">no-tenant-concat / milvus-expr-required</span></div>
+          <div class="stat-line"><span>最近扫描结果</span><span class="badge ok">0 违规</span></div>
+          <div class="row" style="margin-top:10px">
+            <button class="ghost" onclick="toast('已触发静态扫描')">立即扫描</button>
+            <button class="ghost" onclick="toast('已触发全量渗透测试')">全量渗透</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 评测看板 ===== -->
+    <section class="panel" id="p-eval">
+      <div class="grid g4">
+        <div class="card"><h3>批改 MAE(周)</h3><div class="kpi">0.38</div><div class="delta up">目标 &lt;0.4 (非高风险)</div></div>
+        <div class="card"><h3>风险分类 F1</h3><div class="kpi">0.88</div><div class="delta up">目标 ≥0.85</div></div>
+        <div class="card"><h3>出题难度达标率</h3><div class="kpi">88<span class="unit">%</span></div><div class="delta up">|δ|&lt;0.3 占比</div></div>
+        <div class="card"><h3>答疑引用率</h3><div class="kpi">96.2<span class="unit">%</span></div><div class="delta up">目标 ≥95%</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>评测集概况</h3>
+        <table>
+          <thead><tr><th>Agent</th><th>评测集规模</th><th>版本</th><th>最近回归</th><th>指标</th><th>阈值</th><th>结果</th><th>趋势</th></tr></thead>
+          <tbody>
+            <tr><td>批改</td><td>1,240</td><td>v3.2</td><td>2026-08-03</td><td>MAE 0.38</td><td>&lt;0.4</td><td><span class="badge ok">通过</span></td><td class="up">↓0.02</td></tr>
+            <tr><td>批改</td><td>1,240</td><td>v3.2</td><td>2026-08-03</td><td>风险F1 0.88</td><td>≥0.85</td><td><span class="badge ok">通过</span></td><td class="up">↑0.01</td></tr>
+            <tr><td>出题</td><td>1,080</td><td>v2.1</td><td>2026-08-03</td><td>难度达标 88%</td><td>≥85%</td><td><span class="badge ok">通过</span></td><td class="up">↑1%</td></tr>
+            <tr><td>出题</td><td>1,080</td><td>v2.1</td><td>2026-08-03</td><td>去重准确 96%</td><td>≥95%</td><td><span class="badge ok">通过</span></td><td class="up">持平</td></tr>
+            <tr><td>答疑</td><td>1,320</td><td>v2.4</td><td>2026-08-03</td><td>引用率 96.2%</td><td>≥95%</td><td><span class="badge ok">通过</span></td><td class="up">↑0.4%</td></tr>
+            <tr><td>答疑</td><td>1,320</td><td>v2.4</td><td>2026-08-03</td><td>拒答准确 91%</td><td>≥90%</td><td><span class="badge ok">通过</span></td><td class="up">持平</td></tr>
+            <tr><td>学习路径</td><td>560</td><td>v1.3</td><td>2026-08-03</td><td>人工合理性 92%</td><td>≥90%</td><td><span class="badge ok">通过</span></td><td class="up">↑2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>批改 MAE 趋势（近 8 周）</h3>
+          <div id="maeChart" style="height:160px;display:flex;align-items:flex-end;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <!-- bars rendered by JS -->
+          </div>
+          <div class="stat-line" style="margin-top:8px"><span>基线（StepGrade 2025）</span><span>MAE 0.44-0.62（未达人类一致性）</span></div>
+          <div class="stat-line"><span>当前</span><span style="color:var(--ok)">0.38（含 HITL）</span></div>
+        </div>
+        <div class="card">
+          <h3>误判样本回流</h3>
+          <div class="stat-line"><span>本周回流样本</span><span>42 条（教师标注）</span></div>
+          <div class="stat-line"><span>评测集版本</span><span>v3.2 (dvc 管理)</span></div>
+          <div class="stat-line"><span>A/B 比对</span><span>gpt4-class vs qwen-small</span></div>
+          <div class="row" style="margin-top:10px">
+            <button onclick="toast('已触发离线评测回归')">触发回归</button>
+            <button class="ghost" onclick="toast('已导出误判样本集')">导出样本</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // 导航切换
+  const titles = {gateway:"模型网关监控", agents:"Agent 管理", rag:"RAG 知识库", tenant:"多租户管理", eval:"LLM 评测看板"};
+  document.querySelectorAll('.nav-item').forEach(el=>{
+    el.onclick = ()=>{
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      el.classList.add('active');
+      const k = el.dataset.nav;
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('p-'+k).classList.add('active');
+      document.getElementById('title').textContent = titles[k];
+    };
+  });
+
+  function toast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(window.__t);
+    window.__t = setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+
+  // RAG 检索模拟
+  function runRag(){
+    const q = document.getElementById('ragq').value || '二分查找边界怎么处理';
+    const t = document.getElementById('ragt').value;
+    const html = [
+      {cid:'chk_8821', bm:0.91, vec:0.88, rrf:0.93, rerank:0.97, src:'IT后端-数据结构-二分查找.pdf §3.2'},
+      {cid:'chk_8834', bm:0.84, vec:0.86, rrf:0.89, rerank:0.91, src:'IT后端-算法基础.docx §5.1'},
+      {cid:'chk_8902', bm:0.78, vec:0.83, rrf:0.85, rerank:0.82, src:'IT后端-数组与查找.pdf §2.4'},
+      {cid:'chk_9011', bm:0.71, vec:0.79, rrf:0.80, rerank:0.76, src:'IT后端-边界条件总结.docx §1.3'},
+    ];
+    const rows = html.map(r=>`<tr><td>${r.cid}</td><td>${r.bm}</td><td>${r.vec}</td><td>${r.rrf}</td><td>${r.rerank}</td><td>${r.src}</td></tr>`).join('');
+    document.getElementById('ragResult').innerHTML =
+      `<div class="stat-line"><span>query</span><span>${q}</span></div>
+       <div class="stat-line"><span>租户</span><span>${t}</span></div>
+       <div class="stat-line"><span>tenant_id filter</span><span style="color:var(--ok)">已由网关注入</span></div>
+       <table style="margin-top:8px">
+         <thead><tr><th>chunk_id</th><th>BM25</th><th>向量</th><th>RRF</th><th>Rerank</th><th>来源</th></tr></thead>
+         <tbody>${rows}</tbody>
+       </table>`;
+    toast('检索完成，返回 top-4');
+  }
+
+  // 渗透测试模拟
+  function runPen(){
+    const out = `[*] 持租户 A(t_103) JWT 查询 B(t_209) namespace
+[*] 网关注入 X-Tenant-Id: 103
+[*] Milvus expr 强制: tenant_id == 103
+[+] 返回结果数: 0
+[+] FGAC 拒绝记录已写入审计 (event_id=fgac_7723)
+[+] 结论: 隔离有效，零泄漏`;
+    document.getElementById('penResult').innerHTML = `<div class="code">${out}</div>`;
+    toast('渗透测试通过：0 泄漏');
+  }
+
+  // MAE 趋势柱图
+  const mae = [0.46,0.44,0.43,0.42,0.41,0.40,0.39,0.38];
+  const max = 0.5;
+  const colors = ['#f56c6c','#f5a623','#f5a623','#f5a623','#36c5a0','#36c5a0','#36c5a0','#36c5a0'];
+  document.getElementById('maeChart').innerHTML = mae.map((v,i)=>{
+    const h = Math.round(v/max*140);
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="font-size:11px;color:var(--muted)">${v}</div>
+      <div style="width:60%;height:${h}px;background:${colors[i]};border-radius:3px"></div>
+      <div style="font-size:10px;color:var(--muted)">W${i+1}</div>
+    </div>`;
+  }).join('');
+</script>
+</body>
+</html>

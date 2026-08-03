@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT后端学院 - 学员Web门户</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --border:#30363d;
+  --text:#e6edf3; --text2:#8b949e; --primary:#58a6ff; --primary2:#1f6feb;
+  --success:#3fb950; --warning:#d29922; --danger:#f85149; --purple:#bc8cff;
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+a{color:var(--primary);text-decoration:none}
+button{cursor:pointer;font-family:inherit;border:none;border-radius:var(--radius);padding:8px 16px;font-size:14px}
+/* layout */
+.app{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;position:fixed;height:100vh;overflow-y:auto}
+.sidebar .logo{padding:0 20px 20px;font-size:18px;font-weight:600;color:var(--primary);display:flex;align-items:center;gap:8px}
+.sidebar .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--success)}
+.nav-item{padding:10px 20px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:10px;border-left:3px solid transparent}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg3);color:var(--primary);border-left-color:var(--primary)}
+.nav-item .icon{width:18px;text-align:center}
+.main{margin-left:240px;flex:1;padding:24px 32px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.topbar h1{font-size:22px;font-weight:600}
+.topbar .actions{display:flex;gap:12px;align-items:center}
+.search{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:6px 16px;width:320px;color:var(--text)}
+.btn-primary{background:var(--primary2);color:#fff}
+.btn-primary:hover{background:var(--primary)}
+.btn-ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--primary)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+/* page sections */
+.page{display:none}
+.page.active{display:block}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card h3{font-size:16px;margin-bottom:12px}
+.grid{display:grid;gap:16px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+/* course card */
+.course-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
+.course-card:hover{transform:translateY(-2px);border-color:var(--primary)}
+.course-card .cover{height:120px;background:linear-gradient(135deg,var(--primary2),var(--purple));display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:700}
+.course-card .body{padding:14px}
+.course-card .title{font-weight:600;margin-bottom:6px}
+.course-card .meta{color:var(--text2);font-size:12px;display:flex;justify-content:space-between}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;background:var(--bg3);color:var(--text2);margin-right:4px}
+.tag.live{background:rgba(248,81,73,.15);color:var(--danger)}
+.tag.hot{background:rgba(210,153,34,.15);color:var(--warning)}
+/* video player */
+.player-wrap{display:grid;grid-template-columns:1fr 300px;gap:16px}
+.player{background:#000;border-radius:var(--radius);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.player .play-btn{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff}
+.player .controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.8));padding:12px;display:flex;align-items:center;gap:12px;color:#fff}
+.player .progress{flex:1;height:4px;background:rgba(255,255,255,.3);border-radius:2px;position:relative}
+.player .progress .bar{height:100%;background:var(--danger);border-radius:2px;width:35%}
+.chapter-list{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;max-height:500px;overflow-y:auto}
+.chapter-list h4{margin-bottom:10px;color:var(--text2);font-size:13px;text-transform:uppercase}
+.chapter-item{padding:10px;border-radius:6px;cursor:pointer;display:flex;gap:10px;align-items:center}
+.chapter-item:hover{background:var(--bg3)}
+.chapter-item.active{background:var(--bg3);border-left:3px solid var(--primary)}
+.chapter-item .num{width:24px;height:24px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text2)}
+.chapter-item.active .num{background:var(--primary);color:#fff}
+.chapter-item .info{flex:1}
+.chapter-item .info .t{font-size:13px}
+.chapter-item .info .d{font-size:11px;color:var(--text2)}
+/* IDE */
+.ide-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.ide-header{background:var(--bg3);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.ide-tabs{display:flex;gap:4px}
+.ide-tab{padding:6px 12px;background:var(--bg2);border-radius:4px 4px 0 0;font-size:12px;cursor:pointer}
+.ide-tab.active{background:var(--primary2);color:#fff}
+.ide-body{display:grid;grid-template-columns:200px 1fr 300px;height:500px}
+.ide-sidebar{background:var(--bg3);padding:12px;border-right:1px solid var(--border)}
+.ide-sidebar .file{padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text2)}
+.ide-sidebar .file:hover{background:var(--bg2);color:var(--text)}
+.ide-sidebar .file.active{color:var(--primary)}
+.ide-editor{background:#1e1e1e;font-family:"SF Mono",Monaco,Consolas,monospace;font-size:13px;padding:12px;overflow:auto;color:#d4d4d4;position:relative}
+.ide-editor .line-num{color:#6e7681;margin-right:16px;user-select:none}
+.ide-editor .kw{color:#569cd6}
+.ide-editor .str{color:#ce9178}
+.ide-editor .fn{color:#dcdcaa}
+.ide-editor .com{color:#6a9955}
+.ide-editor .type{color:#4ec9b0}
+.ide-output{background:var(--bg);border-left:1px solid var(--border);padding:12px;font-family:monospace;font-size:12px;overflow:auto}
+.ide-output .out-line{color:var(--success);margin-bottom:4px}
+.ide-output .err-line{color:var(--danger)}
+.ide-output .pass{color:var(--success)}
+.ide-output .fail{color:var(--danger)}
+.ide-toolbar{padding:8px 16px;background:var(--bg3);border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+/* assignment list */
+.asg-item{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;background:var(--bg2)}
+.asg-item:hover{border-color:var(--primary)}
+.asg-item .left .t{font-weight:600;margin-bottom:4px}
+.asg-item .left .d{font-size:12px;color:var(--text2)}
+.status{padding:3px 10px;border-radius:12px;font-size:12px}
+.status.pending{background:rgba(210,153,34,.15);color:var(--warning)}
+.status.graded{background:rgba(63,185,80,.15);color:var(--success)}
+.status.overdue{background:rgba(248,81,73,.15);color:var(--danger)}
+/* live room */
+.live-wrap{display:grid;grid-template-columns:1fr 320px;gap:16px}
+.live-video{background:#000;border-radius:var(--radius);aspect-ratio:16/9;position:relative;display:flex;align-items:center;justify-content:center}
+.live-video .live-badge{position:absolute;top:12px;left:12px;background:var(--danger);color:#fff;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.live-video .live-badge .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+.live-video .viewer-count{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);color:#fff;padding:4px 10px;border-radius:4px;font-size:12px}
+.danmaku-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;height:500px}
+.danmaku-box .head{padding:12px;border-bottom:1px solid var(--border);font-weight:600}
+.danmaku-list{flex:1;overflow-y:auto;padding:12px}
+.danmaku-msg{margin-bottom:8px;font-size:13px}
+.danmaku-msg .u{color:var(--purple);font-weight:600;margin-right:6px}
+.danmaku-msg .m{color:var(--text)}
+.danmaku-msg.teacher .u{color:var(--warning)}
+.danmaku-input{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px}
+.danmaku-input input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:8px 14px;color:var(--text)}
+/* exam */
+.exam-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.exam-q{margin-bottom:16px}
+.exam-q .q{font-weight:600;margin-bottom:10px}
+.exam-opt{padding:10px 14px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer}
+.exam-opt:hover{border-color:var(--primary);background:var(--bg3)}
+.exam-opt.sel{border-color:var(--primary);background:rgba(88,166,255,.1)}
+/* profile */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.stat .v{font-size:28px;font-weight:700;color:var(--primary)}
+.stat .l{color:var(--text2);font-size:12px;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo"><span class="dot"></span> IT后端学院</div>
+    <div class="nav-item active" onclick="showPage('courses')"><span class="icon">📚</span> 我的课程</div>
+    <div class="nav-item" onclick="showPage('video')"><span class="icon">▶</span> 视频学习</div>
+    <div class="nav-item" onclick="showPage('ide')"><span class="icon">&lt;/&gt;</span> 在线编程</div>
+    <div class="nav-item" onclick="showPage('assignment')"><span class="icon">📝</span> 作业列表</div>
+    <div class="nav-item" onclick="showPage('live')"><span class="icon">🔴</span> 直播间</div>
+    <div class="nav-item" onclick="showPage('exam')"><span class="icon">📋</span> 在线考试</div>
+    <div class="nav-item" onclick="showPage('profile')"><span class="icon">👤</span> 个人中心</div>
+    <div style="position:absolute;bottom:16px;left:0;right:0;padding:12px 20px;border-top:1px solid var(--border);color:var(--text2);font-size:12px">
+      SP-05 MVP · v1.0<br>单cell · 1万CCU
+    </div>
+  </aside>
+  <main class="main">
+    <!-- 课程列表 -->
+    <section class="page active" id="page-courses">
+      <div class="topbar">
+        <h1>我的课程</h1>
+        <div class="actions">
+          <input class="search" placeholder="搜索课程 / 讲师 / 分类">
+          <div class="avatar">J</div>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <span class="tag hot">全部</span>
+        <span class="tag">Java后端</span>
+        <span class="tag">分布式系统</span>
+        <span class="tag">数据库</span>
+        <span class="tag">云原生</span>
+        <span class="tag live">直播中</span>
+      </div>
+      <div class="grid grid-3">
+        <div class="course-card" onclick="showPage('video')">
+          <div class="cover">Java</div>
+          <div class="body">
+            <div class="title">Java高并发编程实战</div>
+            <div class="meta"><span>张老师</span><span>42课时</span></div>
+            <div style="margin-top:8px"><span class="tag">进行中</span><span class="tag hot">热门</span></div>
+          </div>
+        </div>
+        <div class="course-card">
+          <div class="cover" style="background:linear-gradient(135deg,#3fb950,#58a6ff)">K8s</div>
+          <div class="body">
+            <div class="title">云原生与Kubernetes实战</div>
+            <div class="meta"><span>李老师</span><span>36课时</span></div>
+            <div style="margin-top:8px"><span class="tag">进行中</span></div>
+          </div>
+        </div>
+        <div class="course-card">
+          <div class="cover" style="background:linear-gradient(135deg,#d29922,#f85149)">TiDB</div>
+          <div class="body">
+            <div class="title">分布式数据库TiDB深度</div>
+            <div class="meta"><span>王老师</span><span>28课时</span></div>
+            <div style="margin-top:8px"><span class="tag live">直播中</span></div>
+          </div>
+        </div>
+        <div class="course-card">
+          <div class="cover" style="background:linear-gradient(135deg,#bc8cff,#1f6feb)">DDD</div>
+          <div class="body">
+            <div class="title">领域驱动设计落地</div>
+            <div class="meta"><span>赵老师</span><span>24课时</span></div>
+            <div style="margin-top:8px"><span class="tag">已完成</span></div>
+          </div>
+        </div>
+        <div class="course-card">
+          <div class="cover" style="background:linear-gradient(135deg,#f85149,#bc8cff)">Go</div>
+          <div class="body">
+            <div class="title">Go高性能后端开发</div>
+            <div class="meta"><span>陈老师</span><span>32课时</span></div>
+            <div style="margin-top:8px"><span class="tag">进行中</span></div>
+          </div>
+        </div>
+        <div class="course-card">
+          <div class="cover" style="background:linear-gradient(135deg,#58a6ff,#3fb950)">Flink</div>
+          <div class="body">
+            <div class="title">Flink实时计算实战</div>
+            <div class="meta"><span>刘老师</span><span>30课时</span></div>
+            <div style="margin-top:8px"><span class="tag">即将开课</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 视频学习 -->
+    <section class="page" id="page-video">
+      <div class="topbar"><h1>Java高并发编程实战 - 第3章 Disruptor环形缓冲区</h1>
+        <div class="actions"><button class="btn-ghost">上一节</button><button class="btn-primary">下一节</button></div>
+      </div>
+      <div class="player-wrap">
+        <div>
+          <div class="player">
+            <div class="play-btn">▶</div>
+            <div class="controls">
+              <span>▶</span><span style="font-size:12px">12:35 / 36:20</span>
+              <div class="progress"><div class="bar"></div></div>
+              <span>1.0x</span><span>1080p</span><span>🔊</span><span>⛶</span>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h3>本节简介</h3>
+            <p style="color:var(--text2)">Disruptor 是 LMAX 开源的高性能环形缓冲区，单线程每秒可处理 2000 万+ 消息。本节讲解 RingBuffer 65536 槽位、tryNext 降级、batch flush 等核心机制，并在 ESP 项目中验证了学习事件 ingest 场景。</p>
+            <div style="margin-top:12px"><span class="tag">学习事件 ingest</span><span class="tag">Disruptor</span><span class="tag">批量 flush</span></div>
+          </div>
+        </div>
+        <div class="chapter-list">
+          <h4>课程章节</h4>
+          <div class="chapter-item"><div class="num">1</div><div class="info"><div class="t">并发基础与线程模型</div><div class="d">28:15</div></div></div>
+          <div class="chapter-item"><div class="num">2</div><div class="info"><div class="t">JMM 与 volatile</div><div class="d">32:40</div></div></div>
+          <div class="chapter-item active"><div class="num">3</div><div class="info"><div class="t">Disruptor 环形缓冲区</div><div class="d">36:20</div></div></div>
+          <div class="chapter-item"><div class="num">4</div><div class="info"><div class="t">CompletableFuture 异步</div><div class="d">29:50</div></div></div>
+          <div class="chapter-item"><div class="num">5</div><div class="info"><div class="t">虚拟线程 Loom</div><div class="d">34:10</div></div></div>
+          <div class="chapter-item"><div class="num">6</div><div class="info"><div class="t">锁 vs CAS</div><div class="d">26:30</div></div></div>
+          <div class="chapter-item"><div class="num">7</div><div class="info"><div class="t">线程池调优</div><div class="d">38:00</div></div></div>
+          <div class="chapter-item"><div class="num">8</div><div class="info"><div class="t">实战:学习事件 ingest</div><div class="d">42:15</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 在线编程 IDE -->
+    <section class="page" id="page-ide">
+      <div class="topbar"><h1>在线编程 - 作业3: 实现一个无锁队列</h1>
+        <div class="actions"><span class="tag" style="background:rgba(63,185,80,.15);color:var(--success)">● WebContainer 就绪</span><button class="btn-ghost">协作</button><button class="btn-ghost">运行</button><button class="btn-primary">提交评测</button></div>
+      </div>
+      <div class="ide-wrap">
+        <div class="ide-header">
+          <div class="ide-tabs">
+            <div class="ide-tab active">LockFreeQueue.java</div>
+            <div class="ide-tab">Main.java</div>
+            <div class="ide-tab">+</div>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">Java 21 · Yjs 协作中(2人)</div>
+        </div>
+        <div class="ide-body">
+          <div class="ide-sidebar">
+            <div style="color:var(--text2);font-size:11px;margin-bottom:8px;text-transform:uppercase">文件</div>
+            <div class="file active">📄 LockFreeQueue.java</div>
+            <div class="file">📄 Main.java</div>
+            <div class="file">📁 test/</div>
+            <div class="file">  📄 QueueTest.java</div>
+            <div class="file">📄 README.md</div>
+          </div>
+          <div class="ide-editor">
+<pre><span class="line-num">1</span><span class="kw">package</span> edu.itbackend.concurrency;
+<span class="line-num">2</span>
+<span class="line-num">3</span><span class="kw">import</span> java.util.concurrent.atomic.AtomicReference;
+<span class="line-num">4</span><span class="kw">import</span> java.util.concurrent.atomic.AtomicInteger;
+<span class="line-num">5</span>
+<span class="line-num">6</span><span class="com">/**
+<span class="line-num">7</span> * 无锁队列(Michael-Scott 算法)
+<span class="line-num">8</span> * 作业3: 实现enqueue/dequeue
+<span class="line-num">9</span> */</span>
+<span class="line-num">10</span><span class="kw">public class</span> <span class="type">LockFreeQueue</span>&lt;T&gt; {
+<span class="line-num">11</span>    <span class="kw">private static class</span> <span class="type">Node</span>&lt;T&gt; {
+<span class="line-num">12</span>        T value;
+<span class="line-num">13</span> <span class="type">AtomicReference</span>&lt;<span class="type">Node</span>&lt;T&gt;&gt; next;
+<span class="line-num">14</span>        <span class="type">Node</span>(T value, <span class="type">Node</span>&lt;T&gt; next) {
+<span class="line-num">15</span>            <span class="kw">this</span>.value = value;
+<span class="line-num">16</span>            <span class="kw">this</span>.next = <span class="kw">new</span> <span class="type">AtomicReference</span>&lt;&gt;(next);
+<span class="line-num">17</span>        }
+<span class="line-num">18</span>    }
+<span class="line-num">19</span>
+<span class="line-num">20</span>    <span class="kw">private final</span> <span class="type">AtomicReference</span>&lt;<span class="type">Node</span>&lt;T&gt;&gt; head, tail;
+<span class="line-num">21</span>    <span class="kw">private final</span> <span class="type">AtomicInteger</span> size = <span class="kw">new</span> <span class="type">AtomicInteger</span>(0);
+<span class="line-num">22</span>
+<span class="line-num">23</span>    <span class="kw">public</span> <span class="type">LockFreeQueue</span>() {
+<span class="line-num">24</span>        <span class="type">Node</span>&lt;T&gt; dummy = <span class="kw">new</span> <span class="type">Node</span>&lt;&gt;(<span class="kw">null</span>, <span class="kw">null</span>);
+<span class="line-num">25</span>        head = <span class="kw">new</span> <span class="type">AtomicReference</span>&lt;&gt;(dummy);
+<span class="line-num">26</span>        tail = <span class="kw">new</span> <span class="type">AtomicReference</span>&lt;&gt;(dummy);
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>
+<span class="line-num">29</span>    <span class="com">// TODO: 实现enqueue</span>
+<span class="line-num">30</span>    <span class="kw">public void</span> <span class="fn">enqueue</span>(T value) {
+<span class="line-num">31</span>        <span class="type">Node</span>&lt;T&gt; newNode = <span class="kw">new</span> <span class="type">Node</span>&lt;&gt;(value, <span class="kw">null</span>);
+<span class="line-num">32</span>        <span class="kw">while</span> (<span class="kw">true</span>) {
+<span class="line-num">33</span>            <span class="type">Node</span>&lt;T&gt; curTail = tail.get();
+<span class="line-num">34</span>            <span class="type">Node</span>&lt;T&gt; next = curTail.next.get();
+<span class="line-num">35</span>            <span class="kw">if</span> (curTail == tail.get()) {
+<span class="line-num">36</span>                <span class="kw">if</span> (next == <span class="kw">null</span>) {
+<span class="line-num">37</span>                    <span class="kw">if</span> (curTail.next.compareAndSet(<span class="kw">null</span>, newNode)) {
+<span class="line-num">38</span>                        tail.compareAndSet(curTail, newNode);
+<span class="line-num">39</span>                        size.incrementAndGet();
+<span class="line-num">40</span>                        <span class="kw">return</span>;
+<span class="line-num">41</span>                    }
+<span class="line-num">42</span>                } <span class="kw">else</span> {
+<span class="line-num">43</span>                    tail.compareAndSet(curTail, next);
+<span class="line-num">44</span>                }
+<span class="line-num">45</span>            }
+<span class="line-num">46</span>        }
+<span class="line-num">47</span>    }
+<span class="line-num">48</span>}</pre>
+          </div>
+          <div class="ide-output">
+            <div style="color:var(--text2);margin-bottom:8px">运行输出 (WebContainer)</div>
+            <div class="out-line">▶ 编译 LockFreeQueue.java...</div>
+            <div class="out-line">▶ 编译 Main.java...</div>
+            <div class="out-line">▶ 运行 Main...</div>
+            <div style="color:var(--text);margin:8px 0">--- 测试结果 ---</div>
+            <div class="pass">✓ testEnqueueSingle (12ms)</div>
+            <div class="pass">✓ testEnqueueConcurrent (48ms)</div>
+            <div class="pass">✓ testDequeue (15ms)</div>
+            <div class="fail">✗ testEmptyDequeue (8ms)</div>
+            <div style="color:var(--danger);margin-left:16px">Expected: null, Got: exception</div>
+            <div style="margin-top:8px;color:var(--text2)">3/4 通过 · 覆盖率 78%</div>
+          </div>
+        </div>
+        <div class="ide-toolbar">
+          <span style="margin-right:auto;color:var(--text2);font-size:12px">⚡ 启动 230ms · 协作者: 学员B</span>
+          <button class="btn-ghost">格式化</button>
+          <button class="btn-ghost">调试</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 作业列表 -->
+    <section class="page" id="page-assignment">
+      <div class="topbar"><h1>作业列表</h1>
+        <div class="actions"><button class="btn-ghost">已归档</button><button class="btn-primary">+ 新作业(教师)</button></div>
+      </div>
+      <div class="card">
+        <h3>待提交</h3>
+        <div class="asg-item">
+          <div class="left"><div class="t">作业3: 实现无锁队列 (Java)</div><div class="d">Java高并发编程 · 截止 2026-08-05 23:59 · 剩余 2天</div></div>
+          <div><span class="status pending">待提交</span> <button class="btn-primary" onclick="showPage('ide')">去提交</button></div>
+        </div>
+        <div class="asg-item">
+          <div class="left"><div class="t">实验4: TiDB 分片调优</div><div class="d">分布式数据库TiDB · 截止 2026-08-07 23:59 · 剩余 4天</div></div>
+          <div><span class="status pending">待提交</span> <button class="btn-primary">去提交</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>已评分</h3>
+        <div class="asg-item">
+          <div class="left"><div class="t">作业2: CompletableFuture 异步编排</div><div class="d">Java高并发编程 · 提交于 2026-07-28</div></div>
+          <div><span class="status graded">92分</span> <button class="btn-ghost">查看反馈</button></div>
+        </div>
+        <div class="asg-item">
+          <div class="left"><div class="t">作业1: 线程池实现</div><div class="d">Java高并发编程 · 提交于 2026-07-20</div></div>
+          <div><span class="status graded">88分</span> <button class="btn-ghost">查看反馈</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 直播间 -->
+    <section class="page" id="page-live">
+      <div class="topbar"><h1>🔴 直播中: TiDB 分布式事务深度剖析</h1>
+        <div class="actions"><span class="tag live">WebRTC 互动</span><button class="btn-ghost">切换 LL-HLS</button><button class="btn-ghost">申请连麦</button></div>
+      </div>
+      <div class="live-wrap">
+        <div>
+          <div class="live-video">
+            <span class="live-badge"><span class="dot"></span> LIVE</span>
+            <span class="viewer-count">👁 248 在线</span>
+            <div style="color:#fff;font-size:14px">▶ 主播: 王老师 · 1080p · 延迟 320ms</div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h3>直播互动</h3>
+            <p style="color:var(--text2)">当前为互动模式(WebRTC LiveKit SFU),延迟&lt;800ms(G-05)。观众超几百将自动降级 LL-HLS+CDN。</p>
+            <div style="margin-top:12px">
+              <button class="btn-ghost">📢 发起投票</button>
+              <button class="btn-ghost">🔗 分享屏幕</button>
+              <button class="btn-ghost">📋 签到</button>
+            </div>
+          </div>
+        </div>
+        <div class="danmaku-box">
+          <div class="head">弹幕聊天</div>
+          <div class="danmaku-list" id="danmaku-list">
+            <div class="danmaku-msg teacher"><span class="u">[教师]王老师:</span><span class="m">大家好,今天讲 TiDB 分布式事务</span></div>
+            <div class="danmaku-msg"><span class="u">学员A:</span><span class="m">老师,Percolator 和 TSO 的关系?</span></div>
+            <div class="danmaku-msg"><span class="u">学员B:</span><span class="m">刚进来,讲到哪了</span></div>
+            <div class="danmaku-msg teacher"><span class="u">[教师]王老师:</span><span class="m">TSO 是全局时钟,Percolator 基于 TSO 做 2PC</span></div>
+            <div class="danmaku-msg"><span class="u">学员C:</span><span class="m">PRE_SPLIT_REGIONS 怎么用</span></div>
+            <div class="danmaku-msg"><span class="u">学员A:</span><span class="m">懂了,谢谢老师</span></div>
+            <div class="danmaku-msg"><span class="u">学员D:</span><span class="m">这个延迟好低,互动很流畅</span></div>
+            <div class="danmaku-msg"><span class="u">学员E:</span><span class="m">+1</span></div>
+          </div>
+          <div class="danmaku-input">
+            <input placeholder="发个弹幕..." id="danmaku-input">
+            <button class="btn-primary" onclick="sendDanmaku()">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 考试 -->
+    <section class="page" id="page-exam">
+      <div class="topbar"><h1>在线考试: Java并发期末考试</h1>
+        <div class="actions"><span class="tag" style="background:rgba(248,81,73,.15);color:var(--danger)">🔒 Browser Lockdown</span><span class="tag">⏱ 剩余 42:18</span></div>
+      </div>
+      <div class="exam-card">
+        <div style="color:var(--text2);margin-bottom:16px">第 3/20 题 · 单选题 · 5分</div>
+        <div class="exam-q">
+          <div class="q">3. 以下关于 Disruptor RingBuffer 的描述,哪项是正确的?</div>
+          <div class="exam-opt">A. RingBuffer 满时阻塞生产者直到消费者追上</div>
+          <div class="exam-opt sel">B. RingBuffer 满时 tryNext 返回 false,可降级丢弃</div>
+          <div class="exam-opt">C. RingBuffer 必须配合外部锁保证线程安全</div>
+          <div class="exam-opt">D. RingBuffer 容量固定为 1024,不可配置</div>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <button class="btn-ghost">上一题</button>
+          <button class="btn-primary">下一题</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>考试说明</h3>
+        <ul style="color:var(--text2);padding-left:20px;line-height:2">
+          <li>已启用 browser lockdown:禁止切屏/复制/新窗口</li>
+          <li>AI proctoring 仅 flag 不自动扣分,异常由教师复核</li>
+          <li>断网 5 分钟内可重连续考,状态从 Redis 恢复</li>
+          <li>编程题(第 16-20 题)走 Firecracker 评测沙箱</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 个人中心 -->
+    <section class="page" id="page-profile">
+      <div class="topbar"><h1>个人中心</h1><div class="actions"><button class="btn-ghost">设置</button></div></div>
+      <div class="stat-grid">
+        <div class="stat"><div class="v">5</div><div class="l">进行中课程</div></div>
+        <div class="stat"><div class="v">87.5</div><div class="l">平均分</div></div>
+        <div class="stat"><div class="v">42h</div><div class="l">本月学习时长</div></div>
+        <div class="stat"><div class="v">23</div><div class="l">完成作业数</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>学习进度</h3>
+          <div style="margin-bottom:10px">Java高并发编程 <span style="float:right;color:var(--success)">68%</span></div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px;margin-bottom:12px"><div style="height:100%;width:68%;background:var(--success);border-radius:3px"></div></div>
+          <div style="margin-bottom:10px">云原生K8s <span style="float:right;color:var(--primary)">45%</span></div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px;margin-bottom:12px"><div style="height:100%;width:45%;background:var(--primary);border-radius:3px"></div></div>
+          <div style="margin-bottom:10px">分布式TiDB <span style="float:right;color:var(--warning)">30%</span></div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px;margin-bottom:12px"><div style="height:100%;width:30%;background:var(--warning);border-radius:3px"></div></div>
+        </div>
+        <div class="card">
+          <h3>最近活动</h3>
+          <div style="color:var(--text2);font-size:13px;line-height:2.2">
+            <div>• 2026-08-03 14:30 提交作业3(无锁队列)</div>
+            <div>• 2026-08-03 10:00 观看直播 TiDB事务</div>
+            <div>• 2026-08-02 21:15 完成第2章视频</div>
+            <div>• 2026-08-02 19:00 作业2评分完成(92分)</div>
+            <div>• 2026-08-01 16:00 在 IDE 练习</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+function sendDanmaku(){
+  const input=document.getElementById('danmaku-input');
+  if(input.value.trim()){
+    const list=document.getElementById('danmaku-list');
+    const div=document.createElement('div');
+    div.className='danmaku-msg';
+    div.innerHTML='<span class="u">我:</span><span class="m">'+input.value+'</span>';
+    list.appendChild(div);
+    list.scrollTop=list.scrollHeight;
+    input.value='';
+  }
+}
+document.querySelectorAll('.exam-opt').forEach(o=>o.onclick=()=>{
+  document.querySelectorAll('.exam-opt').forEach(x=>x.classList.remove('sel'));
+  o.classList.add('sel');
+});
+</script>
+</body>
+</html>

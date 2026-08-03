@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业务中台管理控制台 - SP-03</title>
+<style>
+  :root{
+    --bg:#0f1419; --bg2:#1a1f29; --bg3:#232a36; --bg4:#2d3543;
+    --border:#3a4350; --text:#e6edf3; --text2:#9aa7b8; --text3:#6b7785;
+    --primary:#4f9eff; --primary2:#3a8ee6; --success:#3fb950; --warn:#d29922;
+    --danger:#f85149; --purple:#a371f7; --cyan:#39d2c0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;overflow:hidden;
+  }
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  .app{display:flex;height:100vh}
+
+  /* 侧边栏 */
+  .sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+  .logo{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--primary);box-shadow:0 0 8px var(--primary)}
+  .logo .title{font-size:15px;font-weight:600}
+  .logo .sub{font-size:11px;color:var(--text3)}
+  .nav{flex:1;padding:12px 10px;overflow-y:auto}
+  .nav-item{padding:10px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text2);margin-bottom:2px;transition:all .15s;font-size:13px}
+  .nav-item:hover{background:var(--bg3);color:var(--text)}
+  .nav-item.active{background:var(--primary);color:#fff}
+  .nav-item .ico{width:18px;text-align:center;font-size:14px}
+  .nav-group{font-size:11px;color:var(--text3);padding:14px 14px 6px;letter-spacing:.5px}
+  .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center}
+  .sidebar-footer .cell{color:var(--cyan)}
+
+  /* 主区 */
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .topbar{height:54px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:16px}
+  .topbar .crumb{font-size:13px;color:var(--text2)}
+  .topbar .crumb b{color:var(--text)}
+  .topbar .search{flex:1;max-width:360px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px}
+  .topbar .search::placeholder{color:var(--text3)}
+  .topbar .spacer{flex:1}
+  .topbar .badge{padding:4px 10px;background:var(--bg3);border-radius:12px;font-size:12px;color:var(--text2)}
+  .topbar .user{display:flex;align-items:center;gap:8px;font-size:13px}
+  .topbar .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--purple));display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:600}
+  .content{flex:1;overflow:auto;padding:22px}
+
+  /* 通用 */
+  .page{display:none}.page.active{display:block}
+  .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  .page-header h1{font-size:20px;font-weight:600}
+  .page-header .sub{font-size:12px;color:var(--text3);margin-top:3px}
+  .btn{padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s}
+  .btn:hover{background:var(--bg4)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary2)}
+  .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:4px 10px;font-size:12px}
+
+  /* 统计卡 */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .stat-card .label{font-size:12px;color:var(--text3)}
+  .stat-card .val{font-size:26px;font-weight:600;margin:6px 0 4px}
+  .stat-card .trend{font-size:12px}
+  .up{color:var(--success)}.down{color:var(--danger)}
+
+  /* 表格 */
+  .panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .panel-head h3{font-size:14px}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px}
+  .input::placeholder{color:var(--text3)}
+  select.input{cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{padding:11px 14px;text-align:left;background:var(--bg3);color:var(--text2);font-weight:500;font-size:12px;border-bottom:1px solid var(--border)}
+  td{padding:11px 14px;border-bottom:1px solid var(--border)}
+  tr:hover td{background:var(--bg3)}
+  .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+  .tag.green{background:rgba(63,185,80,.15);color:var(--success)}
+  .tag.red{background:rgba(248,81,73,.15);color:var(--danger)}
+  .tag.yellow{background:rgba(210,153,34,.15);color:var(--warn)}
+  .tag.blue{background:rgba(79,158,255,.15);color:var(--primary)}
+  .tag.gray{background:var(--bg4);color:var(--text2)}
+  .tag.purple{background:rgba(163,113,247,.15);color:var(--purple)}
+  .link{color:var(--primary);cursor:pointer}
+  .link:hover{text-decoration:underline}
+  .pagination{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text2)}
+
+  /* 详情抽屉 */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;display:none}
+  .mask.show{display:block}
+  .drawer{position:fixed;top:0;right:0;width:480px;height:100%;background:var(--bg2);border-left:1px solid var(--border);z-index:51;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column}
+  .drawer.show{transform:translateX(0)}
+  .drawer-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .drawer-head h3{font-size:15px}
+  .drawer-body{flex:1;overflow:auto;padding:18px 20px}
+  .drawer-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+  .form-row{margin-bottom:14px}
+  .form-row label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
+  .form-row .val{padding:8px 10px;background:var(--bg3);border-radius:6px;font-size:13px}
+  .form-row input,.form-row select,.form-row textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px}
+  .form-row textarea{resize:vertical;min-height:70px}
+
+  /* 模态 */
+  .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center}
+  .modal.show{display:flex}
+  .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:520px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column}
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .modal-body{flex:1;overflow:auto;padding:18px 20px}
+  .modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+
+  /* 课程树 */
+  .tree{font-size:13px}
+  .tree-node{padding:5px 0}
+  .tree-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer}
+  .tree-row:hover{background:var(--bg3)}
+  .tree-row.selected{background:var(--bg4)}
+  .tree-toggle{width:16px;color:var(--text3);cursor:pointer}
+  .tree-icon{color:var(--warn)}
+  .tree-actions{margin-left:auto;display:none;gap:6px}
+  .tree-row:hover .tree-actions{display:flex}
+  .children{margin-left:18px;border-left:1px dashed var(--border);padding-left:8px}
+
+  /* Kanban */
+  .kanban{display:flex;gap:14px;height:calc(100vh - 200px);overflow-x:auto}
+  .kanban-col{width:280px;flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column}
+  .kanban-head{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+  .kanban-head .count{background:var(--bg4);padding:1px 8px;border-radius:10px;font-size:11px;color:var(--text2)}
+  .kanban-body{flex:1;overflow-y:auto;padding:10px}
+  .kanban-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px;margin-bottom:9px;cursor:pointer;transition:all .15s}
+  .kanban-card:hover{border-color:var(--primary)}
+  .kanban-card .kt-title{font-size:13px;font-weight:500;margin-bottom:6px}
+  .kanban-card .kt-meta{font-size:11px;color:var(--text3);display:flex;justify-content:space-between}
+  .kanban-card .kt-tags{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
+  .sla-ok{color:var(--success)}.sla-warn{color:var(--warn)}.sla-over{color:var(--danger)}
+
+  /* 风控规则编辑 */
+  .rule-block{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px}
+  .rule-block .rh{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .rule-block .rh b{font-size:13px}
+  .cond-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+  .cond-row select,.cond-row input{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:12px}
+  .cond-row .field{width:120px}.cond-row .op{width:60px}.cond-row .val{flex:1}
+  .toast{position:fixed;top:20px;right:20px;background:var(--success);color:#fff;padding:10px 18px;border-radius:6px;z-index:99;font-size:13px;display:none;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+  .toast.show{display:block}
+
+  .empty{text-align:center;color:var(--text3);padding:40px;font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .info-line{display:flex;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .info-line .k{width:120px;color:var(--text3)}
+  .info-line .v{flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="dot"></span>
+      <div>
+        <div class="title">业务中台控制台</div>
+        <div class="sub">SP-03 · v1.0</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-group">运营管理</div>
+      <div class="nav-item active" data-page="dashboard"><span class="ico">◆</span>总览看板</div>
+      <div class="nav-item" data-page="users"><span class="ico">◉</span>用户管理</div>
+      <div class="nav-item" data-page="orders"><span class="ico">▤</span>订单管理</div>
+      <div class="nav-item" data-page="marketing"><span class="ico">★</span>营销管理</div>
+      <div class="nav-group">内容与客服</div>
+      <div class="nav-item" data-page="course"><span class="ico">▦</span>课程目录</div>
+      <div class="nav-item" data-page="tickets"><span class="ico">✦</span>工单看板</div>
+      <div class="nav-group">风控</div>
+      <div class="nav-item" data-page="risk"><span class="ico">⚠</span>风控规则</div>
+    </nav>
+    <div class="sidebar-footer">
+      <span>单元: <span class="cell">Cell-0</span></span>
+      <span>v1.0</span>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">业务中台 / <b id="crumbName">总览看板</b></div>
+      <input class="search" placeholder="搜索用户/订单/课程/工单...">
+      <div class="spacer"></div>
+      <div class="badge">SLO 99.99%</div>
+      <div class="user">
+        <div class="avatar">A</div>
+        <span>管理员</span>
+      </div>
+    </div>
+    <div class="content" id="content">
+
+      <!-- 总览 -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-header"><div><h1>总览看板</h1><div class="sub">业务中台 8 组件运行状态 · 实时</div></div>
+          <div><button class="btn sm">导出报告</button></div></div>
+        <div class="stats">
+          <div class="stat-card"><div class="label">在线用户(UCM)</div><div class="val">128,432</div><div class="trend up">▲ 3.2% vs 昨日</div></div>
+          <div class="stat-card"><div class="label">今日订单(OPM)</div><div class="val">45,210</div><div class="trend up">▲ 8.7%</div></div>
+          <div class="stat-card"><div class="label">支付成功率</div><div class="val">99.87%</div><div class="trend up">▲ 0.05%</div></div>
+          <div class="stat-card"><div class="label">风控拦截率</div><div class="val">2.31%</div><div class="trend down">▼ 0.4%</div></div>
+        </div>
+        <div class="stats">
+          <div class="stat-card"><div class="label">待处理工单</div><div class="val">86</div><div class="trend up">▲ 12</div></div>
+          <div class="stat-card"><div class="label">营销券领取</div><div class="val">23,540</div><div class="trend up">▲ 15%</div></div>
+          <div class="stat-card"><div class="label">搜索 QPS</div><div class="val">8,920</div><div class="trend up">▲ 5%</div></div>
+          <div class="stat-card"><div class="label">通知发送</div><div class="val">312,001</div><div class="trend up">▲ 9%</div></div>
+        </div>
+        <div class="grid2" style="margin-top:6px">
+          <div class="panel">
+            <div class="panel-head"><h3>组件健康</h3></div>
+            <table>
+              <thead><tr><th>组件</th><th>归属</th><th>P95</th><th>可用性</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>UCM 用户中心</td><td>用户域</td><td>142ms</td><td>99.998%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>OPM 订单支付</td><td>用户域</td><td>268ms</td><td>99.995%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>OPM 计费(Rust)</td><td>用户域</td><td>3.2ms</td><td>99.999%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>MMP 营销</td><td>全局+用户</td><td>98ms</td><td>99.97%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>NTF 通知</td><td>跨域</td><td>—</td><td>99.96%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>CMP 课程目录</td><td>全局域</td><td>112ms</td><td>99.99%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>SRH 搜索</td><td>全局域</td><td>178ms</td><td>99.98%</td><td><span class="tag green">正常</span></td></tr>
+                <tr><td>TKT 工单</td><td>全局域</td><td>—</td><td>99.97%</td><td><span class="tag yellow">SLA 临界</span></td></tr>
+                <tr><td>RSK 风控规则(Rust)</td><td>全局+用户</td><td>6.8ms</td><td>99.999%</td><td><span class="tag green">正常</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>近期告警</h3></div>
+            <table>
+              <thead><tr><th>时间</th><th>组件</th><th>内容</th><th>级别</th></tr></thead>
+              <tbody>
+                <tr><td>14:32</td><td>TKT</td><td>SLA 超时工单 3 件</td><td><span class="tag yellow">warn</span></td></tr>
+                <tr><td>13:18</td><td>OPM</td><td>对账差异 2 笔挂起</td><td><span class="tag yellow">warn</span></td></tr>
+                <tr><td>11:05</td><td>RSK</td><td>规则 RULE_A 灰度 10%</td><td><span class="tag blue">info</span></td></tr>
+                <tr><td>09:42</td><td>MMP</td><td>券模板 C-881 预算余 5%</td><td><span class="tag yellow">warn</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 用户管理 -->
+      <section class="page" id="page-users">
+        <div class="page-header"><div><h1>用户管理</h1><div class="sub">UCM · 用户域单元化 · 支持 FGAC 多租户</div></div>
+          <div><button class="btn primary sm" onclick="openUserDrawer(null)">+ 新建用户</button></div></div>
+        <div class="toolbar">
+          <input class="input" id="uSearch" placeholder="搜索 user_id / 手机号 / 昵称" style="width:240px">
+          <select class="input"><option>全部状态</option><option>正常</option><option>封禁</option></select>
+          <select class="input"><option>全部事业群</option><option>IT后端</option><option>考公</option><option>考研</option><option>养生</option></select>
+          <select class="input"><option>全部单元</option><option>Cell-0</option><option>Cell-1</option><option>Cell-2</option></select>
+          <button class="btn sm" onclick="renderUsers()">查询</button>
+        </div>
+        <div class="panel">
+          <table>
+            <thead><tr><th>user_id</th><th>昵称</th><th>手机号</th><th>状态</th><th>实名</th><th>单元</th><th>注册时间</th><th>操作</th></tr></thead>
+            <tbody id="userBody"></tbody>
+          </table>
+          <div class="pagination"><span id="uCount">共 0 条</span><div><button class="btn sm ghost">上一页</button><button class="btn sm ghost">下一页</button></div></div>
+        </div>
+      </section>
+
+      <!-- 订单管理 -->
+      <section class="page" id="page-orders">
+        <div class="page-header"><div><h1>订单管理</h1><div class="sub">OPM · 订单/支付/退款/对账 · 强单元化</div></div>
+          <div><button class="btn primary sm" onclick="toast('对账任务已启动, T+1 出报告')">启动对账</button></div></div>
+        <div class="stats">
+          <div class="stat-card"><div class="label">今日 GMV</div><div class="val">¥4,820,300</div><div class="trend up">▲ 8.7%</div></div>
+          <div class="stat-card"><div class="label">退款笔数</div><div class="val">128</div><div class="trend down">▼ 3%</div></div>
+          <div class="stat-card"><div class="label">对账差异</div><div class="val">2</div><div class="trend up">需人工</div></div>
+          <div class="stat-card"><div class="label">支付 P95</div><div class="val">268ms</div><div class="trend up">达标</div></div>
+        </div>
+        <div class="toolbar">
+          <input class="input" placeholder="订单号 / user_id" style="width:220px">
+          <select class="input"><option>全部状态</option><option>待支付</option><option>已支付</option><option>退款中</option><option>已退款</option><option>已取消</option></select>
+          <select class="input"><option>全部渠道</option><option>微信</option><option>支付宝</option><option>Apple</option><option>余额</option></select>
+          <input class="input" type="date">
+          <button class="btn sm">查询</button>
+          <button class="btn sm">导出</button>
+        </div>
+        <div class="panel">
+          <table>
+            <thead><tr><th>订单号</th><th>用户</th><th>金额</th><th>渠道</th><th>状态</th><th>单元</th><th>下单时间</th><th>操作</th></tr></thead>
+            <tbody id="orderBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 营销管理 -->
+      <section class="page" id="page-marketing">
+        <div class="page-header"><div><h1>营销管理</h1><div class="sub">MMP · 券模板全局 · 个人券单元化</div></div>
+          <div><button class="btn primary sm" onclick="openCouponModal()">+ 新建券模板</button></div></div>
+        <div class="stats">
+          <div class="stat-card"><div class="label">生效中活动</div><div class="val">18</div><div class="trend up">▲ 2</div></div>
+          <div class="stat-card"><div class="label">今日领券</div><div class="val">23,540</div><div class="trend up">▲ 15%</div></div>
+          <div class="stat-card"><div class="label">核销率</div><div class="val">42.3%</div><div class="trend up">▲ 1.2%</div></div>
+          <div class="stat-card"><div class="label">刷券拦截</div><div class="val">312</div><div class="trend up">RSK</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>券模板列表</h3></div>
+          <table>
+            <thead><tr><th>模板ID</th><th>名称</th><th>类型</th><th>预算/已发</th><th>有效期</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="couponBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 课程目录 -->
+      <section class="page" id="page-course">
+        <div class="page-header"><div><h1>课程目录管理</h1><div class="sub">CMP · 全局域主库单写 · 多副本读 · 树形 CRUD</div></div>
+          <div><button class="btn primary sm" onclick="openCourseModal(null)">+ 新建课程</button></div></div>
+        <div style="display:flex;gap:14px;height:calc(100vh - 200px)">
+          <div class="panel" style="width:380px;display:flex;flex-direction:column">
+            <div class="panel-head"><h3>课程树</h3></div>
+            <div style="flex:1;overflow:auto;padding:12px" class="tree" id="courseTree"></div>
+          </div>
+          <div class="panel" style="flex:1;display:flex;flex-direction:column">
+            <div class="panel-head"><h3>课程详情</h3><span id="courseDetailTitle" style="font-size:12px;color:var(--text3)">选择左侧课程查看</span></div>
+            <div style="flex:1;overflow:auto;padding:18px" id="courseDetail">
+              <div class="empty">请选择左侧课程</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 工单看板 -->
+      <section class="page" id="page-tickets">
+        <div class="page-header"><div><h1>工单看板</h1><div class="sub">TKT · 全局域 · 跨客服调度 · SLA 升级</div></div>
+          <div><select class="input"><option>全部技能组</option><option>退款组</option><option>技术组</option><option>投诉组</option></select>
+          <button class="btn primary sm">+ 新建工单</button></div></div>
+        <div class="kanban" id="kanban"></div>
+      </section>
+
+      <!-- 风控规则 -->
+      <section class="page" id="page-risk">
+        <div class="page-header"><div><h1>风控规则配置</h1><div class="sub">RSK · Rust 热点规则引擎 · P95&lt;10ms · 热更新不重启</div></div>
+          <div><button class="btn primary sm" onclick="openRuleModal()">+ 新建规则</button>
+          <button class="btn sm" onclick="toast('规则已发布, Nacos 广播中, 5s 内全节点生效')">热更新发布</button></div></div>
+        <div class="stats">
+          <div class="stat-card"><div class="label">生效规则</div><div class="val">86</div><div class="trend up">8 灰度中</div></div>
+          <div class="stat-card"><div class="label">规则 P95</div><div class="val">6.8ms</div><div class="trend up">达标</div></div>
+          <div class="stat-card"><div class="label">今日拦截</div><div class="val">1,043</div><div class="trend up">▲ 12%</div></div>
+          <div class="stat-card"><div class="label">误拦率</div><div class="val">1.8%</div><div class="trend down">▼ 0.3%</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>规则列表</h3></div>
+          <table>
+            <thead><tr><th>规则ID</th><th>场景</th><th>名称</th><th>动作</th><th>版本</th><th>灰度</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="ruleBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- 用户详情抽屉 -->
+<div class="mask" id="userMask" onclick="closeUserDrawer()"></div>
+<div class="drawer" id="userDrawer">
+  <div class="drawer-head"><h3 id="userDrawerTitle">用户新建</h3><span class="link" onclick="closeUserDrawer()">关闭</span></div>
+  <div class="drawer-body" id="userDrawerBody"></div>
+  <div class="drawer-foot">
+    <button class="btn" onclick="closeUserDrawer()">取消</button>
+    <button class="btn danger" id="userBanBtn" onclick="banUser()" style="display:none">封禁用户</button>
+    <button class="btn primary" onclick="saveUser()">保存</button>
+  </div>
+</div>
+
+<!-- 订单详情抽屉 -->
+<div class="mask" id="orderMask" onclick="closeOrderDrawer()"></div>
+<div class="drawer" id="orderDrawer">
+  <div class="drawer-head"><h3>订单详情</h3><span class="link" onclick="closeOrderDrawer()">关闭</span></div>
+  <div class="drawer-body" id="orderDrawerBody"></div>
+  <div class="drawer-foot">
+    <button class="btn" onclick="closeOrderDrawer()">关闭</button>
+    <button class="btn danger" id="refundBtn" onclick="doRefund()">发起退款</button>
+  </div>
+</div>
+
+<!-- 券模板模态 -->
+<div class="modal" id="couponModal" onclick="if(event.target===this)closeCouponModal()">
+  <div class="modal-box">
+    <div class="modal-head"><h3>新建券模板</h3><span class="link" onclick="closeCouponModal()">关闭</span></div>
+    <div class="modal-body">
+      <div class="form-row"><label>模板名称</label><input placeholder="如:满100减20"></div>
+      <div class="form-row"><label>折扣类型</label><select id="ct"><option value="FULLCUT">满减</option><option value="DISCOUNT">折扣</option><option value="DIRECT">直减</option><option value="EXCHANGE">兑换</option></select></div>
+      <div class="form-row"><label>门槛(元)</label><input type="number" placeholder="满 N 元"></div>
+      <div class="form-row"><label>抵扣/折扣</label><input type="number" placeholder="减 N 元 / 折扣率"></div>
+      <div class="form-row"><label>预算池(张)</label><input type="number" placeholder="总发行量"></div>
+      <div class="form-row"><label>每人限领</label><input type="number" value="1"></div>
+      <div class="form-row"><label>有效期</label><input type="date"> ~ <input type="date"></div>
+      <div class="form-row"><label>退款后券有效期延长(天)</label><input type="number" value="7"></div>
+      <div class="form-row"><label>人群定向</label><select><option>全部用户</option><option>新用户</option><option>会员</option><option>指定事业群</option></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeCouponModal()">取消</button><button class="btn primary" onclick="saveCoupon()">创建</button></div>
+  </div>
+</div>
+
+<!-- 课程模态 -->
+<div class="modal" id="courseModal" onclick="if(event.target===this)closeCourseModal()">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="courseModalTitle">新建课程</h3><span class="link" onclick="closeCourseModal()">关闭</span></div>
+    <div class="modal-body">
+      <div class="form-row"><label>课程标题</label><input placeholder="如:Java 工程师进阶"></div>
+      <div class="form-row"><label>副标题</label><input></div>
+      <div class="form-row"><label>所属事业群(tenant_id)</label><select><option>IT后端</option><option>考公</option><option>考研</option><option>养生</option></select></div>
+      <div class="form-row"><label>分类</label><select><option>编程语言</option><option>架构</option><option>算法</option></select></div>
+      <div class="form-row"><label>原价/活动价/会员价</label><input type="number" placeholder="原价"> <input type="number" placeholder="活动"> <input type="number" placeholder="会员"></div>
+      <div class="form-row"><label>简介</label><textarea placeholder="课程简介"></textarea></div>
+      <div class="form-row"><label>定时上下架</label><input type="datetime-local"> ~ <input type="datetime-local"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeCourseModal()">取消</button><button class="btn primary" onclick="saveCourse()">保存</button></div>
+  </div>
+</div>
+
+<!-- 规则模态 -->
+<div class="modal" id="ruleModal" onclick="if(event.target===this)closeRuleModal()">
+  <div class="modal-box" style="width:640px">
+    <div class="modal-head"><h3>新建/编辑风控规则</h3><span class="link" onclick="closeRuleModal()">关闭</span></div>
+    <div class="modal-body">
+      <div class="form-row"><label>规则名称</label><input placeholder="如:高频登录失败拦截"></div>
+      <div class="form-row"><label>场景</label><select><option value="register">注册</option><option value="login">登录</option><option value="pay">交易</option><option value="coupon">领券</option><option value="content">内容</option></select></div>
+      <div class="rule-block">
+        <div class="rh"><b>条件组(Rete 匹配)</b><button class="btn sm" onclick="addCond(this)">+ 添加条件</button></div>
+        <div class="cond-row"><select class="field"><option>ip</option><option>user_id</option><option>device_id</option><option>phone</option><option>freq_5min</option><option>amount</option></select>
+          <select class="op"><option>==</option><option>!=</option><option>&gt;</option><option>&lt;</option><option>in</option><option>contains</option></select>
+          <input class="val" placeholder="值"></div>
+      </div>
+      <div class="form-row"><label>处置动作</label><select><option value="1">拦截(BLOCK)</option><option value="2">放行(PASS)</option><option value="3">人审(REVIEW)</option></select></div>
+      <div class="form-row"><label>权重</label><input type="number" value="10"></div>
+      <div class="form-row"><label>阈值(评分超此值触发)</label><input type="number" value="50"></div>
+      <div class="form-row"><label>灰度比例(%)</label><input type="number" value="0" placeholder="0/10/100"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeRuleModal()">取消</button><button class="btn primary" onclick="saveRule()">保存并发布</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 数据 ===== */
+const users=[
+  {uid:100861,nick:"张同学",phone:"138****8888",status:1,realname:1,cell:0,bu:"IT后端",t:"2026-07-12 09:32"},
+  {uid:100862,nick:"李学员",phone:"139****6666",status:1,realname:1,cell:1,bu:"考公",t:"2026-07-14 11:08"},
+  {uid:100863,nick:"王测试",phone:"137****2222",status:2,realname:0,cell:0,bu:"考研",t:"2026-07-18 14:21"},
+  {uid:100864,nick:"赵程序员",phone:"135****9999",status:1,realname:1,cell:2,bu:"IT后端",t:"2026-07-22 08:55"},
+  {uid:100865,nick:"陈养生",phone:"136****3333",status:1,realname:1,cell:1,bu:"养生",t:"2026-07-28 19:12"},
+  {uid:100866,nick:"批量注册嫌疑",phone:"134****0001",status:2,realname:0,cell:0,bu:"考公",t:"2026-08-01 02:13"},
+];
+const orders=[
+  {oid:"O202608030001",uid:100861,amt:299,ch:"微信",st:2,cell:0,t:"2026-08-03 09:12"},
+  {oid:"O202608030002",uid:100862,amt:1299,ch:"支付宝",st:2,cell:1,t:"2026-08-03 09:45"},
+  {oid:"O202608030003",uid:100864,amt:49,ch:"余额",st:1,cell:2,t:"2026-08-03 10:02"},
+  {oid:"O202608030004",uid:100865,amt:899,ch:"Apple",st:4,cell:1,t:"2026-08-03 10:30"},
+  {oid:"O202608030005",uid:100863,amt:199,ch:"微信",st:3,cell:0,t:"2026-08-03 11:18"},
+  {oid:"O202608030006",uid:100861,amt:59,ch:"微信",st:5,cell:0,t:"2026-08-03 11:42"},
+];
+const orderStMap={1:["待支付","yellow"],2:["已支付","green"],3:["退款中","purple"],4:["已退款","blue"],5:["已取消","gray"]};
+const chMap={微信:"微信",支付宝:"支付宝",Apple:"Apple",余额:"余额"};
+const coupons=[
+  {tid:881,name:"满100减20",type:"满减",budget:100000,issued:95000,start:"2026-08-01",end:"2026-08-31",st:"生效中"},
+  {tid:882,name:"新用户5折",type:"折扣",budget:50000,issued:12300,start:"2026-07-15",end:"2026-09-15",st:"生效中"},
+  {tid:883,name:"直减50",type:"直减",budget:20000,issued:19800,start:"2026-08-01",end:"2026-08-10",st:"预算告急"},
+  {tid:884,name:"兑换券-试听",type:"兑换",budget:5000,issued:5000,start:"2026-07-01",end:"2026-07-31",st:"已下线"},
+];
+const courseTree=[
+  {id:1,title:"IT后端课程",icon:"▶",children:[
+    {id:11,title:"Java 工程师进阶",icon:"🎬",children:[
+      {id:111,title:"第1章 并发基础",icon:"📖"},
+      {id:112,title:"第2章 JMM 内存模型",icon:"📖"},
+      {id:113,title:"第3章 锁与并发工具",icon:"📖"}]},
+    {id:12,title:"分布式系统设计",icon:"🎬"}]},
+  {id:2,title:"考公课程",icon:"▶",children:[
+    {id:21,title:"行测精讲",icon:"🎬"},
+    {id:22,title:"申论写作",icon:"🎬"}]},
+  {id:3,title:"考研课程",icon:"▶"},
+  {id:4,title:"养生课程",icon:"▶"},
+];
+const courseDetailMap={
+  11:{title:"Java 工程师进阶",teacher:"李老师",cat:"编程语言",price:299,activity:199,member:149,status:"上架",tenant:"IT后端",intro:"从并发到 JVM, 系统进阶 Java 工程师能力。"},
+  12:{title:"分布式系统设计",teacher:"王老师",cat:"架构",price:399,activity:299,member:229,status:"上架",tenant:"IT后端",intro:"CAP/BASE/一致性/单元化/湖仓一体。"}
+};
+const tickets=[
+  {id:"T-2001",title:"支付未到账",type:"退款",prio:"高",sla:"over",slaTxt:"超时 12min",group:"退款组",user:"100861"},
+  {id:"T-2002",title:"课程无法播放",type:"技术",prio:"中",sla:"warn",slaTxt:"剩 8min",group:"技术组",user:"100862"},
+  {id:"T-2003",title:"退款咨询",type:"退款",prio:"低",sla:"ok",slaTxt:"剩 2h",group:"退款组",user:"100864"},
+  {id:"T-2004",title:"券无法使用",type:"技术",prio:"中",sla:"ok",slaTxt:"剩 4h",group:"技术组",user:"100865"},
+  {id:"T-2005",title:"投诉客服态度",type:"投诉",prio:"高",sla:"warn",slaTxt:"剩 20min",group:"投诉组",user:"100863"},
+  {id:"T-2006",title:"发票申请",type:"咨询",prio:"低",sla:"ok",slaTxt:"剩 1天",group:"退款组",user:"100861"},
+  {id:"T-2007",title:"账号封禁申诉",type:"投诉",prio:"高",sla:"ok",slaTxt:"剩 6h",group:"投诉组",user:"100866"},
+];
+const rules=[
+  {rid:"R-001",scene:"register",name:"黑名单IP注册",action:"拦截",ver:3,gray:100,st:"生效"},
+  {rid:"R-002",scene:"login",name:"1min内5次登录失败",action:"人审",ver:2,gray:100,st:"生效"},
+  {rid:"R-003",scene:"coupon",name:"同IP 10次/min领券",action:"拦截",ver:1,gray:10,st:"灰度"},
+  {rid:"R-004",scene:"pay",name:"大额异常交易",action:"人审",ver:5,gray:100,st:"生效"},
+  {rid:"R-005",scene:"content",name:"敏感词命中",action:"拦截",ver:8,gray:100,st:"生效"},
+  {rid:"R-006",scene:"register",name:"批量注册(设备指纹)",action:"拦截",ver:2,gray:10,st:"灰度"},
+];
+
+/* ===== 导航 ===== */
+const navTitles={dashboard:"总览看板",users:"用户管理",orders:"订单管理",marketing:"营销管理",course:"课程目录",tickets:"工单看板",risk:"风控规则"};
+document.getElementById("nav").addEventListener("click",e=>{
+  const it=e.target.closest(".nav-item"); if(!it)return;
+  document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));
+  it.classList.add("active");
+  const p=it.dataset.page;
+  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+  document.getElementById("page-"+p).classList.add("active");
+  document.getElementById("crumbName").textContent=navTitles[p];
+  if(p==="users")renderUsers();
+  if(p==="orders")renderOrders();
+  if(p==="marketing")renderCoupons();
+  if(p==="course")renderCourseTree();
+  if(p==="tickets")renderKanban();
+  if(p==="risk")renderRules();
+});
+
+/* ===== Toast ===== */
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2500);}
+
+/* ===== 用户 ===== */
+function renderUsers(){
+  const kw=(document.getElementById("uSearch").value||"").trim();
+  const list=users.filter(u=>!kw||String(u.uid).includes(kw)||u.nick.includes(kw)||u.phone.includes(kw));
+  document.getElementById("userBody").innerHTML=list.map(u=>`<tr>
+    <td>${u.uid}</td><td>${u.nick}</td><td>${u.phone}</td>
+    <td>${u.status===1?'<span class="tag green">正常</span>':'<span class="tag red">封禁</span>'}</td>
+    <td>${u.realname?'<span class="tag blue">已实名</span>':'<span class="tag gray">未实名</span>'}</td>
+    <td>Cell-${u.cell}</td><td>${u.t}</td>
+    <td><span class="link" onclick="openUserDrawer(${u.uid})">详情</span></td></tr>`).join("");
+  document.getElementById("uCount").textContent=`共 ${list.length} 条`;
+}
+function openUserDrawer(uid){
+  const mask=document.getElementById("userMask"),d=document.getElementById("userDrawer");
+  const body=document.getElementById("userDrawerBody");
+  if(uid){
+    const u=users.find(x=>x.uid===uid);
+    document.getElementById("userDrawerTitle").textContent="用户详情";
+    document.getElementById("userBanBtn").style.display=u.status===1?"inline-block":"none";
+    body.innerHTML=`<div class="info-line"><div class="k">user_id</div><div class="v">${u.uid}</div></div>
+      <div class="info-line"><div class="k">昵称</div><div class="v">${u.nick}</div></div>
+      <div class="info-line"><div class="k">手机号</div><div class="v">${u.phone}</div></div>
+      <div class="info-line"><div class="k">事业群</div><div class="v">${u.bu}</div></div>
+      <div class="info-line"><div class="k">单元</div><div class="v">Cell-${u.cell}</div></div>
+      <div class="info-line"><div class="k">状态</div><div class="v">${u.status===1?'<span class="tag green">正常</span>':'<span class="tag red">封禁</span>'}</div></div>
+      <div class="info-line"><div class="k">实名</div><div class="v">${u.realname?'已实名':'未实名'}</div></div>
+      <div class="info-line"><div class="k">注册时间</div><div class="v">${u.t}</div></div>
+      <div class="info-line"><div class="k">在线设备</div><div class="v">web / 小程序 <span class="tag gray">≤8 端</span></div></div>
+      <div class="form-row" style="margin-top:18px"><label>管理员操作</label>
+        <select class="input"><option>吊销所有会话</option><option>强制下线指定端</option><option>加入全局黑名单</option></select></div>`;
+  }else{
+    document.getElementById("userDrawerTitle").textContent="新建用户";
+    document.getElementById("userBanBtn").style.display="none";
+    body.innerHTML=`<div class="form-row"><label>手机号</label><input placeholder="11位手机号"></div>
+      <div class="form-row"><label>昵称</label><input></div>
+      <div class="form-row"><label>密码</label><input type="password" placeholder="BCrypt cost=12 加密"></div>
+      <div class="form-row"><label>事业群</label><select><option>IT后端</option><option>考公</option><option>考研</option><option>养生</option></select></div>`;
+  }
+  mask.classList.add("show");d.classList.add("show");
+}
+function closeUserDrawer(){document.getElementById("userMask").classList.remove("show");document.getElementById("userDrawer").classList.remove("show");}
+function banUser(){toast("已封禁, 吊销所有 refresh token, 写入全局黑名单广播");closeUserDrawer();}
+function saveUser(){toast("保存成功");closeUserDrawer();}
+
+/* ===== 订单 ===== */
+function renderOrders(){
+  document.getElementById("orderBody").innerHTML=orders.map(o=>{const st=orderStMap[o.st];return `<tr>
+    <td>${o.oid}</td><td>${o.uid}</td><td>¥${o.amt}</td><td>${o.ch}</td>
+    <td><span class="tag ${st[1]}">${st[0]}</span></td><td>Cell-${o.cell}</td><td>${o.t}</td>
+    <td><span class="link" onclick="openOrderDrawer('${o.oid}')">详情</span></td></tr>`}).join("");
+}
+function openOrderDrawer(oid){
+  const o=orders.find(x=>x.oid===oid);
+  document.getElementById("orderMask").classList.add("show");
+  document.getElementById("orderDrawer").classList.add("show");
+  const st=orderStMap[o.st];
+  document.getElementById("refundBtn").style.display=(o.st===2)?"inline-block":"none";
+  document.getElementById("orderDrawerBody").innerHTML=`
+    <div class="info-line"><div class="k">订单号</div><div class="v">${o.oid}</div></div>
+    <div class="info-line"><div class="k">用户</div><div class="v">${o.uid}</div></div>
+    <div class="info-line"><div class="k">金额</div><div class="v">¥${o.amt}</div></div>
+    <div class="info-line"><div class="k">支付渠道</div><div class="v">${o.ch}</div></div>
+    <div class="info-line"><div class="k">状态</div><div class="v"><span class="tag ${st[1]}">${st[0]}</span></div></div>
+    <div class="info-line"><div class="k">单元</div><div class="v">Cell-${o.cell}</div></div>
+    <div class="info-line"><div class="k">下单时间</div><div class="v">${o.t}</div></div>
+    <div class="info-line"><div class="k">幂等键</div><div class="v">idem-${o.oid.slice(-6)} (24h)</div></div>
+    <div class="info-line"><div class="k">用券</div><div class="v">无</div></div>
+    <div class="info-line"><div class="k">对账状态</div><div class="v"><span class="tag green">已对账</span></div></div>`;
+}
+function closeOrderDrawer(){document.getElementById("orderMask").classList.remove("show");document.getElementById("orderDrawer").classList.remove("show");}
+function doRefund(){toast("退款单已创建, T+1 到账, 券有效期延长 7 天");closeOrderDrawer();}
+
+/* ===== 营销 ===== */
+function renderCoupons(){
+  document.getElementById("couponBody").innerHTML=coupons.map(c=>{
+    const pct=(c.issued/c.budget*100).toFixed(1);
+    const stTag=c.st==="生效中"?'green':c.st==="预算告急"?'yellow':'gray';
+    return `<tr><td>${c.tid}</td><td>${c.name}</td><td>${c.type}</td>
+      <td>${c.issued}/${c.budget} (${pct}%)</td><td>${c.start} ~ ${c.end}</td>
+      <td><span class="tag ${stTag}">${c.st}</span></td>
+      <td><span class="link">编辑</span> <span class="link">下线</span></td></tr>`}).join("");
+}
+function openCouponModal(){document.getElementById("couponModal").classList.add("show");}
+function closeCouponModal(){document.getElementById("couponModal").classList.remove("show");}
+function saveCoupon(){toast("券模板已创建(全局域主库单写), 广播至各单元");closeCouponModal();renderCoupons();}
+
+/* ===== 课程树 ===== */
+let selectedCourse=null;
+function renderCourseTree(){
+  document.getElementById("courseTree").innerHTML=courseTree.map(n=>renderNode(n,0)).join("");
+}
+function renderNode(n,depth){
+  const hasChild=n.children&&n.children.length;
+  return `<div class="tree-node">
+    <div class="tree-row" data-id="${n.id}" onclick="selectCourse(${n.id},this)">
+      <span class="tree-toggle" onclick="toggleNode(this);event.stopPropagation()">${hasChild?'▼':(n.icon?'':'•')}</span>
+      <span class="tree-icon">${n.icon||'📚'}</span>
+      <span>${n.title}</span>
+      <span class="tree-actions">
+        <button class="btn sm" onclick="openCourseModal(${n.id});event.stopPropagation()">编辑</button>
+        <button class="btn sm" onclick="addSection(${n.id});event.stopPropagation()">+章节</button>
+      </span>
+    </div>
+    ${hasChild?`<div class="children">${n.children.map(c=>renderNode(c,depth+1)).join("")}</div>`:''}</div>`;
+}
+function toggleNode(el){
+  const node=el.closest(".tree-node");const ch=node.querySelector(":scope > .children");
+  if(ch){const hide=ch.style.display==="none";ch.style.display=hide?"":"none";el.textContent=hide?"▼":"▶";}
+}
+function selectCourse(id,el){
+  document.querySelectorAll(".tree-row").forEach(x=>x.classList.remove("selected"));
+  el.classList.add("selected");
+  selectedCourse=id;
+  const d=courseDetailMap[id];
+  const body=document.getElementById("courseDetail");
+  if(d){
+    document.getElementById("courseDetailTitle").textContent=d.title;
+    body.innerHTML=`<div class="info-line"><div class="k">标题</div><div class="v">${d.title}</div></div>
+      <div class="info-line"><div class="k">教师</div><div class="v">${d.teacher}</div></div>
+      <div class="info-line"><div class="k">分类</div><div class="v">${d.cat}</div></div>
+      <div class="info-line"><div class="k">事业群</div><div class="v">${d.tenant} <span class="tag blue">FGAC</span></div></div>
+      <div class="info-line"><div class="k">价格</div><div class="v">原价 ¥${d.price} / 活动 ¥${d.activity} / 会员 ¥${d.member}</div></div>
+      <div class="info-line"><div class="k">状态</div><div class="v"><span class="tag green">${d.status}</span></div></div>
+      <div class="info-line"><div class="k">简介</div><div class="v">${d.intro}</div></div>
+      <div class="info-line"><div class="k">下架保护</div><div class="v">已购用户仍可学习(Enrollment 在用户域独立)</div></div>
+      <div style="margin-top:14px"><button class="btn sm" onclick="openCourseModal(${id})">编辑</button>
+        <button class="btn sm">定时上下架</button>
+        <button class="btn sm">重建搜索索引</button></div>`;
+  }else{
+    document.getElementById("courseDetailTitle").textContent="选择课程查看";
+    body.innerHTML=`<div class="empty">该节点为分类目录, 请选择子课程或 <button class="btn sm" onclick="openCourseModal(null)">新建课程</button></div>`;
+  }
+}
+function addSection(id){toast("新增章节(闭包表 parent_id="+id+")");}
+function openCourseModal(id){
+  document.getElementById("courseModalTitle").textContent=id?"编辑课程":"新建课程";
+  document.getElementById("courseModal").classList.add("show");
+}
+function closeCourseModal(){document.getElementById("courseModal").classList.remove("show");}
+function saveCourse(){toast("课程已保存(全局域主库单写), CDC 增量同步至 ES");closeCourseModal();}
+
+/* ===== Kanban ===== */
+function renderKanban(){
+  const cols=[
+    {key:"NEW",name:"新建",items:tickets.slice(0,2)},
+    {key:"PROCESSING",name:"处理中",items:tickets.slice(2,4)},
+    {key:"WAITING",name:"待用户",items:tickets.slice(4,5)},
+    {key:"RESOLVED",name:"已解决",items:tickets.slice(5,7)},
+  ];
+  document.getElementById("kanban").innerHTML=cols.map(c=>`<div class="kanban-col">
+    <div class="kanban-head"><span>${c.name}</span><span class="count">${c.items.length}</span></div>
+    <div class="kanban-body">${c.items.map(t=>`<div class="kanban-card" onclick="toast('打开工单 ${t.id}')">
+      <div class="kt-title">${t.id} ${t.title}</div>
+      <div class="kt-meta"><span>用户:${t.user}</span><span class="sla-${t.sla}">${t.slaTxt}</span></div>
+      <div class="kt-tags"><span class="tag ${t.prio==='高'?'red':t.prio==='中'?'yellow':'gray'}">${t.prio}</span>
+        <span class="tag blue">${t.type}</span><span class="tag gray">${t.group}</span></div>
+    </div>`).join("")}</div></div>`).join("");
+}
+
+/* ===== 风控规则 ===== */
+function renderRules(){
+  document.getElementById("ruleBody").innerHTML=rules.map(r=>{
+    const aTag=r.action==="拦截"?"red":r.action==="人审"?"yellow":"green";
+    const stTag=r.st==="灰度"?"purple":"green";
+    return `<tr><td>${r.rid}</td><td>${r.scene}</td><td>${r.name}</td>
+      <td><span class="tag ${aTag}">${r.action}</span></td>
+      <td>v${r.ver}</td><td>${r.gray}%</td>
+      <td><span class="tag ${stTag}">${r.st}</span></td>
+      <td><span class="link" onclick="openRuleModal('${r.rid}')">编辑</span>
+          <span class="link" onclick="toast('规则回滚到 v${r.ver-1}')">回滚</span></td></tr>`}).join("");
+}
+function openRuleModal(rid){
+  if(rid){const r=rules.find(x=>x.rid===rid);toast("编辑规则 "+r.rid+" v"+r.ver);}
+  document.getElementById("ruleModal").classList.add("show");
+}
+function closeRuleModal(){document.getElementById("ruleModal").classList.remove("show");}
+function addCond(btn){
+  const block=btn.closest(".rule-block");
+  const row=document.createElement("div");row.className="cond-row";
+  row.innerHTML=block.querySelector(".cond-row").innerHTML;
+  block.appendChild(row);
+}
+function saveRule(){toast("规则已保存, Nacos 广播, 5s 全节点热更新, 不重启");closeRuleModal();renderRules();}
+
+/* 初始化 */
+renderUsers();
+</script>
+</body>
+</html>
