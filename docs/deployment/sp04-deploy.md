@@ -29,7 +29,7 @@
 
 ### 2.1 镜像规范
 - 基础镜像 `python:3.11-slim`，多阶段构建。
-- Web 框架 Litestar 2.x + Granian 1.x（Rust ASGI，承接 ESP ADR-09 替代 FastAPI/Uvicorn）。
+- Web 框架 Litestar 2.x + Granian ≥1.6.0（Rust ASGI，承接 ESP ADR-09 替代 FastAPI/Uvicorn；ESP 实际解析至 2.7.9，EP 锁定 ≥1.6.0 下限）。
 - ASGI 入口 `granian app:app --interface asgi --workers $(nproc)*2+1`（替代 gunicorn/uvicorn）。
 - 健康检查：`/healthz`（liveness）、`/readyz`（readiness，含 Redis/Milvus 探活）。
 - **ESP 踩坑对策**：`pulsar-client` Python 包需在目标架构(arm64/cp311)预检 wheel 可用性；Dockerfile 用 `pip install pulsar-client || echo "PULSAR disabled"` + 运行时 `PULSAR_ENABLED=false` 降级开关（ESP 无 arm64 wheel 导致 import 失败）。

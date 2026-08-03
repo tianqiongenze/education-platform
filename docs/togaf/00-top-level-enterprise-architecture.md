@@ -424,8 +424,8 @@ education-platform 业务能力地图
 | 组件 | 选型 | 版本 | 用途 | 复用 |
 |------|------|------|------|------|
 | 分布式数据库 | TiDB | 8.5 LTS | HTAP 在线库(Primary/Follower) + TiFlash 列存；对齐 ESP v8.5.7 3-region Raft 验证(ADR-T-DB) | ✅ 集群已有 |
-| 缓存 | Redis Cluster | 7.x | L2 缓存/会话/路由表/特征 | ✅ |
-| 消息队列 | Pulsar | 3.3.x | 跨服务事件/geo-rep(ADR-02 承接 ESP, 不用 Kafka 做事件总线) | ✅ |
+| 缓存 | Redis Cluster | 8.0 | L2 缓存/会话/路由表/特征(对齐 ESP 实际部署 redis:8.0-alpine, 非 7.x) | ✅ |
+| 消息队列 | Pulsar | 3.3.x | 跨服务事件/geo-rep(ADR-02 承接 ESP, 不用 Kafka 做事件总线; 4.x 升级延迟至 v2.0 — ADR-T11) | ✅ |
 | CDC 总线 | Kafka | 3.x | TiCDC changefeed 缓冲(仅 CDC, 不替代 Pulsar) | ✅ |
 | 向量数据库 | Milvus | 2.5+ | RAG/语义检索/查重(对齐 ESP 验证 2.5.0) | ✅ |
 | 图数据库 | Neo4j | 5.25+ | 知识图谱/学习路径(对齐 ESP 验证 5.25.1-community) | ✅ |
@@ -437,9 +437,9 @@ education-platform 业务能力地图
 | 可观测-链路 | Tempo + OTel | — | 分布式链路追踪(承接 ESP 双层 Collector tail-sampling 防 OOM) | ✅ |
 | 配置中心 | Nacos | 2.4.3 | 路由表/特性开关/限流规则下发(pin ESP 验证版, 不升 v3 直到镜像可用) | ✅ |
 | 限流降级 | Sentinel | 1.8+ | 网关+服务双层(规则走 Nacos 分布式下发, 禁本地内存) | ✅ |
-| 服务发现/RPC | Dubbo | 3.3.6 | Triple(HTTP/2+Protobuf)契约先行(pin ESP 验证版) | ✅ |
+| 服务发现/RPC | Dubbo | 3.3.6 | Triple(HTTP/2+Protobuf)契约先行, 禁 STRICT 序列化(ADR-T09, pin ESP 验证版) | ✅ |
 | AI 网关 | Kong AI / LiteLLM | — | LLM 路由/缓存/计费(D-018 LiteLLM 起步→Kong AI) | 新增 |
-| Python Web | Litestar + Granian | 2.x / 1.x | Rust ASGI 高性能(承接 ESP ADR-09, 替代 FastAPI/Uvicorn) | 新增 |
+| Python Web | Litestar + Granian | 2.x / ≥1.6.0 | Rust ASGI 高性能(承接 ESP ADR-09, 替代 FastAPI/Uvicorn; ESP 实际解析至 2.7.9, EP 锁定 ≥1.6.0 下限) | 新增 |
 | 直播 SFU | LiveKit | — | WebRTC 互动 | 新增 |
 | 直播 Origin | SRS v7 | — | 推流/转码/录制 | 新增 |
 | 沙箱 | Firecracker | — | 评测 Judge microVM | 新增 |
@@ -777,6 +777,9 @@ CI Pipeline:
 | ADR-T06 | 不用Seata,幂等键+乐观锁+Pulsar at-least-once | 技术中台 | sp01-sad §3.6 (ESP Seata SCA冲突) |
 | ADR-T07 | 网关选SCG非Netty手写 | 技术中台 | sp01-sad §3.7 |
 | ADR-T08 | Sentinel规则走Nacos分布式,禁本地内存 | 技术中台 | sp01-sad §3.8 (ESP踩坑) |
+| ADR-T09 | Dubbo Triple禁STRICT序列化,统一Protobuf契约 | 技术中台 | sp01-sad §3.9 (ESP Dubbo STRICT跨语言踩坑) |
+| ADR-T10 | 大表强制RANGE分区(防session_turns 82M OOM) | 技术中台 | sp01-sad §3.10 (ESP session_turns 16次OOM) |
+| ADR-T11 | Pulsar 3.3.x锁定,4.x升级延迟至v2.0 | 技术中台 | sp01-sad §3.11 (ESP TODO升级评估) |
 | ADR-D01 | CDC非直连 | 数据中台 | EP-SPEC-001 §4 |
 | ADR-D02 | Flink→Iceberg checkpoint即提交 | 数据中台 | EP-SPEC-001 §4 |
 | ADR-D03 | Feature Store在线/离线一致 | 数据中台 | EP-SPEC-001 §4 |

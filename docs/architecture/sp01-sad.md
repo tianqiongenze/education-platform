@@ -90,14 +90,14 @@
 |---------|---------|------------|
 | K8s 1.28+ | Deployment/HPA/PDB | 所有组件 |
 | TiDB 8.5 LTS | 读写分离目标(对齐 ESP v8.5.7 验证) | ep-rw-java |
-| Redis Cluster 7.x | L2 缓存/会话/路由表/JWKS(真集群 3主3从→30节点) | ep-cache/网关/CellRouter |
-| Pulsar 3.3.x | 事件总线(承接 ESP ADR-02, 不用 Kafka) | ep-cache 广播/EDA |
+| Redis Cluster 8.0 | L2 缓存/会话/路由表/JWKS(真集群 3主3从→30节点, 对齐 ESP 实际 redis:8.0-alpine) | ep-cache/网关/CellRouter |
+| Pulsar 3.3.x | 事件总线(承接 ESP ADR-02, 不用 Kafka; 4.x 升级延迟至 v2.0 — ADR-T11) | ep-cache 广播/EDA |
 | Nacos 2.4.3 | 配置/服务发现(pin ESP 验证版, 不升 v3) | CellRouter/网关/Sentinel |
-| Dubbo 3.3.6 | Triple RPC(契约先行, pin ESP 验证版) | 服务间 RPC |
+| Dubbo 3.3.6 | Triple RPC(契约先行, 禁 STRICT 序列化 — ADR-T09, pin ESP 验证版) | 服务间 RPC |
 | Loki/Prom/Tempo | 可观测后端(承接 ESP 双层 Collector) | OTel SDK |
 | Sentinel 1.8+ | 限流降级(规则走 Nacos 分布式下发, 禁本地内存) | 网关+服务双层 |
 | Spring Cloud | 2025.1.2 + SCA 2025.1.0.0 | BFF/服务治理 |
-| Litestar+Granian | Python AI 服务(承接 ESP ADR-09 Rust ASGI) | AI 中台 |
+| Litestar+Granian | Python AI 服务(承接 ESP ADR-09 Rust ASGI, Granian ≥1.6.0 — ESP 实际解析 2.7.9) | AI 中台 |
 
 ---
 
@@ -286,7 +286,7 @@
 | 项 | 内容 |
 |----|------|
 | **背景** | ESP 引入 Seata AT 模式后，SCA 2025.1.0.0 → spring-boot-webclient:4.0.0 → CodecsAutoConfiguration 与 SB3.5.16 bean 冲突，需 `allow-bean-definition-overriding=true` 绕过；Seata 2.5.0+ 升级受阻（需 jdk17 variant），与当前 SB 4.0.7/Jetty 17 体系不兼容。Seata 全局锁在高并发写场景成为吞吐瓶颈。 |
-| **决策** | **不引入 Seata**。分布式一致性通过以下组合保证：<br>① **幂等键**：写请求携带 client-side UUID，Redis SETNX + TiDB 唯一索引双写去重（ADR-T07）；<br>② **乐观锁**：领域聚合根 `@Version` 字段，CAS 更新，冲突重试 ≤3 次；<br>③ **Pulsar at-least-once + 幂等消费者**：事件 `event_id` 雪花 ID 去重，消费者维护 24h 已处理集合（Redis Bitmap）；<br>④ **Saga 编排**：跨服务长事务用 Pulsar 事件 choreography（非 Seata TCC/Saga），补偿事件显式定义。 |
+| **决策** | **不引入 Seata**。分布式一致性通过以下组合保证：<br>① **幂等键**：写请求携带 client-side UUID，Redis SETNX + TiDB 唯一索引双写去重；<br>② **乐观锁**：领域聚合根 `@Version` 字段，CAS 更新，冲突重试 ≤3 次；<br>③ **Pulsar at-least-once + 幂等消费者**：事件 `event_id` 雪花 ID 去重，消费者维护 24h 已处理集合（Redis Bitmap）；<br>④ **Saga 编排**：跨服务长事务用 Pulsar 事件 choreography（非 Seata TCC/Saga），补偿事件显式定义。 |
 | **理由** | Seata AT 的全局锁在 100 万 CCU 场景下是单点瓶颈；SCA bean 冲突是 Spring 生态已知问题，override 仅是 workaround；Pulsar at-least-once + 幂等消费者已能覆盖 99.99% 的一致性需求，且无侵入式代理；乐观锁对领域模型友好（DDD 聚合根天然支持 Version）。 |
 | **实现** | `IdempotentInterceptor`（Java）/ `idempotency_middleware`（Python Litestar）/ `IdempotencyFilter`（Go）；`@Version` JPA 注解；Pulsar consumer `dedup_window=24h`；Saga 事件定义在 `EventTopics.java`。 |
 | **依据** | ESP ADR-11（Seata SCA bean 冲突踩坑）+ EP-TOGAF §6.1 中间件选型 |
@@ -316,6 +316,43 @@
 | **依据** | ESP 踩坑记录 P-14 + EP-TOGAF §6.1 |
 | **状态** | Accepted |
 | **关联需求** | NFR-A-01 / NFR-S-04 |
+
+### 3.9 ADR-T09 Dubbo Triple 禁用 STRICT 序列化，统一 Protobuf 契约(ESP 踩坑)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 使用 Dubbo 3.3.6 Triple 协议时，默认序列化在某些场景退化为 `STRICT`（严格 Java 原生序列化），导致 Go/Python 消费方反序列化失败（`ClassCastException` / `ClassNotFoundException`），且 STRICT 模式携带 Java 类信息存在反序列化攻击面。ESP 踩坑：Java 服务间工作正常，跨语言 Go 网关消费 Triple 报 `java.lang.ClassNotFoundException`。 |
+| **决策** | Dubbo Triple RPC **统一使用 Protobuf 契约**（`.proto` IDL → 多语言生成），禁用 `STRICT` 序列化与 Java 原生序列化。dubbo 配置 `serialization=protobuf`，Triple stub 由 `protoc` 生成。用户 ID 等跨语言字段统一 `string` 类型（对齐 ADR-T04 user_id string 铁律）。 |
+| **理由** | Protobuf 是跨语言中立契约，Go/Python/Java 均可生成 stub；STRICT 模式仅限 Java 生态且存在安全风险。ESP 验证 Protobuf Triple 可行但配置易错，EP 从 Day 1 固化 `.proto` 契约先行流程。 |
+| **实现** | `proto/` 目录集中管理 IDL；CI `proto-compile` 步骤生成 Java/Go/Python stub；Dubbo `application.yml` 强制 `dubbo.protocol.serialization=protobuf`；禁止 `generic` 调用使用 Java 序列化。 |
+| **依据** | ESP 踩坑 P-10 Dubbo Triple STRICT + EP-TOGAF §6.1 Dubbo 3.3.6 pin |
+| **状态** | Accepted |
+| **关联需求** | FR-RPC-01 / NFR-S-04 |
+
+### 3.10 ADR-T10 大表分区策略：高频写表强制 RANGE 分区(ESP session_turns 82M OOM 血泪)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP `session_turns` 表（AI 对话轮次记录）日均增长 82M 行，单表无分区导致 TiDB 查询 OOM 16 次（TiDB Server 内存溢出重启），临时用 8-shard×2-worker 停损但未根治。根因：单表无分区，TiDB GC 压缩扫描全表，查询计划退化为全表扫。 |
+| **决策** | EP 所有高频写表（日志/对话轮次/事件审计/行为流水）**Day 1 强制 RANGE 分区**，分区键为时间（`created_at`），按日/周分区。TiDB 建表 DDL 包含 `PARTITION BY RANGE (UNIX_TIMESTAMP(created_at))`。分区保留策略：热分区（7d）+ 温分区（30d）+ 冷分区归档 Iceberg。 |
+| **理由** | TiDB 分区裁剪（partition pruning）将查询限制在单分区，避免全表扫 OOM；ESP 82M 行单表是前车之鉴。EP 天花板 30 亿用户，对话轮次表日均增长可达 10 亿级，无分区必然 OOM。 |
+| **实现** | ① DDL 规范：`ep-ddl-convention` CI 检查所有建表语句，高频写表无 `PARTITION BY` → 编译失败；② 分区管理：`tidb-partition-manager` 定时任务自动创建未来分区 + 归档过期分区；③ 监控：单分区行数 >5000 万告警。 |
+| **涉及表** | `session_turns`（AI 对话）、`event_audit_log`（事件审计）、`learning_behavior`（行为流水）、`grading_record`（批改记录）、`live_chat_log`（直播弹幕） |
+| **依据** | ESP 踩坑 P-17 session_turns 82M OOM + EP 数据中台 sp02-sad §分区策略 |
+| **状态** | Accepted |
+| **关联需求** | NFR-P-01 / NFR-D-02 |
+
+### 3.11 ADR-T11 Pulsar 3.3.x 当前版本 + 4.x 升级路线图(ESP 延迟决策)
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 使用 Pulsar 3.3.x 作为事件总线（ADR-02），验证可行。Pulsar 4.0 LTS 已发布，引入 KoP 协议增强、轻量级 broker、改进的 schema registry。ESP 在升级评估中因资源限制未完成，留为 TODO。EP 需明确当前版本与升级路径。 |
+| **决策** | EP 当前**锁定 Pulsar 3.3.x**（对齐 ESP 验证版本，不冒险升 4.x），在 v2.0 大版本（预计 2027 Q1）评估升级 Pulsar 4.x LTS。升级前提：① Pulsar 4.x 至少有一个 minor release 稳定运行 6 个月；② KoP 兼容性验证通过（EP 用 Kafka 仅做 CDC，不依赖 KoP）；③ Geo-replication 行为不变。 |
+| **理由** | 3.3.x 已被 ESP 验证，EP 复用集群基础设施不应冒险。4.x 的改进（轻量 broker）对 EP 当前规模非关键路径。升级风险 > 收益，延迟到 v2.0 降低项目初期不确定性。 |
+| **实现** | Helm chart `pulsar-3.3.x-pinned`；`upgrade-pulsar-4x.md` 路线图文档（v2.0 backlog）；CI 冒烟测试覆盖 Pulsar producer/consumer/geo-rep。 |
+| **依据** | ESP ADR-02 Pulsar 选型 + ESP TODO 升级评估 + EP-TOGAF §6.1 |
+| **状态** | Accepted（3.3.x 锁定）/ Deferred（4.x 升级） |
+| **关联需求** | FR-EDA-01 / NFR-A-01 |
 
 ---
 

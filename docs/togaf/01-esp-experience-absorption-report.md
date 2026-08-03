@@ -19,6 +19,12 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 - ⏳ P2 行动项 8/8 待修复（文档完备性提升，不阻塞 MVP 开发）
 - ✅ ESP 16 条踩坑已写入 `~/.zcode/sessions/education-platform/pitfalls.jsonl`（ESP-P-01~ESP-P-16）
 
+**第二轮穷尽审计修复完成情况**（2026-08-03 第二轮）：
+- ✅ **新增 3 条 ADR**：ADR-T09（Dubbo Triple 禁 STRICT 序列化）、ADR-T10（大表强制 RANGE 分区防 OOM）、ADR-T11（Pulsar 3.3.x 锁定 + 4.x 升级延迟至 v2.0）
+- ✅ **版本对齐 2 项**：Redis 7.x → 8.0（对齐 ESP 实际 `redis:8.0-alpine`）；Granian 1.x → ≥1.6.0（ESP 实际解析至 2.7.9）
+- ✅ **新增 4 条 ESP 踩坑对策**：JWT_SECRET<256bit（EP 从 Day 1 用 RS256 规避）、Dubbo timeout 3s→10s（冷缓存 DEADLINE_EXCEEDED）、learning-worker 分离模式（ESP_ROLE=worker + Disruptor↔Pulsar 双路径降级）、session_turns 82M OOM（大表 RANGE 分区）
+- ✅ ESP 踩坑清单更新：18 条全部有对应 EP 对策（13 条 ✅ 已吸收 + 5 条 ⚠️ P2）
+
 ---
 
 ## 1. 中间件与基础设施对比
@@ -159,15 +165,22 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | 7 | Seata SCA bean 冲突(webclient→CodecsAutoConfiguration) | ✅ ADR-T06 | EP 不用 Seata, 幂等键+乐观锁+Pulsar at-least-once 替代 |
 | 8 | Nacos/Seata 升级受阻(v3 需 derby re-import, 镜像不可达) | ✅ 已修复 | Nacos pin 2.4.3 + 注明"不升级 v3 直到镜像可用"；Seata 不引入(ADR-T06) |
 | 9 | ConfigMap 必须 in manifest(kubectl 创建→重装丢失) | ✅ 已吸收 | EP 所有配置走 ConfigMap/Nacos |
-| 10 | Dubbo timeout 3s→10s(cold cache DEADLINE_EXCEEDED) | ✅ 已修复(TOGAF §6.1) | Dubbo 3.3.6 pin, timeout≥10s |
+| 10 | Dubbo timeout 3s→10s(cold cache DEADLINE_EXCEEDED) | ✅ 已修复(sp01-sdd §5.4) | Dubbo 3.3.6 pin, 默认 timeout≥10s, 读 10s/写 15s, 长任务走异步 Pulsar |
 | 11 | user_id 传播断点(writing.graded 无 user_id→默认 0) | ✅ 已修复(sp01-sdd §7.2) | EP 事件 schema 强制 user_id 必传, CI Avro/JSON Schema 校验 |
 | 12 | ClassCastException user_id(String vs number) | ✅ 已修复(sp01-sdd §7.2) | user_id 类型统一为 string, 跨语言契约注明 |
 | 13 | pulsar-client 无 arm64 wheel(Python) | ✅ 已修复(sp04-sdd/sp04-deploy) | pulsar-client optional extra, PULSAR_ENABLED=false 降级开关 |
 | 14 | go mod tidy 网络受限(go.sum 不一致) | ⚠️ 需补写(P2-A-13) | EP 需注明 Go 依赖 vendor 策略 |
-| 15 | Redis "集群"实为单实例(文档与部署不一致) | ✅ 已修复 | EP 用真 Redis Cluster |
+| 15 | Redis "集群"实为单实例(文档与部署不一致) | ✅ 已修复 | EP 用真 Redis Cluster 8.0(对齐 ESP redis:8.0-alpine) |
 | 16 | 混沌脚本 env 残留(${Dur} typo → REDIS_HOST 卡死) | ⚠️ 需补写(P2-A-18) | EP 混沌 Runbook 需注明"脚本执行后验证 env 恢复" |
 | 17 | NetworkPolicy RD CNI 不执行 | ⚠️ 需补写(P2-A-20) | EP 需注明需 Calico/Cilium |
 | 18 | locustfile HS256 → 100% 401 | ✅ 已修复(sp05-test R-TEST-06) | CI 校验 locustfile 用 RS256+JWKS, 禁 HS256 |
+| **19** | **Dubbo Triple STRICT 序列化**(跨语言 ClassNotFoundException) | ✅ ADR-T09(sp01-sad §3.9) | 统一 Protobuf 契约, 禁 STRICT/Java 原生序列化, .proto IDL → 多语言 stub |
+| **20** | **session_turns 82M 行 TiDB OOM**(16 次重启) | ✅ ADR-T10(sp01-sad §3.10) | 高频写表 Day 1 强制 RANGE 分区, CI DDL 检查无分区→编译失败 |
+| **21** | **Pulsar 4.x 升级评估未完成**(ESP TODO) | ✅ ADR-T11(sp01-sad §3.11) | 3.3.x 锁定, 4.x 升级延迟至 v2.0(2027Q1), 升级前提明确 |
+| **22** | **JWT_SECRET <256bit**(HS256 短密钥可暴力破解) | ✅ 已修复(sp01-sdd §5.3) | EP Day 1 用 RS256 非对称签名, 私钥≥2048bit, CI 校验密钥长度 |
+| **23** | **learning-worker 分离模式**(API 进程被批量写入拖慢) | ✅ 已修复(sp01-sdd §5.5) | EP_ROLE=api/worker 双角色部署, Disruptor↔Pulsar 双路径降级 |
+| **24** | **Redis 版本不一致**(EP 文档 7.x, ESP 实际 8.0-alpine) | ✅ 已修复(TOGAF §6.1) | EP 统一为 Redis 8.0, 对齐 ESP 实际部署 |
+| **25** | **Granian 版本不一致**(EP 文档 1.x, ESP 实际 2.7.9) | ✅ 已修复(TOGAF §6.1) | EP 统一为 Granian ≥1.6.0, ESP 实际解析 2.7.9 |
 
 ---
 
@@ -197,6 +210,19 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | A-12 | pin Spring Cloud 2025.1.2 + SCA 2025.1.0.0 | sp01-sad | ✅ 已修复(sp01-sad infra 表) |
 | A-17 | 禁止单节点压测(ESP 3 次验证) | sp01-test, sp05-test | ✅ 已修复(sp01-test §6 + sp05-test R-TEST-05/06) |
 
+### 第二轮穷尽审计 — 新增修复项
+
+| ID | 行动 | 涉及文档 | 状态 |
+|----|------|---------|------|
+| A-23 | Dubbo Triple STRICT 序列化踩坑 + Protobuf 契约强制 | sp01-sad §3.9 (ADR-T09), TOGAF ADR 索引 | ✅ 已修复(2026-08-03) |
+| A-24 | session_turns 82M 行 OOM → 大表强制 RANGE 分区 | sp01-sad §3.10 (ADR-T10), TOGAF ADR 索引 | ✅ 已修复(2026-08-03) |
+| A-25 | Pulsar 4.x 升级路线图(3.3.x 锁定 + v2.0 评估) | sp01-sad §3.11 (ADR-T11), TOGAF ADR 索引 | ✅ 已修复(2026-08-03) |
+| A-26 | JWT_SECRET<256bit 踩坑 + RS256 Day 1 对策 | sp01-sdd §5.3 | ✅ 已修复(2026-08-03) |
+| A-27 | Dubbo timeout≥10s 冷缓存 DEADLINE_EXCEEDED 对策 | sp01-sdd §5.4 | ✅ 已修复(2026-08-03) |
+| A-28 | learning-worker 分离模式(EP_ROLE=api/worker + 降级) | sp01-sdd §5.5 | ✅ 已修复(2026-08-03) |
+| A-29 | Redis 版本 7.x → 8.0(对齐 ESP redis:8.0-alpine) | TOGAF §6.1, sp01-sad infra 表 | ✅ 已修复(2026-08-03) |
+| A-30 | Granian 版本 1.x → ≥1.6.0(ESP 实际 2.7.9) | TOGAF §6.1, sp04-sad, sp04-deploy | ✅ 已修复(2026-08-03) |
+
 ### P2 — 建议补写(提升文档完备性)
 
 | ID | 行动 | 涉及文档 | 状态 |
@@ -219,7 +245,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 2. 读写分离 SDK(AbstractRoutingDataSource + AOP, Feature flag 降级)
 3. 多级缓存 L1+L2(Caffeine + Redis + Pulsar 广播失效)
 4. Disruptor 高吞吐削峰(tryNext 背压 + 批量刷新)
-5. JWT RS256 + JWKS(跨语言验证, AuthFilter 防伪造头)
+5. JWT RS256 + JWKS(跨语言验证, AuthFilter 防伪造头, 私钥≥2048bit — sp01-sdd §5.3)
 6. 缓存 Key 明文格式(禁 sha256, ESP 跨语言 MISS 血泪)
 7. Jackson 纯 JSON(禁 DefaultTyping, ESP 跨语言炸弹血泪)
 8. 探针三分离(ESP liveness timeout=1s 雪崩血泪 → ADR-T05)
@@ -230,6 +256,15 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 13. Pact 契约测试(file-based for Dubbo Triple)
 14. Testcontainers 集成测试
 15. LLM_MODE=mock(CI 不调真实 LLM)
+
+### 第二轮穷尽审计新增吸收(7 项)
+16. Dubbo Triple 禁 STRICT 序列化, 统一 Protobuf 契约(ADR-T09 — ESP 跨语言 ClassNotFoundException)
+17. 大表强制 RANGE 分区, 防 TiDB OOM(ADR-T10 — ESP session_turns 82M 行 16 次重启)
+18. Pulsar 3.3.x 锁定, 4.x 升级延迟至 v2.0(ADR-T11 — ESP TODO 评估完成)
+19. JWT_SECRET<256bit 规避: Day 1 RS256 非对称签名(sp01-sdd §5.3 — ESP HS256 短密钥踩坑)
+20. Dubbo timeout≥10s 冷缓存对策(sp01-sdd §5.4 — ESP DEADLINE_EXCEEDED 链路雪崩)
+21. learning-worker 分离模式: EP_ROLE=api/worker 双部署 + Disruptor↔Pulsar 双路径降级(sp01-sdd §5.5 — ESP ingest 拆分经验)
+22. 版本对齐: Redis 7.x→8.0, Granian 1.x→≥1.6.0(对齐 ESP 实际部署 manifest)
 
 ### EP 合理升级的维度(11 项)
 1. 单元化(ESP 无 → EP 混合单元化 D-012)

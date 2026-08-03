@@ -164,7 +164,7 @@
 ### ADR-A04 LangGraph ≥1.0 用于多步 Agent
 - **决策**：批改/答疑/学习路径用 LangGraph ≥1.0（对齐 ESP 验证版本 1.2.10：interrupt_before + Redis checkpointer + Command(resume)）；固定流程用轻量状态机。
 - **理由**：ESP 验证 LangGraph 1.x HITL 模式可行；避免固定流程跨语言 RPC 延迟；修复 ESP 遗留的 RedisSaver 未实现问题（EP 直接用 RedisClusterSaver）。
-- **影响**：Python 主语言，Web 框架用 Litestar 2.x + Granian 1.x（承接 ESP ADR-09，Rust ASGI 替代 FastAPI/Uvicorn）；状态序列化 schema 需版本化。
+- **影响**：Python 主语言，Web 框架用 Litestar 2.x + Granian ≥1.6.0（承接 ESP ADR-09，Rust ASGI 替代 FastAPI/Uvicorn；ESP 实际解析至 2.7.9，EP 锁定 ≥1.6.0 下限）；状态序列化 schema 需版本化。
 - **ESP 踩坑对策**：Python pulsar-client 需检查 arm64 wheel 可用性（ESP 无 arm64/cp313 wheel），实现 `PULSAR_ENABLED=false` 降级开关。
 
 ## 8. 部署拓扑

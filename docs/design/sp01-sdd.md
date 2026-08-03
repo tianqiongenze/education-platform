@@ -732,6 +732,85 @@ com.ep.gateway
 
 ---
 
+### 5.3 JWT 签发安全(ESP 踩坑对策)
+
+> **ESP 血泪铁律**：ESP bff-java 早期使用 HS256 对称签名，`JWT_SECRET` 环境变量曾配 `<256bit`（短密钥），导致 JWT 可暴力破解；且 HS256 共享密钥无法实现"签发方与验证方分离"——下游 Go/Python 服务需持有相同 secret，密钥泄露面扩大。
+
+**EP 对策（Day 1 固化）**：
+- **RS256 非对称签名**：BFF 持私钥签发，下游服务仅持公钥验签（JWKS endpoint）。密钥泄露面最小化。
+- **私钥长度强制**：CI 校验 RSA 私钥 ≥2048bit（推荐 3072bit），`JWT_SECRET` 环境变量仅用于 HMAC 降级场景（必须 ≥256bit，CI 闸门 `jwt-secret-length-check`）。
+- **JWKS 轮转**：kid 标识密钥版本，Redis 缓存 JWKS（`ep:jwks:current`），轮转周期 90d，旧 kid 保留 7d 宽限期。
+- **禁止头注入**：AuthFilter 覆盖客户端所有 `X-User-*` 头，仅信任 JWT claims（ADR-T07 防伪造头）。
+
+```java
+// JwtIssuer.java — RS256 签发, 私钥 ≥2048bit
+public String issue(UserPrincipal principal) {
+    return Jwts.builder()
+        .header().keyId(kid).and()           // kid → JWKS 轮转
+        .subject(principal.userId())          // user_id (string, 跨语言统一)
+        .claim("cell", principal.cellId())
+        .claim("roles", principal.roles())
+        .expiration(Date.from(Instant.now().plus(30, MINUTES)))
+        .signWith(privateKey, Jwts.SIG.RS256) // 非 HS256
+        .compact();
+}
+```
+
+### 5.4 Dubbo Triple 超时配置(ESP 踩坑对策)
+
+> **ESP 踩坑**：ESP Dubbo 默认 timeout=3s，冷缓存场景（首次查询 TiDB Follower + Redis miss + 图库 cold start）触发 `DEADLINE_EXCEEDED`，链路雪崩。后调整为 10s 才稳定。
+
+**EP 对策**：
+- Dubbo Triple **默认 timeout ≥10s**（`dubbo.consumer.timeout=10000`），冷启动/冷缓存场景容忍。
+- 区分 SLA：读操作 timeout=10s，写操作 timeout=15s（含幂等检查），批改等长任务走异步 Pulsar 事件（非同步 RPC）。
+- 熔断降级：Sentinel 配合 Dubbo `org.apache.dubbo.rpc.Filter`，超时率 >5% 触发降级（返回缓存/默认值）。
+
+```yaml
+# application.yml — Dubbo Triple 超时 + Protobuf 序列化(ADR-T09)
+dubbo:
+  consumer:
+    timeout: 10000          # ESP 踩坑: 3s → 10s
+    serialization: protobuf  # ADR-T09: 禁 STRICT
+  provider:
+    timeout: 10000
+    serialization: protobuf
+```
+
+### 5.5 Worker 分离模式(ESP learning-worker 经验)
+
+> **ESP 模式**：ESP 将 ingest 服务拆分为 **API 进程**（`ESP_ROLE=api`，接收请求 + Disruptor 削峰）和 **Worker 进程**（`ESP_ROLE=worker`，消费 Disruptor ring buffer → 写 TiDB/Pulsar），通过 `@ConditionalOnProperty(name="esp.role", havingValue="worker")` 实现同代码库双部署。避免 API 进程被批量写入拖慢响应。
+
+**EP 对策（复用此模式）**：
+- 技术中台 ingest 服务采用 **API / Worker 双角色部署**：
+  - **API 角色**（`EP_ROLE=api`）：HTTP/gRPC 入口 + Disruptor `tryNext()` 削峰，不直接写库。
+  - **Worker 角色**（`EP_ROLE=worker`）：`@ConditionalOnProperty(name="ep.role", havingValue="worker")` 激活 Disruptor 消费者 handler，批量写 TiDB + 发 Pulsar 事件。
+- **Disruptor↔Pulsar 双路径降级**：
+  - 正常态：API → Disruptor（进程内）→ Worker → TiDB + Pulsar。
+  - 降级态（Worker 全挂）：API `tryNext()` 失败（ring buffer 满）→ 降级直写 Pulsar（跳过 Disruptor），由下游消费者兜底。`DisruptorWorker.publish()` 返回 `FAILED` 时触发 `PulsarFallback.publish()`。
+- K8s 部署：API Deployment（HPA 按 QPS）+ Worker Deployment（HPA 按 Disruptor 消费 lag），独立扩缩容。
+
+```java
+// DisruptorIngestService.java — 双角色 + 降级
+@Service
+public class DisruptorIngestService {
+    @Autowired(required = false)  // Worker 角色才有 handler
+    @ConditionalOnProperty(name = "ep.role", havingValue = "worker")
+    private DisruptorEventHandler handler;
+
+    public PublishResult publish(IngestEvent event) {
+        PublishResult result = disruptorWorker.publish(event);
+        if (result == PublishResult.FAILED) {
+            // Disruptor 满 → 降级直写 Pulsar(ESP 经验: 避免丢数据)
+            pulsarFallback.publish(event);
+            metrics.counter("disruptor.fallback.pulsar").increment();
+        }
+        return result;
+    }
+}
+```
+
+---
+
 ## 6. WS/实时网关
 
 ### 6.1 模块设计(Go)
