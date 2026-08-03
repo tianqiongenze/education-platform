@@ -7,9 +7,10 @@
 education-platform: 大型在线教育公司多事业群平台项目群，4 大中台(技术/数据/业务/AI)共享底座 + 多事业群(IT后端 MVP 首发/IT前端/考公/考研/养生)，天花板 30 亿用户/100 万并发，国内异地多活+海外独立，TDD+DDD+EDA+读写分离，复用容器集群 TiDB/Redis Cluster/Pulsar/图库/向量库。
 
 ## 1. 当前阶段
-- **设计阶段**(非编码)：本 spec `docs/superpowers/specs/2026-08-03-education-platform-blueprint-and-platforms-sad.md` 待用户 review
-- spec 通过后进入 `superpowers:writing-plans`，首个实现计划 = SP-01 技术中台
-- 任何编码前必须先有对应子项目的 spec→plan
+- **第一批设计资料已完成**(2026-08-03)：顶层 TOGAF 企业架构 + 4 大中台(SP-01~SP-04) + IT 后端 MVP(SP-05) 全套 6 类文档(需求/架构/详细/原型/测试/部署)已产出并提交(commit ec67959)
+- 3 个技术中台 SDK 已实现并通过测试：ep-rw-java(11 测试/97.7%)、ep-disruptor(9 测试/93%)、ep-cache(31 测试/95.8%)
+- **下一批待产出**：考公/考研/养生 事业群(业务模型待用户输入)、SP-06~SP-10(前端/单元化/测试/扩容/事业群复制)
+- SP-01 Task 4-7 代码(ep-api/bff-java/gateway-go/集成冒烟)暂停，设计文档已齐可随时恢复
 
 ## 2. 上下文工程铁律(继承全局，本项目强化)
 - 会话状态外化：Redis Cluster 在线→`zcode:session:education-platform:*`；离线→`~/.zcode/sessions/education-platform/`
