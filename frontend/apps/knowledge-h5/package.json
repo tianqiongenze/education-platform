@@ -34,7 +34,7 @@
     "@ep/lint-config": "workspace:*",
     "eslint": "9.18.0",
     "@tarojs/cli": "4.0.9",
-    "@tarojs/taro-loader": "4.0.9",
+    "@tarojs/taro-loader": "4.2.1",
     "@tarojs/webpack5-runner": "4.0.9",
     "@types/react": "19.0.7",
     "babel-preset-taro": "4.0.9",
