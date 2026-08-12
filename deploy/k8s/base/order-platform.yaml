@@ -48,7 +48,7 @@ spec:
               app.kubernetes.io/name: order-platform
       containers:
         - name: order-platform
-          image: harbor.edu.internal/education-platform/order-platform:1.0.0
+          image: harbor.edu.internal/education-platform/order-platform-service:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

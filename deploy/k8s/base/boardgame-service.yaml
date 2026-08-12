@@ -28,7 +28,7 @@ spec:
               app: boardgame-service
       containers:
         - name: boardgame-service
-          image: registry.local:5000/ep/boardgame-service:latest
+          image: harbor.edu.internal/education-platform/boardgame-service:1.0.0
           ports:
             - name: http
               containerPort: 8089

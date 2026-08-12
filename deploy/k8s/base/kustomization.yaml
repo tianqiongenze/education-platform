@@ -77,9 +77,9 @@ images:
     newTag: 1.0.0
   - name: harbor.edu.internal/education-platform/core-business
     newTag: 1.0.0
-  - name: harbor.edu.internal/education-platform/order-platform
+  - name: harbor.edu.internal/education-platform/order-platform-service
     newTag: 1.0.0
-  - name: harbor.edu.internal/education-platform/payment-platform
+  - name: harbor.edu.internal/education-platform/payment-platform-service
     newTag: 1.0.0
   - name: harbor.edu.internal/education-platform/grading-service
     newTag: 1.0.0
@@ -103,4 +103,8 @@ images:
   - name: harbor.edu.internal/education-platform/agent-service
     newTag: 1.0.0
   - name: harbor.edu.internal/education-platform/tenant-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/senior-care
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/boardgame-service
     newTag: 1.0.0

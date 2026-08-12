@@ -14,7 +14,7 @@ Decision record: `docs/adr/D-114-gitops-argocd.md`.
 | `argocd-config.yaml` | argocd-cm customizations: ignoreDifferences, health checks, repo credential template. | -1 |
 | `applicationset-base.yaml` | Base infra (namespace, configmap, ingress, TiDB, OTel, Karmada policies). | 0 |
 | `applicationset-cells.yaml` | 4 cell overlays: hz / sz / bj / sg. | 1 |
-| `applicationset-apps.yaml` | 8 application services (bff-java, gateway-go, sp03-*, sp04-ai, frontend-portal). | 2 |
+| `applicationset-apps.yaml` | 16 application services (portal-bff, ws-gateway, core-business, order-platform, payment-platform, grading-service, ai-platform, frontend-portal, and more). | 2 |
 
 Sync waves guarantee ordering: base → cells → apps. Within a wave, ArgoCD
 reconciles in parallel.
@@ -33,7 +33,7 @@ reconciles in parallel.
      --from-file=sshPrivateKey=~/.ssh/edu_platform_deploy_key \
      --label argocd.argoproj.io/secret-type=repository
    ```
-   Replace the placeholder `repoURL` (`https://github.com/edu-platform/education-platform.git`)
+   Replace the placeholder `repoURL` (`https://github.com/tianqiongenze/education-platform.git`)
    in each manifest with your real repo URL if it differs.
 4. **Member clusters registered** (multi-cluster topology only). For each cell:
    ```bash
@@ -90,12 +90,12 @@ The platform uses image-tag promotion (D-035 rule 6):
    `deploy/k8s/base/kustomization.yaml`:
    ```yaml
    images:
-     - name: harbor.edu.internal/education-platform/bff-java
+     - name: harbor.edu.internal/education-platform/portal-bff
        newTag: 1.2.3   # <- updated
    ```
 3. PR is reviewed and merged to `main`.
 4. ArgoCD detects the change, re-renders kustomize, and syncs the affected
-   Application (`ep-app-bff-java`). The new `image:` triggers a RollingUpdate.
+   Application (`ep-app-portal-bff`). The new `image:` triggers a RollingUpdate.
 
 For config-only changes (ConfigMap, Ingress, HPA thresholds), just edit the
 YAML in `deploy/k8s/base` or the relevant `overlays/cell-*` and push — ArgoCD
@@ -114,10 +114,10 @@ ArgoCD auto-syncs the reverted state. For faster rollback during an active
 incident, disable auto-sync temporarily and use ArgoCD's history:
 
 ```bash
-argocd app set ep-app-bff-java --sync-policy none     # stop auto-sync
-argocd app rollback ep-app-bff-java <revision-id>     # manual rollback
+argocd app set ep-app-portal-bff --sync-policy none     # stop auto-sync
+argocd app rollback ep-app-portal-bff <revision-id>     # manual rollback
 # once stable, re-enable auto-sync:
-argocd app set ep-app-bff-java --sync-policy automated --auto-prune --self-heal
+argocd app set ep-app-portal-bff --sync-policy automated --auto-prune --self-heal
 ```
 
 Re-enabling `selfHeal` will re-converge the cluster to whatever is in Git, so
@@ -168,7 +168,7 @@ After bootstrap, confirm all Applications are `Healthy` and `Synced`:
 argocd app list -l app.kubernetes.io/part-of=education-platform
 ```
 
-Expected output: 1 base + 4 cell + 8 app = 13 child Applications, plus the
+Expected output: 1 base + 4 cell + 16 app = 21 child Applications, plus the
 root `ep-root`. All should show `Synced` / `Healthy`.
 
 Local smoke-test on k3s without ArgoCD is unchanged — use

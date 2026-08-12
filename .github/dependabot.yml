@@ -5,36 +5,72 @@
 version: 2
 
 updates:
-  # Java — sp03-business
+  # Java — core-business
   - package-ecosystem: "maven"
-    directory: "/services/sp03-business"
+    directory: "/services/core-business"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
     labels: ["dependencies", "java"]
 
-  # Java — sp05-itbackend
+  # Java — grading-service
   - package-ecosystem: "maven"
-    directory: "/services/sp05-itbackend"
+    directory: "/services/grading-service"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
     labels: ["dependencies", "java"]
 
-  # Java — bff-java
+  # Java — portal-bff
   - package-ecosystem: "maven"
-    directory: "/services/bff-java"
+    directory: "/services/portal-bff"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
     labels: ["dependencies", "java"]
 
-  # Java — sp07-knowledge (sp07-retrieval-service)
+  # Java — knowledge-platform (retrieval-service)
   - package-ecosystem: "maven"
-    directory: "/services/sp07-knowledge/sp07-retrieval-service"
+    directory: "/services/knowledge-platform/retrieval-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — order-platform
+  - package-ecosystem: "maven"
+    directory: "/services/order-platform/order-platform-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — payment-platform
+  - package-ecosystem: "maven"
+    directory: "/services/payment-platform/payment-platform-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — senior-care
+  - package-ecosystem: "maven"
+    directory: "/services/senior-care"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — boardgame-service
+  - package-ecosystem: "maven"
+    directory: "/services/boardgame-service"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -50,9 +86,9 @@ updates:
     open-pull-requests-limit: 3
     labels: ["dependencies", "java", "test"]
 
-  # Python — sp04-ai
+  # Python — ai-platform
   - package-ecosystem: "pip"
-    directory: "/services/sp04-ai"
+    directory: "/services/ai-platform"
     schedule:
       interval: "weekly"
       day: "tuesday"

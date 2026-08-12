@@ -28,7 +28,7 @@ spec:
               app: senior-care
       containers:
         - name: senior-care
-          image: registry.local:5000/ep/senior-care:latest
+          image: harbor.edu.internal/education-platform/senior-care:1.0.0
           ports:
             - name: http
               containerPort: 8088

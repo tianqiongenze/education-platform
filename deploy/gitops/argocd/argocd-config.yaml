@@ -98,6 +98,6 @@ data:
   #     --label argocd.argoproj.io/secret-type=repository
   # (For HTTPS, use a secret of type repository with username/password instead.)
   repositories: |
-    - url: https://github.com/edu-platform/education-platform.git
+    - url: https://github.com/tianqiongenze/education-platform.git
       type: git
       name: education-platform

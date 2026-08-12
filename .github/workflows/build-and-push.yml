@@ -44,6 +44,7 @@ jobs:
           - services/knowledge-platform/agent-service
           - services/knowledge-platform/tenant-service
           - services/knowledge-platform/knowledge-service
+          - services/knowledge-platform/knowledge-bff
           - services/senior-care
           - services/boardgame-service
     steps:
@@ -151,6 +152,12 @@ jobs:
           - ws-gateway
           - ai-platform
           - frontend-portal
+          - agent-service
+          - tenant-service
+          - knowledge-service
+          - knowledge-bff
+          - senior-care
+          - boardgame-service
     steps:
       - name: Login to Harbor
         uses: docker/login-action@v3

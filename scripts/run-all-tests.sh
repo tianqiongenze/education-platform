@@ -177,11 +177,12 @@ else
         portal-bff
         data-platform
         core-business
-        order-platform
-        payment-platform
+        order-platform/order-platform-service
+        payment-platform/payment-platform-service
         grading-service
         knowledge-platform
-        ep-api
+        senior-care
+        boardgame-service
         ep-web-common
         ep-memory-java
         ep-cache

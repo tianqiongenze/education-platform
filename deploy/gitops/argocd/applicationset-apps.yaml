@@ -46,6 +46,22 @@ spec:
             component: ai
           - app: frontend-portal
             component: portal
+          - app: data-platform
+            component: data
+          - app: knowledge-service
+            component: knowledge
+          - app: knowledge-bff
+            component: knowledge-bff
+          - app: retrieval-service
+            component: retrieval
+          - app: agent-service
+            component: agent
+          - app: tenant-service
+            component: tenant
+          - app: senior-care
+            component: senior
+          - app: boardgame-service
+            component: boardgame
   template:
     metadata:
       # Finalizer ensures the Application's resources are garbage-collected
@@ -64,7 +80,7 @@ spec:
     spec:
       project: education-platform
       source:
-        repoURL: https://github.com/edu-platform/education-platform.git
+        repoURL: https://github.com/tianqiongenze/education-platform.git
         targetRevision: HEAD
         # Each app renders the full base kustomization. Kustomize namePrefix
         # (edu-) and commonLabels apply uniformly; per-app rollouts are driven

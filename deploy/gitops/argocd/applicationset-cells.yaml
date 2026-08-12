@@ -32,15 +32,19 @@ spec:
         elements:
           - cell: hz
             region: cn-east-1
+            # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
             server: https://hz-cluster-api:6443
           - cell: sz
             region: cn-south-1
+            # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
             server: https://sz-cluster-api:6443
           - cell: bj
             region: cn-north-1
+            # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
             server: https://bj-cluster-api:6443
           - cell: sg
             region: ap-southeast-1
+            # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
             server: https://sg-cluster-api:6443
   template:
     metadata:
@@ -56,7 +60,7 @@ spec:
     spec:
       project: education-platform
       source:
-        repoURL: https://github.com/edu-platform/education-platform.git
+        repoURL: https://github.com/tianqiongenze/education-platform.git
         targetRevision: HEAD
         path: 'deploy/k8s/overlays/cell-{{cell}}'
       destination:

@@ -20,8 +20,8 @@ spec:
 
   # Allowed source repositories. Replace placeholder with the real org/repo URL.
   sourceRepos:
-    - https://github.com/edu-platform/education-platform.git
-    # - git@github.com:edu-platform/education-platform.git   # SSH variant
+    - https://github.com/tianqiongenze/education-platform.git
+    # - git@github.com:tianqiongenze/education-platform.git   # SSH variant
 
   # Allowed destination clusters + namespaces.
   # Cluster URLs are placeholders — register real clusters via:
@@ -29,12 +29,16 @@ spec:
   destinations:
     # 4 production cells + local verify cluster.
     # Each entry permits the project to deploy into the given cluster/namespace.
+    # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
     - server: https://hz-cluster-api:6443
       namespace: education-platform
+    # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
     - server: https://sz-cluster-api:6443
       namespace: education-platform
+    # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
     - server: https://bj-cluster-api:6443
       namespace: education-platform
+    # TODO: Replace with real cluster API URL after `argocd cluster add <context> --name <cell>`
     - server: https://sg-cluster-api:6443
       namespace: education-platform
     # Local / control-plane cluster (Karmada host + ArgoCD control plane).

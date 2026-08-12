@@ -40,7 +40,7 @@ spec:
     spec:
       project: education-platform
       source:
-        repoURL: https://github.com/edu-platform/education-platform.git
+        repoURL: https://github.com/tianqiongenze/education-platform.git
         targetRevision: HEAD
         path: deploy/k8s/base
       destination:

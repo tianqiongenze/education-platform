@@ -48,7 +48,7 @@ spec:
               app.kubernetes.io/name: payment-platform
       containers:
         - name: payment-platform
-          image: harbor.edu.internal/education-platform/payment-platform:1.0.0
+          image: harbor.edu.internal/education-platform/payment-platform-service:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
