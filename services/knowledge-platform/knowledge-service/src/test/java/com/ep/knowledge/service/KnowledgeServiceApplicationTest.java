@@ -1,5 +1,6 @@
 package com.ep.knowledge.service;
 
+import com.ep.cache.CacheService;
 import com.ep.knowledge.service.entity.Document;
 import com.ep.knowledge.service.mapper.DocumentMapper;
 import com.ep.knowledge.service.DocumentService;
@@ -9,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.function.Supplier;
+
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -32,7 +35,14 @@ class KnowledgeServiceApplicationTest {
     @BeforeEach
     void setUp() {
         documentMapper = mock(DocumentMapper.class);
-        documentService = new DocumentServiceImpl(documentMapper);
+        // D-182: inject a cache-miss CacheService mock (invokes the loader directly).
+        CacheService cacheService = mock(CacheService.class);
+        lenient().when(cacheService.getOrLoad(any(), any(), any(Supplier.class), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        documentService = new DocumentServiceImpl(documentMapper, cacheService);
     }
 
     @Test
