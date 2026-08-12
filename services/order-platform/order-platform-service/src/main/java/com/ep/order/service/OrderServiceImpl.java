@@ -15,6 +15,7 @@ import com.ep.payment.api.PaymentRequest;
 import com.ep.payment.api.PaymentResult;
 import com.ep.payment.api.PaymentService;
 import com.ep.payment.api.Refund;
+import com.ep.cache.CacheService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.seata.saga.engine.StateMachineEngine;
 import org.apache.dubbo.config.annotation.DubboReference;
@@ -78,6 +79,14 @@ public class OrderServiceImpl implements OrderService {
     /** Saga state-machine definition name registered in {@code cancel-order-saga.json}. */
     private static final String CANCEL_ORDER_SAGA = "cancelOrderSaga";
 
+    // D-182: multi-level cache configuration.
+    /** Cache name for order-by-id reads (300s, read-heavy). */
+    private static final String CACHE_ORDER = "order:detail";
+    /** Cache name for order-by-user-and-course reads (300s). */
+    private static final String CACHE_ORDER_BY_USER_COURSE = "order:by-user-course";
+    /** Order cache TTL in seconds. */
+    private static final long ORDER_TTL_SEC = 300;
+
     private final OrderRepository orderRepository;
     private final PulsarEventPublisher eventPublisher;
 
@@ -90,6 +99,12 @@ public class OrderServiceImpl implements OrderService {
     private final StateMachineEngine sagaEngine;
 
     /**
+     * D-182: Multi-level cache service (L1 Caffeine + L2 Redis).
+     * Used to cache order details for read-heavy lookups.
+     */
+    private final CacheService cacheService;
+
+    /**
      * Cross-service Dubbo RPC reference to the OPM Payment middle platform.
      * {@code check=false} so the order service boots even when the payment
      * provider is not yet registered (dev/CI); {@code timeout=10000ms} covers
@@ -100,10 +115,12 @@ public class OrderServiceImpl implements OrderService {
 
     public OrderServiceImpl(OrderRepository orderRepository,
                             PulsarEventPublisher eventPublisher,
-                            StateMachineEngine sagaEngine) {
+                            StateMachineEngine sagaEngine,
+                            CacheService cacheService) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.sagaEngine = sagaEngine;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -135,6 +152,9 @@ public class OrderServiceImpl implements OrderService {
         order.setTenantId(cmd.tenantId());
         order.setProductType(cmd.productType());
         OrderModel saved = orderRepository.save(order);
+        // D-182: evict cache entries after write.
+        cacheService.evict(CACHE_ORDER, String.valueOf(saved.getOrderId()));
+        cacheService.evict(CACHE_ORDER_BY_USER_COURSE, saved.getUserId() + ":" + saved.getCourseId());
         return toDto(saved);
     }
 
@@ -247,7 +267,10 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public OrderDto getOrderById(Long orderId) {
         Objects.requireNonNull(orderId, "orderId must not be null");
-        return orderRepository.findById(orderId).map(OrderServiceImpl::toDto).orElse(null);
+        // D-182: cache read-heavy order detail (300s, cacheEmpty=true).
+        return cacheService.getOrLoad(CACHE_ORDER, String.valueOf(orderId),
+                () -> orderRepository.findById(orderId).map(OrderServiceImpl::toDto).orElse(null),
+                ORDER_TTL_SEC, true);
     }
 
     @Override
@@ -255,8 +278,11 @@ public class OrderServiceImpl implements OrderService {
     public OrderDto getOrderByUserAndCourse(Long userId, Long courseId) {
         Objects.requireNonNull(userId, "userId must not be null");
         Objects.requireNonNull(courseId, "courseId must not be null");
-        return orderRepository.findByUserIdAndCourseId(userId, courseId)
-                .map(OrderServiceImpl::toDto).orElse(null);
+        // D-182: cache read-heavy order-by-user-and-course (300s, cacheEmpty=true).
+        return cacheService.getOrLoad(CACHE_ORDER_BY_USER_COURSE, userId + ":" + courseId,
+                () -> orderRepository.findByUserIdAndCourseId(userId, courseId)
+                        .map(OrderServiceImpl::toDto).orElse(null),
+                ORDER_TTL_SEC, true);
     }
 
     @Override
@@ -269,6 +295,9 @@ public class OrderServiceImpl implements OrderService {
         // state transition (PENDING -> PAID) recorded inside the aggregate
         order.pay(payMethod);
         orderRepository.save(order);
+        // D-182: evict cache entries after write.
+        cacheService.evict(CACHE_ORDER, String.valueOf(order.getOrderId()));
+        cacheService.evict(CACHE_ORDER_BY_USER_COURSE, order.getUserId() + ":" + order.getCourseId());
         // Record a real Payment via cross-service RPC. Best-effort: a Payment
         // failure must NOT roll back the order status flip - the order is PAID
         // regardless; Payment is a downstream concern reconciled out-of-band.
@@ -299,6 +328,9 @@ public class OrderServiceImpl implements OrderService {
         // state transition (PAID -> REFUNDED) recorded inside the aggregate
         order.refund();
         orderRepository.save(order);
+        // D-182: evict cache entries after write.
+        cacheService.evict(CACHE_ORDER, String.valueOf(order.getOrderId()));
+        cacheService.evict(CACHE_ORDER_BY_USER_COURSE, order.getUserId() + ":" + order.getCourseId());
         // FIX (vs legacy core-business): now actually instruct Payment to refund.
         // Best-effort: a Payment refund failure is logged but does NOT roll back
         // the order status flip - reconciliation catches the gap out-of-band.

@@ -1,5 +1,7 @@
 package com.ep.grading.grading;
 
+import com.ep.grading.common.PlagiarismCheckFacade;
+import com.ep.grading.common.PlagiarismCheckResult;
 import com.ep.grading.config.IdempotencyService;
 import com.ep.grading.grading.dto.StartGradingCmd;
 import com.ep.grading.grading.entity.GradePipeline;
@@ -7,9 +9,9 @@ import com.ep.grading.grading.entity.GradePipelineStatus;
 import com.ep.grading.grading.entity.GradeStage;
 import com.ep.grading.grading.entity.GradeStageStatus;
 import com.ep.grading.grading.impl.GradingServiceImpl;
-import com.ep.grading.homework.entity.PlagiarismCheck;
-import com.ep.grading.homework.entity.PlagiarismStatus;
-import com.ep.grading.homework.service.PlagiarismService;
+import com.ep.grading.sandbox.ExecutionRequest;
+import com.ep.grading.sandbox.ExecutionResult;
+import com.ep.grading.sandbox.SandboxExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -42,7 +44,8 @@ class GradingServiceImplTest {
     private GradePipelineRepository pipelineRepository;
     private GradeStageRepository stageRepository;
     private IdempotencyService idempotencyService;
-    private PlagiarismService plagiarismService;
+    private PlagiarismCheckFacade plagiarismService;
+    private SandboxExecutor sandboxExecutor;
     private GradingServiceImpl service;
     private final AtomicLong idSeq = new AtomicLong(0L);
 
@@ -51,7 +54,8 @@ class GradingServiceImplTest {
         pipelineRepository = mock(GradePipelineRepository.class);
         stageRepository = mock(GradeStageRepository.class);
         idempotencyService = mock(IdempotencyService.class);
-        plagiarismService = mock(PlagiarismService.class);
+        plagiarismService = mock(PlagiarismCheckFacade.class);
+        sandboxExecutor = mock(SandboxExecutor.class);
 
         when(idempotencyService.claimOrFetch(anyString(), any())).thenReturn(null);
         when(pipelineRepository.save(any(GradePipeline.class))).thenAnswer(inv -> {
@@ -61,24 +65,101 @@ class GradingServiceImplTest {
             }
             return p;
         });
-        PlagiarismCheck clean = new PlagiarismCheck();
-        clean.setId(1L);
-        clean.setSubmissionId(1L);
-        clean.setSimilarityScore(0.1);
-        clean.setStatus(PlagiarismStatus.CLEAN);
-        clean.setMatchedSources("[]");
-        when(plagiarismService.check(any())).thenReturn(clean);
+        PlagiarismCheckResult clean = new PlagiarismCheckResult(0.1, PlagiarismCheckResult.Status.CLEAN);
+        when(plagiarismService.checkResult(any())).thenReturn(clean);
 
-        service = new GradingServiceImpl(pipelineRepository, stageRepository, idempotencyService);
+        service = new GradingServiceImpl(pipelineRepository, stageRepository, idempotencyService, null);
         java.lang.reflect.Field f = GradingServiceImpl.class.getDeclaredField("plagiarismService");
         f.setAccessible(true);
         f.set(service, plagiarismService);
     }
 
+    // D-185: sandbox-driven auto_check
+    @Test
+    void test_start_grading_sandbox_passed_when_exit_zero() {
+        when(pipelineRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        when(sandboxExecutor.execute(any(ExecutionRequest.class)))
+                .thenReturn(new ExecutionResult(0, "hello", "", 12L, false));
+
+        GradingServiceImpl svc = new GradingServiceImpl(
+                pipelineRepository, stageRepository, idempotencyService, sandboxExecutor);
+        java.lang.reflect.Field f;
+        try {
+            f = GradingServiceImpl.class.getDeclaredField("plagiarismService");
+            f.setAccessible(true);
+            f.set(svc, plagiarismService);
+        } catch (Exception ignored) {
+        }
+
+        GradePipeline pipeline = svc.startGrading(
+                new StartGradingCmd(1L, 5L, "grade-sandbox-1", "print('hello')", "PYTHON"));
+        GradeStage autoCheck = pipeline.getStages().get(0);
+        assertEquals(GradeStageStatus.PASSED, autoCheck.getStatus());
+        assertEquals(40, autoCheck.getStageScore());
+        assertTrue(autoCheck.getStageResult().contains("exit=0"));
+    }
+
+    @Test
+    void test_start_grading_sandbox_failed_when_exit_nonzero() {
+        when(pipelineRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        when(sandboxExecutor.execute(any(ExecutionRequest.class)))
+                .thenReturn(new ExecutionResult(1, "", "SyntaxError: invalid syntax", 8L, false));
+
+        GradingServiceImpl svc = new GradingServiceImpl(
+                pipelineRepository, stageRepository, idempotencyService, sandboxExecutor);
+        try {
+            java.lang.reflect.Field f = GradingServiceImpl.class.getDeclaredField("plagiarismService");
+            f.setAccessible(true);
+            f.set(svc, plagiarismService);
+        } catch (Exception ignored) {
+        }
+
+        GradePipeline pipeline = svc.startGrading(
+                new StartGradingCmd(1L, 5L, "grade-sandbox-2", "bad code", "PYTHON"));
+        GradeStage autoCheck = pipeline.getStages().get(0);
+        assertEquals(GradeStageStatus.FAILED, autoCheck.getStatus());
+        assertEquals(0, autoCheck.getStageScore());
+        assertTrue(autoCheck.getStageResult().contains("exit=1"));
+    }
+
+    @Test
+    void test_start_grading_sandbox_failed_when_timed_out() {
+        when(pipelineRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        when(sandboxExecutor.execute(any(ExecutionRequest.class)))
+                .thenReturn(new ExecutionResult(-1, "", "", 10001L, true));
+
+        GradingServiceImpl svc = new GradingServiceImpl(
+                pipelineRepository, stageRepository, idempotencyService, sandboxExecutor);
+        try {
+            java.lang.reflect.Field f = GradingServiceImpl.class.getDeclaredField("plagiarismService");
+            f.setAccessible(true);
+            f.set(svc, plagiarismService);
+        } catch (Exception ignored) {
+        }
+
+        GradePipeline pipeline = svc.startGrading(
+                new StartGradingCmd(1L, 5L, "grade-sandbox-3", "while True: pass", "PYTHON"));
+        GradeStage autoCheck = pipeline.getStages().get(0);
+        assertEquals(GradeStageStatus.FAILED, autoCheck.getStatus());
+        assertTrue(autoCheck.getStageResult().contains("timed out"));
+    }
+
+    @Test
+    void test_start_grading_dev_mode_fallback_when_no_code() {
+        when(pipelineRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        // sandboxExecutor is null in the default service (dev mode)
+        GradePipeline pipeline = service.startGrading(new StartGradingCmd(1L, 5L, "grade-key-1"));
+        GradeStage autoCheck = pipeline.getStages().get(0);
+        // dev-mode fallback: PASSED with default score
+        assertEquals(GradeStageStatus.PASSED, autoCheck.getStatus());
+        assertEquals(40, autoCheck.getStageScore());
+        verify(sandboxExecutor, never()).execute(any());
+    }
+
     @Test
     void test_start_grading_success() {
         when(pipelineRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
-        GradePipeline pipeline = service.startGrading(new StartGradingCmd(1L, 5L, "grade-key-1"));
+        GradePipeline pipeline = service.startGrading(new StartGradingCmd(1L, 5L, "grade-key-1b"));
         assertNotNull(pipeline.getId());
         assertEquals(1L, pipeline.getSubmissionId());
         assertEquals(5L, pipeline.getGradedBy());

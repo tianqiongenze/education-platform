@@ -16,7 +16,12 @@ from ai_gateway.cost.confidence_cascade import ConfidenceCascade
 from ai_gateway.cost.cost_stack import CostStack
 from ai_gateway.cost.provider_fallback import ProviderFallback
 from ai_gateway.cost.route_router import FLAGSHIP_MODEL, SMALL_MODEL, RouteRouter
-from ai_gateway.cost.semantic_cache import SemanticCache, _CACHE_PREFIX, _CACHE_TTL_SEC
+from ai_gateway.cost.semantic_cache import (
+    SemanticCache,
+    _CACHE_NAME,
+    _CACHE_PREFIX,
+    _CACHE_TTL_SEC,
+)
 from ai_gateway.models import ChatMessage, ChatRequest, ChatResponse
 
 
@@ -32,6 +37,11 @@ class FakeRedis:
         self.store: dict[str, str] = {}
         self.calls: list[tuple[str, tuple, dict]] = []
         self.fail: bool = False
+        # Pub/Sub state: channels with active subscribers and the messages
+        # published to them. CacheService's background thread subscribes to
+        # ``ep:cache:invalidate``; we record subscribers so publish() can
+        # deliver messages synchronously to mimic real Redis pubsub semantics.
+        self._subscribers: dict[str, list] = {}
 
     def ping(self) -> bool:
         if self.fail:
@@ -53,6 +63,57 @@ class FakeRedis:
     def delete(self, key: str) -> int:
         self.calls.append(("delete", (key,), {}))
         return 1 if self.store.pop(key, None) is not None else 0
+
+    # -- Pub/Sub (used by CacheService's invalidation broadcast) --
+
+    def pubsub(self, ignore_subscribe_messages: bool = False):
+        return _FakePubSub(self)
+
+    def pubsub_channels(self, pattern: str | None = None):
+        return [c.encode() for c in self._subscribers if self._subscribers[c]]
+
+    def publish(self, channel: str, message: str) -> int:
+        delivered = 0
+        for sub in self._subscribers.get(channel, []):
+            sub._deliver(channel, message)  # noqa: SLF001
+            delivered += 1
+        return delivered
+
+
+class _FakePubSub:
+    """Minimal pubsub stand-in for CacheService's invalidation listener."""
+
+    def __init__(self, fake: "FakeRedis") -> None:
+        self._fake = fake
+        self._channel: str | None = None
+        self._queue: list[dict] = []
+        self._closed = False
+
+    def subscribe(self, channel: str) -> None:
+        self._channel = channel
+        self._fake._subscribers.setdefault(channel, []).append(self)  # noqa: SLF001
+
+    def listen(self):
+        # Generator that yields queued messages as they arrive. Blocks
+        # (polls) until the fake is closed — CacheService runs this in a
+        # daemon thread so it never blocks process exit.
+        import time as _time
+
+        while not self._closed:
+            if self._queue:
+                yield self._queue.pop(0)
+            else:
+                _time.sleep(0.01)
+
+    def close(self) -> None:
+        self._closed = True
+        if self._channel is not None:
+            subs = self._fake._subscribers.get(self._channel, [])  # noqa: SLF001
+            if self in subs:
+                subs.remove(self)
+
+    def _deliver(self, channel: str, message: str) -> None:
+        self._queue.append({"type": "message", "channel": channel, "data": message})
 
 
 def _chat_response(
@@ -149,12 +210,13 @@ def test_semantic_cache_redis_key_and_ttl():
 
 def test_semantic_cache_degrades_without_redis():
     # Passing client=None triggers _build_redis_client(), which will try the
-    # real env. Force-override to None to simulate total unavailability.
+    # real env. Force-override to L1-only to simulate total unavailability.
     cache = SemanticCache(client=None)
-    cache._client = None  # noqa: SLF001 — simulate no-Redis in tests
+    cache._cache._redis = None  # noqa: SLF001 — simulate no-Redis in tests
     msgs = [ChatMessage(role="user", content="anything")]
     assert cache.get(msgs) is None
-    # put is a no-op (does not raise).
+    # put is a no-op on L2 (does not raise); L1 stores it but get still
+    # returns None because the loader is a no-op lambda.
     cache.put(msgs, _chat_response())
     assert not cache.available
 
@@ -173,11 +235,13 @@ def test_semantic_cache_corrupt_entry_evicted():
     fake = FakeRedis()
     cache = SemanticCache(client=fake)
     msgs = [ChatMessage(role="user", content="corrupt")]
-    # Plant a corrupt JSON entry directly in the fake store.
-    fake.store[_CACHE_PREFIX + SemanticCache.hash(msgs)] = "not-json{"
+    # Plant a corrupt JSON entry directly in the fake store. The full key
+    # is "{cache_name}:{hash}" (CacheService builds it as cache_name:key).
+    full_key = _CACHE_NAME + ":" + SemanticCache.hash(msgs)
+    fake.store[full_key] = "not-json{"
     assert cache.get(msgs) is None
     # Eviction attempted → key removed.
-    assert _CACHE_PREFIX + SemanticCache.hash(msgs) not in fake.store
+    assert full_key not in fake.store
 
 
 # --------------------------------------------------------------------------- #
@@ -337,7 +401,7 @@ def test_provider_fallback_accepts_bare_callables():
 def _make_stack(fake_redis: FakeRedis | None = None) -> CostStack:
     cache = SemanticCache(client=fake_redis) if fake_redis else SemanticCache(client=None)
     if fake_redis is None:
-        cache._client = None  # noqa: SLF001 — no-Redis path
+        cache._cache._redis = None  # noqa: SLF001 — no-Redis path
     return CostStack(
         cache=cache,
         router=RouteRouter(),
@@ -428,6 +492,7 @@ def test_cost_stack_stores_final_response_in_cache():
     req = ChatRequest(messages=[ChatMessage(role="user", content="hi")])
     good = _chat_response(content="Hello there, I can help you with that question today.", resp_id="ok")
     stack.execute(req, [_ScriptedProvider("small", [good])], [_ScriptedProvider("flag", [good])])
-    # Cache should now contain the response under the prompt hash.
-    key = _CACHE_PREFIX + SemanticCache.hash(req.messages)
+    # Cache should now contain the response under the prompt hash. The full
+    # key is "{cache_name}:{hash}" (CacheService builds it as cache_name:key).
+    key = _CACHE_NAME + ":" + SemanticCache.hash(req.messages)
     assert key in fake.store

@@ -1,5 +1,6 @@
 package com.ep.grading.homework;
 
+import com.ep.cache.CacheService;
 import com.ep.grading.homework.dto.AssignmentCommand;
 import com.ep.grading.homework.entity.Assignment;
 import com.ep.grading.homework.entity.AssignmentStatus;
@@ -18,7 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,16 +33,26 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link AssignmentServiceImpl}. Repository is mocked so tests run
  * without TiDB. Sentinel is not engaged in plain unit tests (no aspect weaving).
+ * D-182: CacheService is mocked with cache-miss default (invokes loader), allowing
+ * cache interaction verification while keeping existing logic tests intact.
  */
 class AssignmentServiceImplTest {
 
     private AssignmentRepository assignmentRepository;
+    private CacheService cacheService;
     private AssignmentServiceImpl service;
     private final AtomicLong idSeq = new AtomicLong(0L);
 
     @BeforeEach
     void setUp() {
         assignmentRepository = mock(AssignmentRepository.class);
+        cacheService = mock(CacheService.class);
+        // Cache-miss default: invoke the loader so the repository is called as before.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(inv -> {
             Assignment a = inv.getArgument(0);
             if (a.getId() == null) {
@@ -43,7 +60,7 @@ class AssignmentServiceImplTest {
             }
             return a;
         });
-        service = new AssignmentServiceImpl(assignmentRepository);
+        service = new AssignmentServiceImpl(assignmentRepository, cacheService);
     }
 
     @Test
@@ -56,6 +73,7 @@ class AssignmentServiceImplTest {
         assertEquals(100, a.getMaxScore());
         assertEquals(AssignmentStatus.DRAFT, a.getStatus());
         assertNotNull(a.getCreatedAt());
+        verify(cacheService).evict("assignment:by-course", String.valueOf(10L));
     }
 
     @Test
@@ -81,6 +99,8 @@ class AssignmentServiceImplTest {
         Assignment published = service.publish(1L);
         assertEquals(AssignmentStatus.PUBLISHED, published.getStatus());
         verify(assignmentRepository, times(1)).save(any(Assignment.class));
+        verify(cacheService).evict("assignment", String.valueOf(1L));
+        verify(cacheService).evict("assignment:by-course", String.valueOf(1L));
     }
 
     @Test
@@ -104,6 +124,8 @@ class AssignmentServiceImplTest {
         Assignment closed = service.close(1L);
         assertEquals(AssignmentStatus.CLOSED, closed.getStatus());
         verify(assignmentRepository, times(1)).save(any(Assignment.class));
+        verify(cacheService).evict("assignment", String.valueOf(1L));
+        verify(cacheService).evict("assignment:by-course", String.valueOf(1L));
     }
 
     @Test
@@ -113,6 +135,21 @@ class AssignmentServiceImplTest {
         Assignment found = service.findById(1L);
         assertNotNull(found);
         assertEquals(1L, found.getId());
+        verify(cacheService).getOrLoad(eq("assignment"), eq(String.valueOf(1L)), any(), eq(600L), eq(true));
+    }
+
+    @Test
+    void test_find_by_id_cache_hit_skips_repository() {
+        // Cache hit: CacheService returns cached value without invoking loader.
+        Assignment cached = new Assignment(1L, "T", "D", 1L, 2L, 100, null, AssignmentStatus.DRAFT, LocalDateTime.now(), null);
+        when(cacheService.getOrLoad(eq("assignment"), eq(String.valueOf(1L)), any(), eq(600L), eq(true)))
+                .thenReturn(cached);
+
+        Assignment found = service.findById(1L);
+        assertNotNull(found);
+        assertEquals(1L, found.getId());
+        // Repository must NOT be called on cache hit.
+        verify(assignmentRepository, never()).findById(anyLong());
     }
 
     @Test
@@ -124,6 +161,7 @@ class AssignmentServiceImplTest {
         List<Assignment> result = service.findByCourseId(10L);
         assertEquals(2, result.size());
         assertTrue(result.stream().allMatch(a -> a.getCourseId().equals(10L)));
+        verify(cacheService).getOrLoad(eq("assignment:by-course"), eq(String.valueOf(10L)), any(), eq(600L), eq(false));
     }
 
     @Test

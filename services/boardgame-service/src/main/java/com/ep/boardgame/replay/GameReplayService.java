@@ -2,6 +2,7 @@ package com.ep.boardgame.replay;
 
 import com.ep.boardgame.common.SnowflakeIdGenerator;
 import com.ep.boardgame.room.GameMatch;
+import com.ep.cache.CacheService;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -9,14 +10,24 @@ import java.util.List;
 
 /**
  * D-149: Replay service — creates and retrieves game replays.
+ * <p>
+ * D-182: read methods cached via ep-cache SDK (L1 Caffeine + L2 Redis +
+ * Pub/Sub broadcast). createReplay evicts the affected cache entries.
  */
 @DubboService
 public class GameReplayService {
 
-    private final GameReplayRepository replayRepo;
+    private static final String CACHE_REPLAY = "boardgame:replay";
+    private static final String CACHE_REPLAY_BY_TENANT = "boardgame:replay:by-tenant";
+    private static final String CACHE_REPLAY_BY_COURSE = "boardgame:replay:by-course";
+    private static final long REPLAY_TTL_SEC = 600;
 
-    public GameReplayService(GameReplayRepository replayRepo) {
+    private final GameReplayRepository replayRepo;
+    private final CacheService cacheService;
+
+    public GameReplayService(GameReplayRepository replayRepo, CacheService cacheService) {
         this.replayRepo = replayRepo;
+        this.cacheService = cacheService;
     }
 
     @Transactional
@@ -35,20 +46,31 @@ public class GameReplayService {
         replay.setMoveHistory(match.getMoveHistory());
         replay.setInitialFen(XiangqiRuleEngineHolder.INITIAL_FEN);
         replay.setCreatedAt(System.currentTimeMillis());
-        return replayRepo.save(replay);
+        GameReplay saved = replayRepo.save(replay);
+        cacheService.evict(CACHE_REPLAY, String.valueOf(match.getMatchId()));
+        cacheService.evict(CACHE_REPLAY_BY_TENANT, String.valueOf(match.getTenantId()));
+        cacheService.evict(CACHE_REPLAY_BY_COURSE, String.valueOf(match.getCourseId()));
+        return saved;
     }
 
     public GameReplay getReplayByMatch(Long matchId) {
-        List<GameReplay> replays = replayRepo.findByMatchId(matchId);
-        return replays.isEmpty() ? null : replays.get(0);
+        return cacheService.getOrLoad(CACHE_REPLAY, String.valueOf(matchId),
+                () -> {
+                    List<GameReplay> replays = replayRepo.findByMatchId(matchId);
+                    return replays.isEmpty() ? null : replays.get(0);
+                }, REPLAY_TTL_SEC, true);
     }
 
     public List<GameReplay> listReplaysByTenant(Long tenantId) {
-        return replayRepo.findByTenantIdOrderByReplayIdDesc(tenantId);
+        return cacheService.getOrLoad(CACHE_REPLAY_BY_TENANT, String.valueOf(tenantId),
+                () -> replayRepo.findByTenantIdOrderByReplayIdDesc(tenantId),
+                REPLAY_TTL_SEC, false);
     }
 
     public List<GameReplay> listReplaysByCourse(Long courseId) {
-        return replayRepo.findByCourseIdOrderByReplayIdDesc(courseId);
+        return cacheService.getOrLoad(CACHE_REPLAY_BY_COURSE, String.valueOf(courseId),
+                () -> replayRepo.findByCourseIdOrderByReplayIdDesc(courseId),
+                REPLAY_TTL_SEC, false);
     }
 
     /** Inner holder to avoid importing rule engine into the replay service directly. */

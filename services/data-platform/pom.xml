@@ -16,6 +16,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- D-115: JIB build port (data-platform listens on 8082). -->
     <jib.container.port>8082</jib.container.port>
+    <!-- D-195: unified Pulsar version (upgrade target 4.0 / 2027 Q1) -->
+    <pulsar.version>3.3.9</pulsar.version>
   </properties>
   <dependencies>
     <dependency>
@@ -68,7 +70,7 @@
     <dependency>
       <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-client</artifactId>
-      <version>3.3.9</version>
+      <version>${pulsar.version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -117,6 +119,58 @@
       <artifactId>slf4j-simple</artifactId>
       <version>2.0.18</version>
       <scope>test</scope>
+    </dependency>
+    <!-- D-188: Druid SQL parser for AST-based field-level lineage -->
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>druid</artifactId>
+      <version>1.2.24</version>
+    </dependency>
+    <!-- D-190: Guava (transitive dep of Druid SQL parser — needed at runtime
+         for com.google.common.collect.Lists used by PrestoSelectParser) -->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>33.4.0-jre</version>
+    </dependency>
+    <!-- D-189: ONNX Runtime for AIOps model inference (LSTM/IF/GBT) -->
+    <dependency>
+      <groupId>com.microsoft.onnxruntime</groupId>
+      <artifactId>onnxruntime</artifactId>
+      <version>1.21.0</version>
+    </dependency>
+    <!-- D-190: Trino JDBC driver for text-to-SQL execution -->
+    <dependency>
+      <groupId>io.trino</groupId>
+      <artifactId>trino-jdbc</artifactId>
+      <version>465</version>
+    </dependency>
+    <!-- D-190: ANTLR4 runtime (kept for potential grammar-based validation) -->
+    <dependency>
+      <groupId>org.antlr</groupId>
+      <artifactId>antlr4-runtime</artifactId>
+      <version>4.13.2</version>
+    </dependency>
+    <!-- D-190: JDBC + MySQL driver for TiDB access (audit log, lineage persistence) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- D-194: PostgreSQL driver for CockroachDB (wire-compatible) dual-DB PoC. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- D-190: Redis for rate limiting and conversation context persistence -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
   </dependencies>
   <build>

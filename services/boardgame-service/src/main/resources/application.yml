@@ -103,6 +103,8 @@ management:
 
 # EP platform config
 ep:
+  cache:
+    enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)
   pulsar:
     enabled: false
     service-url: pulsar://pulsar-broker:6650

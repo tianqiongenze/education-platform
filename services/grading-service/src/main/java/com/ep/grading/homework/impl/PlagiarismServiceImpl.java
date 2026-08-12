@@ -1,5 +1,7 @@
 package com.ep.grading.homework.impl;
 
+import com.ep.grading.common.PlagiarismCheckFacade;
+import com.ep.grading.common.PlagiarismCheckResult;
 import com.ep.grading.common.SnowflakeIdGenerator;
 import com.ep.grading.homework.PlagiarismCheckRepository;
 import com.ep.grading.homework.entity.PlagiarismCheck;
@@ -18,9 +20,12 @@ import java.time.LocalDateTime;
  * D-048 P0-4: ConcurrentHashMap store replaced by Spring Data JPA
  * {@link PlagiarismCheckRepository}.
  * D-048 P0-7: {@link SentinelResource} on {@link #check} for rate limiting.
+ * D-136: also implements the shared {@link PlagiarismCheckFacade} so the
+ * {@code grading} bounded context can consume plagiarism outcomes without
+ * importing {@code homework} entity classes (context isolation).
  */
 @DubboService
-public class PlagiarismServiceImpl implements PlagiarismService {
+public class PlagiarismServiceImpl implements PlagiarismService, PlagiarismCheckFacade {
 
     private final PlagiarismCheckRepository plagiarismCheckRepository;
 
@@ -88,5 +93,30 @@ public class PlagiarismServiceImpl implements PlagiarismService {
 
     public PlagiarismCheck checkFallback(Long submissionId, Throwable t) {
         throw new IllegalStateException("Plagiarism check failed: " + t.getMessage(), t);
+    }
+
+    // ------------------------------------------------------------------
+    // PlagiarismCheckFacade — context-neutral view for the grading context
+    // ------------------------------------------------------------------
+
+    @Override
+    public PlagiarismCheckResult checkResult(Long submissionId) {
+        PlagiarismCheck check = check(submissionId);
+        if (check == null) {
+            return null;
+        }
+        return new PlagiarismCheckResult(check.getSimilarityScore(), mapStatus(check.getStatus()));
+    }
+
+    private static PlagiarismCheckResult.Status mapStatus(PlagiarismStatus status) {
+        if (status == null) {
+            return null;
+        }
+        return switch (status) {
+            case PENDING -> PlagiarismCheckResult.Status.PENDING;
+            case CLEAN -> PlagiarismCheckResult.Status.CLEAN;
+            case FLAGGED -> PlagiarismCheckResult.Status.FLAGGED;
+            case REVIEWING -> PlagiarismCheckResult.Status.REVIEWING;
+        };
     }
 }

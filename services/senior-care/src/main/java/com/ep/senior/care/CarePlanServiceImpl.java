@@ -1,6 +1,7 @@
 package com.ep.senior.care;
 
 import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.ep.cache.CacheService;
 import com.ep.senior.common.DomainEvent;
 import com.ep.senior.common.SnowflakeIdGenerator;
 import com.ep.senior.event.PulsarEventPublisher;
@@ -12,17 +13,31 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * D-150: CarePlan service implementation.
+ * <p>
+ * D-182: getPlanById cached via ep-cache SDK (L1 Caffeine + L2 Redis +
+ * Pub/Sub broadcast). Writes evict the affected cache entry.
+ */
 @DubboService
 public class CarePlanServiceImpl implements CarePlanService {
 
     private static final Logger log = LoggerFactory.getLogger(CarePlanServiceImpl.class);
 
+    private static final String CACHE_CARE_PLAN = "senior:care-plan";
+    private static final String CACHE_CARE_PLAN_BY_ELDER = "senior:care-plan:by-elder";
+    private static final long CARE_PLAN_TTL_SEC = 600;
+
     private final CarePlanRepository repository;
     private final PulsarEventPublisher eventPublisher;
+    private final CacheService cacheService;
 
-    public CarePlanServiceImpl(CarePlanRepository repository, PulsarEventPublisher eventPublisher) {
+    public CarePlanServiceImpl(CarePlanRepository repository,
+                               PulsarEventPublisher eventPublisher,
+                               CacheService cacheService) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -51,21 +66,27 @@ public class CarePlanServiceImpl implements CarePlanService {
         plan.setStatus(CarePlanStatus.DRAFT.getCode());
         plan.setCreatedAt(now);
         plan.setUpdatedAt(now);
-        return repository.save(plan);
+        CarePlan saved = repository.save(plan);
+        cacheService.evict(CACHE_CARE_PLAN, String.valueOf(saved.getPlanId()));
+        cacheService.evict(CACHE_CARE_PLAN_BY_ELDER, String.valueOf(saved.getElderId()));
+        return saved;
     }
 
     @Override
     @Transactional(readOnly = true)
     public CarePlan getPlanById(Long planId) {
         Objects.requireNonNull(planId, "planId must not be null");
-        return repository.findById(planId).orElse(null);
+        return cacheService.getOrLoad(CACHE_CARE_PLAN, String.valueOf(planId),
+                () -> repository.findById(planId).orElse(null), CARE_PLAN_TTL_SEC, true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CarePlan> listByElder(Long elderId) {
         Objects.requireNonNull(elderId, "elderId must not be null");
-        return repository.findByElderIdOrderByPlanIdDesc(elderId);
+        return cacheService.getOrLoad(CACHE_CARE_PLAN_BY_ELDER, String.valueOf(elderId),
+                () -> repository.findByElderIdOrderByPlanIdDesc(elderId),
+                CARE_PLAN_TTL_SEC, false);
     }
 
     @Override
@@ -76,6 +97,8 @@ public class CarePlanServiceImpl implements CarePlanService {
                 .orElseThrow(() -> new IllegalStateException("CarePlan not found: " + planId));
         plan.activate();
         repository.save(plan);
+        cacheService.evict(CACHE_CARE_PLAN, String.valueOf(planId));
+        cacheService.evict(CACHE_CARE_PLAN_BY_ELDER, String.valueOf(plan.getElderId()));
         publishEvents(plan);
     }
 
@@ -87,6 +110,8 @@ public class CarePlanServiceImpl implements CarePlanService {
                 .orElseThrow(() -> new IllegalStateException("CarePlan not found: " + planId));
         plan.complete();
         repository.save(plan);
+        cacheService.evict(CACHE_CARE_PLAN, String.valueOf(planId));
+        cacheService.evict(CACHE_CARE_PLAN_BY_ELDER, String.valueOf(plan.getElderId()));
         publishEvents(plan);
     }
 
@@ -98,6 +123,8 @@ public class CarePlanServiceImpl implements CarePlanService {
                 .orElseThrow(() -> new IllegalStateException("CarePlan not found: " + planId));
         plan.archive();
         repository.save(plan);
+        cacheService.evict(CACHE_CARE_PLAN, String.valueOf(planId));
+        cacheService.evict(CACHE_CARE_PLAN_BY_ELDER, String.valueOf(plan.getElderId()));
         publishEvents(plan);
     }
 

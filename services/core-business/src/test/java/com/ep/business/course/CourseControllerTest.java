@@ -2,6 +2,7 @@ package com.ep.business.course;
 
 import com.ep.business.event.PulsarClientProperties;
 import com.ep.business.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import com.ep.web.common.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +18,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,6 +37,7 @@ class CourseControllerTest {
     private MockMvc mockMvc;
     private final ObjectMapper mapper = new ObjectMapper();
     private CourseRepository repository;
+    private CacheService cacheService;
 
     @BeforeEach
     void setUp() {
@@ -47,7 +49,14 @@ class CourseControllerTest {
             }
             return c;
         });
-        CourseService courseService = new CourseServiceImpl(repository, noopPublisher());
+        cacheService = mock(CacheService.class);
+        // Simulate cache miss — loader is invoked, so the repository is exercised.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        CourseService courseService = new CourseServiceImpl(repository, noopPublisher(), cacheService);
         CourseController controller = new CourseController(courseService);
         // standaloneSetup does not auto-register @RestControllerAdvice, so wire
         // the shared GlobalExceptionHandler explicitly to get the real 403 mapping
@@ -96,7 +105,7 @@ class CourseControllerTest {
 
     @Test
     void getById_endpoint() throws Exception {
-        Course created = new CourseServiceImpl(repository, noopPublisher()).createCourse(cmd());
+        Course created = new CourseServiceImpl(repository, noopPublisher(), cacheService).createCourse(cmd());
         when(repository.findById(created.getCourseId())).thenReturn(Optional.of(created));
 
         mockMvc.perform(get("/api/v1/courses/{id}", created.getCourseId()))
@@ -138,7 +147,7 @@ class CourseControllerTest {
 
     @Test
     void publishCourse_endpoint() throws Exception {
-        Course created = new CourseServiceImpl(repository, noopPublisher()).createCourse(cmd());
+        Course created = new CourseServiceImpl(repository, noopPublisher(), cacheService).createCourse(cmd());
         when(repository.findById(created.getCourseId())).thenReturn(Optional.of(created));
 
         mockMvc.perform(post("/api/v1/courses/{id}/publish", created.getCourseId())
@@ -149,7 +158,7 @@ class CourseControllerTest {
     @Test
     void archiveCourse_endpoint() throws Exception {
         // Build a PUBLISHED course so the archive transition is valid.
-        Course created = new CourseServiceImpl(repository, noopPublisher()).createCourse(cmd());
+        Course created = new CourseServiceImpl(repository, noopPublisher(), cacheService).createCourse(cmd());
         created.publish();
         when(repository.findById(created.getCourseId())).thenReturn(Optional.of(created));
 

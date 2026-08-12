@@ -1,5 +1,6 @@
 package com.ep.knowledge.service.impl;
 
+import com.ep.cache.CacheService;
 import com.ep.knowledge.service.entity.Document;
 import com.ep.knowledge.service.mapper.DocumentMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,25 +9,51 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.function.Supplier;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * Pure-Mockito unit tests for {@link DocumentServiceImpl} covering the file
  * upload sanitization (path-traversal fix), UUID-based content paths and the
  * extension allowlist. No Spring context is required.
+ * <p>
+ * D-182: also verifies {@link CacheService} getOrLoad/evict integration.
  */
 class DocumentServiceImplTest {
 
     private DocumentMapper documentMapper;
+    private CacheService cacheService;
     private DocumentServiceImpl service;
+
+    /**
+     * D-182: Create a CacheService mock that simulates a cache miss by invoking
+     * the supplied loader. This keeps existing logic intact while allowing
+     * cache-hit tests to override the stub.
+     */
+    private static CacheService cacheMiss() {
+        CacheService cs = mock(CacheService.class);
+        // lenient: not every test exercises getOrLoad (upload/delete/parseAndChunk only evict).
+        lenient().when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        return cs;
+    }
 
     @BeforeEach
     void setUp() {
         documentMapper = mock(DocumentMapper.class);
         when(documentMapper.insert(any(Document.class))).thenReturn(1);
-        service = new DocumentServiceImpl(documentMapper);
+        cacheService = cacheMiss();
+        service = new DocumentServiceImpl(documentMapper, cacheService);
     }
 
     // ---- sanitizeFileName -------------------------------------------------
@@ -132,6 +159,7 @@ class DocumentServiceImplTest {
                 () -> service.upload("t1", file, "c1"));
         assertTrue(ex.getMessage().contains("exe"));
         verify(documentMapper, never()).insert(any(Document.class));
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -142,6 +170,7 @@ class DocumentServiceImplTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.upload("t1", file, "c1"));
         verify(documentMapper, never()).insert(any(Document.class));
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -154,5 +183,95 @@ class DocumentServiceImplTest {
                     "extension should be allowed: " + ext);
         }
         verify(documentMapper, times(allowed.length)).insert(any(Document.class));
+    }
+
+    // ---- D-182: CacheService integration ---------------------------------
+
+    @Test
+    void get_cacheMiss_invokesMapper_andCachesResult() {
+        Document doc = new Document();
+        doc.setId("doc-1");
+        doc.setTenantId("t1");
+        doc.setTitle("hello.pdf");
+        when(documentMapper.selectById("doc-1")).thenReturn(doc);
+
+        Document fetched = service.get("t1", "doc-1");
+
+        assertNotNull(fetched);
+        assertEquals("doc-1", fetched.getId());
+        assertEquals("hello.pdf", fetched.getTitle());
+        // D-182: get must go through cache getOrLoad (TTL 600s, cacheEmpty=true).
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("doc-1"),
+                any(Supplier.class), eq(600L), eq(true));
+    }
+
+    @Test
+    void get_tenantMismatch_returnsNull() {
+        Document doc = new Document();
+        doc.setId("doc-2");
+        doc.setTenantId("other-tenant");
+        when(documentMapper.selectById("doc-2")).thenReturn(doc);
+
+        Document fetched = service.get("t1", "doc-2");
+
+        assertNull(fetched, "tenant mismatch must return null");
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("doc-2"),
+                any(Supplier.class), eq(600L), eq(true));
+    }
+
+    @Test
+    void get_cacheHit_skipsMapper() {
+        // D-182: when the cache returns a value, the mapper is never touched.
+        Document cached = new Document();
+        cached.setId("doc-ch");
+        cached.setTenantId("t1");
+        when(cacheService.getOrLoad(eq("knowledge:document"), eq("doc-ch"),
+                any(Supplier.class), eq(600L), eq(true)))
+                .thenReturn(cached);
+
+        Document fetched = service.get("t1", "doc-ch");
+
+        assertSame(cached, fetched);
+        verify(documentMapper, never()).selectById(any());
+    }
+
+    @Test
+    void upload_evictsCacheAfterInsert() {
+        // D-182: upload should evict the potentially cached null entry for the
+        // newly assigned document id.
+        MultipartFile file = new MockMultipartFile(
+                "file", "test.pdf", "application/octet-stream", new byte[]{1});
+
+        service.upload("t1", file, "c1");
+
+        verify(cacheService).evict(eq("knowledge:document"), anyString());
+    }
+
+    @Test
+    void delete_evictsCacheAfterDelete() {
+        // D-182: delete should evict the cache entry.
+        Document doc = new Document();
+        doc.setId("doc-del");
+        doc.setTenantId("t1");
+        when(documentMapper.selectById("doc-del")).thenReturn(doc);
+
+        service.delete("t1", "doc-del");
+
+        verify(documentMapper).deleteById("doc-del");
+        verify(cacheService).evict("knowledge:document", "doc-del");
+    }
+
+    @Test
+    void delete_tenantMismatch_doesNotEvict() {
+        // D-182: when the tenant doesn't match, nothing is deleted and no evict.
+        Document doc = new Document();
+        doc.setId("doc-del2");
+        doc.setTenantId("other");
+        when(documentMapper.selectById("doc-del2")).thenReturn(doc);
+
+        service.delete("t1", "doc-del2");
+
+        verify(documentMapper, never()).deleteById(any());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 }

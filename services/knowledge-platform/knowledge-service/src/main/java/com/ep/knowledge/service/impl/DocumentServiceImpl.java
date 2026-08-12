@@ -1,5 +1,6 @@
 package com.ep.knowledge.service.impl;
 
+import com.ep.cache.CacheService;
 import com.ep.knowledge.service.DocumentService;
 import com.ep.knowledge.service.entity.Document;
 import com.ep.knowledge.service.mapper.DocumentMapper;
@@ -14,11 +15,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Service
 public class DocumentServiceImpl implements DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentServiceImpl.class);
+
+    // D-182: cache names and TTL for knowledge document metadata (600s).
+    private static final String CACHE_DOCUMENT = "knowledge:document";
+    private static final long DOCUMENT_TTL_SEC = 600;
 
     /**
      * Allowlist of file extensions permitted for upload. Any extension not in
@@ -28,9 +34,11 @@ public class DocumentServiceImpl implements DocumentService {
             "pdf", "docx", "doc", "txt", "md", "pptx", "xlsx", "html", "epub");
 
     private final DocumentMapper documentMapper;
+    private final CacheService cacheService;
 
-    public DocumentServiceImpl(DocumentMapper documentMapper) {
+    public DocumentServiceImpl(DocumentMapper documentMapper, CacheService cacheService) {
         this.documentMapper = documentMapper;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -56,12 +64,20 @@ public class DocumentServiceImpl implements DocumentService {
         doc.setVersion(1);
         doc.setCreatedAt(LocalDateTime.now());
         documentMapper.insert(doc);
+        // D-182: evict potentially cached null for this document id.
+        cacheService.evict(CACHE_DOCUMENT, String.valueOf(doc.getId()));
         log.info("Uploaded document {} for tenant {}", doc.getId(), tenantId);
         return doc;
     }
 
     @Override
     public Document get(String tenantId, String id) {
+        // D-182: cache read-only document metadata (600s, cacheEmpty=true).
+        return cacheService.getOrLoad(CACHE_DOCUMENT, id,
+                () -> getDirect(tenantId, id), DOCUMENT_TTL_SEC, true);
+    }
+
+    private Document getDirect(String tenantId, String id) {
         Document doc = documentMapper.selectById(id);
         if (doc == null || !tenantId.equals(doc.getTenantId())) {
             return null;
@@ -74,6 +90,8 @@ public class DocumentServiceImpl implements DocumentService {
         Document doc = documentMapper.selectById(id);
         if (doc != null && tenantId.equals(doc.getTenantId())) {
             documentMapper.deleteById(id);
+            // D-182: evict cache entry after delete.
+            cacheService.evict(CACHE_DOCUMENT, id);
         }
     }
 
@@ -102,6 +120,8 @@ public class DocumentServiceImpl implements DocumentService {
             doc.setStatus("PARSED");
             doc.setUpdatedAt(LocalDateTime.now());
             documentMapper.updateById(doc);
+            // D-182: evict cache entry after metadata change.
+            cacheService.evict(CACHE_DOCUMENT, documentId);
             return 1;
         }
 
@@ -117,6 +137,8 @@ public class DocumentServiceImpl implements DocumentService {
         doc.setStatus("PARSED");
         doc.setUpdatedAt(LocalDateTime.now());
         documentMapper.updateById(doc);
+        // D-182: evict cache entry after metadata change.
+        cacheService.evict(CACHE_DOCUMENT, documentId);
         return 0;
     }
 

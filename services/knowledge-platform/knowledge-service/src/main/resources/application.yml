@@ -70,6 +70,11 @@ management:
 cors:
   allowed-origins: http://localhost:3000,http://localhost:5173
 
+# D-182: Multi-level cache (L1 Caffeine + L2 Redis + Pub/Sub broadcast).
+ep:
+  cache:
+    enabled: true
+
 # P2-10: Resilience4j RateLimiter (opt-in via @RateLimiter annotation)
 resilience4j:
   ratelimiter:

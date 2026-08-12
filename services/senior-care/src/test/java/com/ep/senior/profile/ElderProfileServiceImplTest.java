@@ -1,5 +1,6 @@
 package com.ep.senior.profile;
 
+import com.ep.cache.CacheService;
 import com.ep.senior.event.PulsarClientProperties;
 import com.ep.senior.event.PulsarEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,15 +14,17 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
  * D-148: ElderProfileServiceImpl unit tests.
+ * D-182: verifies CacheService getOrLoad/evict integration.
  */
 class ElderProfileServiceImplTest {
 
     private ElderProfileRepository repository;
+    private CacheService cacheService;
     private ElderProfileServiceImpl service;
 
     @BeforeEach
@@ -32,7 +35,14 @@ class ElderProfileServiceImplTest {
             if (e.getElderId() == null) e.setElderId(System.nanoTime() % 100000L);
             return e;
         });
-        service = new ElderProfileServiceImpl(repository, noopPublisher());
+        cacheService = mock(CacheService.class);
+        // Cache miss: invoke the loader so the real repository is exercised.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        service = new ElderProfileServiceImpl(repository, noopPublisher(), cacheService);
     }
 
     private static PulsarEventPublisher noopPublisher() {
@@ -55,12 +65,15 @@ class ElderProfileServiceImplTest {
         assertEquals("王奶奶", e.getName());
         assertEquals(ElderStatus.ACTIVE.getCode(), e.getStatus());
         assertNotNull(e.getCreatedAt());
+        // D-182: create should evict the elder cache entry.
+        verify(cacheService).evict("senior:elder", String.valueOf(e.getElderId()));
     }
 
     @Test
     void createElder_blankName_throws() {
         CreateElderCmd c = cmd("");
         assertThrows(IllegalArgumentException.class, () -> service.createElder(c));
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -77,12 +90,28 @@ class ElderProfileServiceImplTest {
         ElderProfile result = service.getElderById(1L);
         assertNotNull(result);
         assertEquals(1L, result.getElderId());
+        // D-182: getElderById goes through cache with cacheEmpty=true.
+        verify(cacheService).getOrLoad(eq("senior:elder"), eq("1"), any(), eq(600L), eq(true));
     }
 
     @Test
     void getElderById_notFound() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
         assertNull(service.getElderById(999L));
+        verify(cacheService).getOrLoad(eq("senior:elder"), eq("999"), any(), eq(600L), eq(true));
+    }
+
+    @Test
+    void getElderById_cacheHit_skipsRepository() {
+        // Simulate a cache hit: getOrLoad returns the elder without invoking the loader.
+        ElderProfile cached = newElder(1L);
+        when(cacheService.getOrLoad(eq("senior:elder"), eq("1"), any(), eq(600L), eq(true)))
+                .thenReturn(cached);
+        ElderProfile result = service.getElderById(1L);
+        assertNotNull(result);
+        assertEquals(1L, result.getElderId());
+        // Repository must NOT be called on a cache hit.
+        verify(repository, never()).findById(anyLong());
     }
 
     @Test
@@ -107,6 +136,8 @@ class ElderProfileServiceImplTest {
         when(repository.findById(1L)).thenReturn(Optional.of(e));
         service.pauseElder(1L);
         assertEquals(ElderStatus.PAUSED.getCode(), e.getStatus());
+        // D-182: status change should evict the cache entry.
+        verify(cacheService).evict("senior:elder", "1");
     }
 
     @Test
@@ -116,6 +147,7 @@ class ElderProfileServiceImplTest {
         when(repository.findById(1L)).thenReturn(Optional.of(e));
         service.activateElder(1L);
         assertEquals(ElderStatus.ACTIVE.getCode(), e.getStatus());
+        verify(cacheService).evict("senior:elder", "1");
     }
 
     @Test
@@ -124,6 +156,7 @@ class ElderProfileServiceImplTest {
         when(repository.findById(1L)).thenReturn(Optional.of(e));
         service.dischargeElder(1L);
         assertEquals(ElderStatus.DISCHARGED.getCode(), e.getStatus());
+        verify(cacheService).evict("senior:elder", "1");
     }
 
     @Test

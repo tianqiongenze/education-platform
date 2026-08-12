@@ -4,6 +4,7 @@ import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.ep.business.common.DomainEvent;
 import com.ep.business.common.SnowflakeIdGenerator;
 import com.ep.business.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,12 +22,22 @@ public class CourseServiceImpl implements CourseService {
 
     private static final Logger log = LoggerFactory.getLogger(CourseServiceImpl.class);
 
+    /** D-182: cache names and TTLs for the course domain. */
+    private static final String CACHE_COURSE = "course";
+    private static final String CACHE_COURSE_LIST = "course:list";
+    private static final String LIST_ALL_KEY = "all";
+    private static final long COURSE_TTL_SEC = 300;
+    private static final long COURSE_LIST_TTL_SEC = 300;
+
     private final CourseRepository courseRepository;
     private final PulsarEventPublisher eventPublisher;
+    private final CacheService cacheService;
 
-    public CourseServiceImpl(CourseRepository courseRepository, PulsarEventPublisher eventPublisher) {
+    public CourseServiceImpl(CourseRepository courseRepository, PulsarEventPublisher eventPublisher,
+                             CacheService cacheService) {
         this.courseRepository = courseRepository;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -51,14 +62,18 @@ public class CourseServiceImpl implements CourseService {
         course.setStudentCount(0);
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
-        return courseRepository.save(course);
+        Course saved = courseRepository.save(course);
+        // D-182: evict list cache since a new course changes the list.
+        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
+        return saved;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Course getCourseById(Long courseId) {
         Objects.requireNonNull(courseId, "courseId must not be null");
-        return courseRepository.findById(courseId).orElse(null);
+        return cacheService.getOrLoad(CACHE_COURSE, String.valueOf(courseId),
+                () -> courseRepository.findById(courseId).orElse(null), COURSE_TTL_SEC, true);
     }
 
     @Override
@@ -66,8 +81,11 @@ public class CourseServiceImpl implements CourseService {
     public List<Course> listCourses(Integer page, Integer size) {
         int p = page == null || page < 1 ? 1 : page;
         int s = size == null || size < 1 ? 10 : size;
-        Page<Course> pageResult = courseRepository.findAllByOrderByCourseIdAsc(PageRequest.of(p - 1, s));
-        return new ArrayList<>(pageResult.getContent());
+        return cacheService.getOrLoad(CACHE_COURSE_LIST, LIST_ALL_KEY,
+                () -> {
+                    Page<Course> pageResult = courseRepository.findAllByOrderByCourseIdAsc(PageRequest.of(p - 1, s));
+                    return new ArrayList<>(pageResult.getContent());
+                }, COURSE_LIST_TTL_SEC, false);
     }
 
     @Override
@@ -87,6 +105,9 @@ public class CourseServiceImpl implements CourseService {
         course.publish();
         courseRepository.save(course);
         publishEvents(course);
+        // D-182: evict cached course + list after a state change.
+        cacheService.evict(CACHE_COURSE, String.valueOf(courseId));
+        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
     }
 
     @Override
@@ -99,6 +120,9 @@ public class CourseServiceImpl implements CourseService {
         course.archive();
         courseRepository.save(course);
         publishEvents(course);
+        // D-182: evict cached course + list after a state change.
+        cacheService.evict(CACHE_COURSE, String.valueOf(courseId));
+        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
     }
 
     /** Sentinel block handler — signature must match the protected method plus BlockException. */

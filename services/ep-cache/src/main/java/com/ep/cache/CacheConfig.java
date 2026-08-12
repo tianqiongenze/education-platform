@@ -23,6 +23,7 @@ import java.time.Duration;
 public class CacheConfig {
 
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(org.springframework.cache.CacheManager.class)
     public CaffeineCacheManager cacheManager() {
         CaffeineCacheManager m = new CaffeineCacheManager();
         // brief 修正：caffeine.caffeine() 不存在 -> 用 Caffeine.newBuilder()
@@ -33,6 +34,7 @@ public class CacheConfig {
     }
 
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(RedisTemplate.class)
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory cf) {
         RedisTemplate<String, Object> t = new RedisTemplate<>();
         t.setConnectionFactory(cf);

@@ -1,5 +1,6 @@
 package com.ep.grading.homework.impl;
 
+import com.ep.cache.CacheService;
 import com.ep.grading.common.SnowflakeIdGenerator;
 import com.ep.grading.config.IdempotencyService;
 import com.ep.grading.homework.AssignmentRepository;
@@ -19,14 +20,23 @@ import java.util.Objects;
  * D-048 P0-4: ConcurrentHashMap store replaced by Spring Data JPA {@link AssignmentRepository}.
  * D-048 P0-7: {@link SentinelResource} on {@link #create} for rate limiting (configurable
  * via Sentinel dashboard / Nacos datasource). Service interface unchanged.
+ * D-182: L1+L2 cache via ep-cache SDK. Assignment template cached 600s (cacheEmpty=true);
+ * reads wrapped with {@code getOrLoad}, writes evict.
  */
 @DubboService
 public class AssignmentServiceImpl implements AssignmentService {
 
-    private final AssignmentRepository assignmentRepository;
+    private static final String CACHE_ASSIGNMENT = "assignment";
+    private static final String CACHE_ASSIGNMENT_BY_COURSE = "assignment:by-course";
+    private static final long ASSIGNMENT_TTL_SEC = 600;
 
-    public AssignmentServiceImpl(AssignmentRepository assignmentRepository) {
+    private final AssignmentRepository assignmentRepository;
+    private final CacheService cacheService;
+
+    public AssignmentServiceImpl(AssignmentRepository assignmentRepository,
+                                 CacheService cacheService) {
         this.assignmentRepository = assignmentRepository;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -59,7 +69,9 @@ public class AssignmentServiceImpl implements AssignmentService {
                 now,
                 now
         );
-        return assignmentRepository.save(assignment);
+        Assignment saved = assignmentRepository.save(assignment);
+        cacheService.evict(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(cmd.courseId()));
+        return saved;
     }
 
     @Override
@@ -72,7 +84,10 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         assignment.setStatus(AssignmentStatus.PUBLISHED);
         assignment.setUpdatedAt(LocalDateTime.now());
-        return assignmentRepository.save(assignment);
+        Assignment saved = assignmentRepository.save(assignment);
+        cacheService.evict(CACHE_ASSIGNMENT, String.valueOf(id));
+        cacheService.evict(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(assignment.getCourseId()));
+        return saved;
     }
 
     @Override
@@ -85,7 +100,10 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         assignment.setStatus(AssignmentStatus.CLOSED);
         assignment.setUpdatedAt(LocalDateTime.now());
-        return assignmentRepository.save(assignment);
+        Assignment saved = assignmentRepository.save(assignment);
+        cacheService.evict(CACHE_ASSIGNMENT, String.valueOf(id));
+        cacheService.evict(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(assignment.getCourseId()));
+        return saved;
     }
 
     @Override
@@ -94,7 +112,9 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (id == null) {
             return null;
         }
-        return assignmentRepository.findById(id).orElse(null);
+        return cacheService.getOrLoad(CACHE_ASSIGNMENT, String.valueOf(id),
+                () -> assignmentRepository.findById(id).orElse(null),
+                ASSIGNMENT_TTL_SEC, true);
     }
 
     @Override
@@ -103,7 +123,9 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (courseId == null) {
             return List.of();
         }
-        return assignmentRepository.findByCourseId(courseId);
+        return cacheService.getOrLoad(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(courseId),
+                () -> assignmentRepository.findByCourseId(courseId),
+                ASSIGNMENT_TTL_SEC, false);
     }
 
     private Assignment requireById(Long id) {

@@ -16,6 +16,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- D-147: JIB build port (senior-care listens on 8088). -->
     <jib.container.port>8088</jib.container.port>
+    <!-- D-195: unified Pulsar version (upgrade target 4.0 / 2027 Q1) -->
+    <pulsar.version>3.3.9</pulsar.version>
   </properties>
   <dependencies>
     <!-- ep-web-common: shared HTTP/security infrastructure (RoleChecker,
@@ -23,6 +25,12 @@
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <!-- D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-cache</artifactId>
       <version>1.0.0</version>
     </dependency>
     <dependency>
@@ -106,7 +114,7 @@
     <dependency>
       <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-client</artifactId>
-      <version>3.3.9</version>
+      <version>${pulsar.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

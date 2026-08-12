@@ -95,6 +95,8 @@ springdoc:
     path: /swagger-ui.html
 
 ep:
+  cache:
+    enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)
   pulsar:
     enabled: false
     service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}

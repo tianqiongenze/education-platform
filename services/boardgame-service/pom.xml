@@ -16,6 +16,13 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- D-149: JIB build port (boardgame-service listens on 8089). -->
     <jib.container.port>8089</jib.container.port>
+    <!-- D-195: unified Pulsar version property (upgrade target v2.0 / 2027 Q1). -->
+    <pulsar.version>3.3.9</pulsar.version>
+    <!-- D-193: gRPC + protobuf for Stockfish AI sidecar. -->
+    <grpc.version>1.68.1</grpc.version>
+    <protobuf.version>3.25.5</protobuf.version>
+    <protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
+    <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
   </properties>
   <dependencies>
     <!-- ep-web-common: shared HTTP/security infrastructure (RoleChecker,
@@ -23,6 +30,12 @@
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <!-- D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-cache</artifactId>
       <version>1.0.0</version>
     </dependency>
     <dependency>
@@ -105,7 +118,33 @@
     <dependency>
       <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-client</artifactId>
-      <version>3.3.9</version>
+      <version>${pulsar.version}</version>
+    </dependency>
+    <!-- D-193: gRPC client for the Stockfish AI sidecar (in-pod, localhost:50051). -->
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-netty-shaded</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>${protobuf.version}</version>
+    </dependency>
+    <!-- D-193: javax.annotation.Generated required by generated gRPC stubs on JDK 21. -->
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -197,7 +236,35 @@
     </dependency>
   </dependencies>
   <build>
+    <extensions>
+      <!-- D-193: detect OS architecture for protobuf codegen. -->
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>${os-maven-plugin.version}</version>
+      </extension>
+    </extensions>
     <plugins>
+      <!-- D-193: generate gRPC + protobuf Java stubs from src/main/proto. -->
+      <plugin>
+        <groupId>org.xolstice.maven.plugins</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>${protobuf-maven-plugin.version}</version>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+          <pluginId>grpc-java</pluginId>
+          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
+          <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>compile-custom</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>

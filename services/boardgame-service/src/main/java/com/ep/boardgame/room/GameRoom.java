@@ -18,8 +18,17 @@ import java.util.List;
  * D-149: GameRoom aggregate root.
  * <p>
  * A game room binds a course/lesson (Match-as-Lesson pattern) and manages
- * the lifecycle: WAITING → PLAYING → FINISHED. Two players join, the room
- * transitions to PLAYING, then FINISHED when the match completes.
+ * the lifecycle per ADR-BG10 (7-state machine):
+ * <pre>
+ *   CREATED → WAITING → READY → PLAYING → FINISHING → FINISHED
+ *                                                  ↘ ABORTED (from any state)
+ * </pre>
+ * Two players join (WAITING→READY), the room transitions to PLAYING, then
+ * FINISHING when the match concludes, and finally FINISHED. Any state may
+ * transition to ABORTED (premature termination / abort).
+ * <p>
+ * The {@code int} status codes are kept for backward compatibility with
+ * existing DB rows and {@code findByStatusAndTenantId} queries.
  */
 @Entity
 @Table(name = "bg_game_room")
@@ -50,12 +59,20 @@ public class GameRoom implements Serializable {
     @Column(name = "max_players", nullable = false)
     private Integer maxPlayers = 2;
 
-    /** 0=WAITING, 1=PLAYING, 2=FINISHED */
+    /** 0=WAITING, 1=PLAYING, 2=FINISHED (legacy) */
     @Column(name = "status", nullable = false)
     private Integer status;
 
     @Column(name = "match_id")
     private Long matchId;
+
+    /** D-192: BOARD_CAST ingest URL (set when a live broadcast is active). */
+    @Column(name = "boardcast_ingest_url")
+    private String boardcastIngestUrl;
+
+    /** D-192: BOARD_CAST playback URL (set when a live broadcast is active). */
+    @Column(name = "boardcast_play_url")
+    private String boardcastPlayUrl;
 
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
@@ -70,19 +87,81 @@ public class GameRoom implements Serializable {
     @Transient
     private transient List<DomainEvent> events = new ArrayList<>();
 
-    // --- State codes ---
-    public static final int STATUS_WAITING = 0;
-    public static final int STATUS_PLAYING = 1;
-    public static final int STATUS_FINISHED = 2;
+    // --- State codes (ADR-BG10 7-state machine) ---
+    public static final int STATUS_CREATED = 0;
+    public static final int STATUS_WAITING = 1;
+    public static final int STATUS_READY = 2;
+    public static final int STATUS_PLAYING = 3;
+    public static final int STATUS_FINISHING = 4;
+    public static final int STATUS_FINISHED = 5;
+    public static final int STATUS_ABORTED = 6;
+
+    // --- Legacy aliases (deprecated; kept for source compatibility) ---
+    /** @deprecated use {@link #STATUS_WAITING} */
+    @Deprecated
+    public static final int STATUS_WAITING_LEGACY = 0;
+    /** @deprecated use {@link #STATUS_PLAYING} */
+    @Deprecated
+    public static final int STATUS_PLAYING_LEGACY = 1;
+    /** @deprecated use {@link #STATUS_FINISHED} */
+    @Deprecated
+    public static final int STATUS_FINISHED_LEGACY = 2;
+
+    // --- Transition validation (ADR-BG10) ---
+
+    /**
+     * Returns true iff the current status may transition to {@code next}.
+     * <ul>
+     *   <li>CREATED → WAITING</li>
+     *   <li>WAITING → READY</li>
+     *   <li>READY → PLAYING</li>
+     *   <li>PLAYING → FINISHING</li>
+     *   <li>FINISHING → FINISHED</li>
+     *   <li>any non-terminal → ABORTED</li>
+     * </ul>
+     * Same-status is not a transition. ABORTED and FINISHED are terminal.
+     */
+    public boolean canTransitionTo(int next) {
+        if (next == this.status) return false;
+        if (next == STATUS_ABORTED) {
+            return this.status != STATUS_ABORTED && this.status != STATUS_FINISHED;
+        }
+        return switch (this.status) {
+            case STATUS_CREATED -> next == STATUS_WAITING;
+            case STATUS_WAITING -> next == STATUS_READY;
+            case STATUS_READY -> next == STATUS_PLAYING;
+            case STATUS_PLAYING -> next == STATUS_FINISHING;
+            case STATUS_FINISHING -> next == STATUS_FINISHED;
+            default -> false; // FINISHED / ABORTED are terminal
+        };
+    }
+
+    private void requireTransition(int next) {
+        if (!canTransitionTo(next)) {
+            throw new IllegalStateException(
+                    "Illegal room transition: " + status + " → " + next);
+        }
+        this.status = next;
+        this.updatedAt = System.currentTimeMillis();
+    }
 
     // --- Lifecycle methods (state machine) ---
 
     /**
-     * A player joins the room. Red joins first, then Black.
+     * Move from CREATED to WAITING (open the room for joins).
+     */
+    public void open() {
+        requireTransition(STATUS_WAITING);
+    }
+
+    /**
+     * A player joins the room. Red joins first, then Black. Only valid in
+     * WAITING state. When both players are present the room auto-transitions
+     * to READY.
      */
     public void join(Long playerId) {
-        if (status != STATUS_WAITING) {
-            throw new IllegalStateException("Room is not WAITING, cannot join");
+        if (status != STATUS_WAITING && status != STATUS_READY) {
+            throw new IllegalStateException("Room is not WAITING/READY, cannot join");
         }
         if (redPlayerId == null) {
             redPlayerId = playerId;
@@ -95,14 +174,19 @@ public class GameRoom implements Serializable {
             throw new IllegalStateException("Room is full");
         }
         updatedAt = System.currentTimeMillis();
+        // Auto-advance WAITING → READY when both seats are filled.
+        if (redPlayerId != null && blackPlayerId != null && status == STATUS_WAITING) {
+            requireTransition(STATUS_READY);
+        }
     }
 
     /**
-     * A player leaves the room (only allowed in WAITING state).
+     * A player leaves the room (only allowed in WAITING/READY state).
+     * Leaving from READY reverts the room to WAITING.
      */
     public void leave(Long playerId) {
-        if (status != STATUS_WAITING) {
-            throw new IllegalStateException("Cannot leave a non-WAITING room");
+        if (status != STATUS_WAITING && status != STATUS_READY) {
+            throw new IllegalStateException("Cannot leave a non-WAITING/READY room");
         }
         if (playerId.equals(redPlayerId)) {
             redPlayerId = null;
@@ -111,35 +195,53 @@ public class GameRoom implements Serializable {
         } else {
             throw new IllegalArgumentException("Player not in room");
         }
+        // Revert READY → WAITING if a seat opens up.
+        if (status == STATUS_READY && (redPlayerId == null || blackPlayerId == null)) {
+            status = STATUS_WAITING;
+        }
         updatedAt = System.currentTimeMillis();
     }
 
     /**
-     * Start the match: both players must be present.
+     * Start the match: both players must be present and the room must be READY.
+     * Transitions READY → PLAYING.
      */
     public void start(Long matchId) {
-        if (status != STATUS_WAITING) {
-            throw new IllegalStateException("Room must be WAITING to start");
+        if (status != STATUS_READY) {
+            throw new IllegalStateException("Room must be READY to start");
         }
         if (redPlayerId == null || blackPlayerId == null) {
             throw new IllegalStateException("Need both players to start");
         }
         this.matchId = matchId;
-        this.status = STATUS_PLAYING;
-        this.updatedAt = System.currentTimeMillis();
+        requireTransition(STATUS_PLAYING);
         this.events.add(new RoomStartedEvent(roomId, matchId, System.currentTimeMillis()));
     }
 
     /**
-     * Finish the room after match completion.
+     * Transition PLAYING → FINISHING (match is concluding, e.g. adjudicating result).
+     */
+    public void beginFinish() {
+        requireTransition(STATUS_FINISHING);
+    }
+
+    /**
+     * Transition FINISHING → FINISHED.
      */
     public void finish() {
-        if (status != STATUS_PLAYING) {
-            throw new IllegalStateException("Room must be PLAYING to finish");
+        if (status != STATUS_FINISHING) {
+            throw new IllegalStateException("Room must be FINISHING to finish");
         }
-        this.status = STATUS_FINISHED;
-        this.updatedAt = System.currentTimeMillis();
+        requireTransition(STATUS_FINISHED);
         this.events.add(new RoomFinishedEvent(roomId, matchId, System.currentTimeMillis()));
+    }
+
+    /**
+     * Abort the room from any non-terminal state. Terminal states (FINISHED,
+     * ABORTED) cannot be aborted.
+     */
+    public void abort() {
+        requireTransition(STATUS_ABORTED);
     }
 
     public List<DomainEvent> pullEvents() {
@@ -176,4 +278,8 @@ public class GameRoom implements Serializable {
     public void setUpdatedAt(Long updatedAt) { this.updatedAt = updatedAt; }
     public Long getLockVersion() { return lockVersion; }
     public void setLockVersion(Long lockVersion) { this.lockVersion = lockVersion; }
+    public String getBoardcastIngestUrl() { return boardcastIngestUrl; }
+    public void setBoardcastIngestUrl(String boardcastIngestUrl) { this.boardcastIngestUrl = boardcastIngestUrl; }
+    public String getBoardcastPlayUrl() { return boardcastPlayUrl; }
+    public void setBoardcastPlayUrl(String boardcastPlayUrl) { this.boardcastPlayUrl = boardcastPlayUrl; }
 }

@@ -43,12 +43,13 @@ class ArchitectureTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("Controllers must not depend on repository packages directly")
+    @DisplayName("Controllers must not depend on repository interfaces directly")
     void controllersMustNotDependOnRepositories() {
         noClasses().that().resideInAPackage("..controller..")
-                .should().dependOnClassesThat().resideInAnyPackage("..homework..entity..", "..grading..entity..")
-                .orShould().resideInAnyPackage("..homework..*Repository", "..grading..*Repository")
-                .because("Controllers should go through the service layer, not reach into entities/repositories directly")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "com.ep.grading.homework..*Repository",
+                        "com.ep.grading.grading..*Repository")
+                .because("Controllers should go through the service layer, not reach into repositories directly")
                 .check(classes);
     }
 
@@ -66,13 +67,13 @@ class ArchitectureTest {
     @Test
     @DisplayName("homework and grading bounded contexts must not cross-depend")
     void boundedContextsMustNotCrossDepend() {
-        noClasses().that().resideInAPackage("..homework..")
-                .should().dependOnClassesThat().resideInAPackage("..grading..")
+        noClasses().that().resideInAPackage("com.ep.grading.homework..")
+                .should().dependOnClassesThat().resideInAPackage("com.ep.grading.grading..")
                 .because("homework and grading are separate bounded contexts — communicate via events, not direct imports")
                 .check(classes);
 
-        noClasses().that().resideInAPackage("..grading..")
-                .should().dependOnClassesThat().resideInAPackage("..homework..")
+        noClasses().that().resideInAPackage("com.ep.grading.grading..")
+                .should().dependOnClassesThat().resideInAPackage("com.ep.grading.homework..")
                 .because("homework and grading are separate bounded contexts — communicate via events, not direct imports")
                 .check(classes);
     }

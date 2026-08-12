@@ -15,6 +15,7 @@ import com.ep.payment.entity.PaymentEntity;
 import com.ep.payment.entity.RefundEntity;
 import com.ep.payment.repository.PaymentJpaRepository;
 import com.ep.payment.repository.RefundJpaRepository;
+import com.ep.cache.CacheService;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,14 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
 
+    // D-182: multi-level cache configuration (read-only 120s).
+    /** Cache name for payment-by-id reads. */
+    private static final String CACHE_PAYMENT = "payment:detail";
+    /** Cache name for payment-by-order reads. */
+    private static final String CACHE_PAYMENT_BY_ORDER = "payment:by-order";
+    /** Payment cache TTL in seconds (read-only). */
+    private static final long PAYMENT_TTL_SEC = 120;
+
     /**
      * D-132: legacy in-memory fallback. Used only when the JPA repositories are
      * not available — i.e. the pure-Mockito unit tests that construct this service
@@ -86,6 +95,12 @@ public class PaymentServiceImpl implements PaymentService {
     private final RefundJpaRepository refundRepository;
 
     /**
+     * D-182: Multi-level cache service (L1 Caffeine + L2 Redis).
+     * Read-only caching for PaymentEntity; evicted on refund (status change).
+     */
+    private final CacheService cacheService;
+
+    /**
      * Spring-managed constructor. The repositories are injected via
      * {@link ObjectProvider} so they are optional — when both are resolved the
      * service persists to TiDB; when neither is available (pure unit test) the
@@ -102,10 +117,12 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis,
                               ObjectProvider<PaymentJpaRepository> paymentRepositoryProvider,
                               ObjectProvider<RefundJpaRepository> refundRepositoryProvider,
-                              @Value("${ep.payment.dev-guard:true}") boolean devGuard) {
+                              @Value("${ep.payment.dev-guard:true}") boolean devGuard,
+                              CacheService cacheService) {
         this.devGuard = devGuard;
         this.paymentRepository = paymentRepositoryProvider == null ? null : paymentRepositoryProvider.getIfAvailable();
         this.refundRepository = refundRepositoryProvider == null ? null : refundRepositoryProvider.getIfAvailable();
+        this.cacheService = cacheService;
         ConcurrentHashMap<PaymentChannel, PaymentChannelSpi> map = new ConcurrentHashMap<>();
         PaymentChannelSpi fallback = null;
         if (channelSpis != null) {
@@ -140,11 +157,25 @@ public class PaymentServiceImpl implements PaymentService {
      * so the service falls back to the in-memory store.
      */
     public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard) {
-        this(channelSpis, null, null, devGuard);
+        this(channelSpis, null, null, devGuard, null);
+    }
+
+    /**
+     * D-182: Test constructor that accepts a CacheService for cache integration
+     * tests. Passes null for repository providers so in-memory store is used.
+     */
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard,
+                              CacheService cacheService) {
+        this(channelSpis, null, null, devGuard, cacheService);
     }
 
     private boolean isJpa() {
         return paymentRepository != null && refundRepository != null;
+    }
+
+    /** D-182: test-only accessor for verifying cache interactions. */
+    CacheService getCacheServiceForTest() {
+        return cacheService;
     }
 
     @Override
@@ -191,6 +222,12 @@ public class PaymentServiceImpl implements PaymentService {
             paymentsByOrder.put(request.orderId(), payment);
         }
 
+        // D-182: evict potentially cached null/empty entry for this paymentId/orderId.
+        if (cacheService != null) {
+            cacheService.evict(CACHE_PAYMENT, paymentId);
+            cacheService.evict(CACHE_PAYMENT_BY_ORDER, request.orderId());
+        }
+
         log.info("createPayment: orderId={}, channel={}, status={}, paymentId={}, channelTxId={}",
                 request.orderId(), spi.getChannel(), payment.getStatus(), paymentId,
                 payment.getChannelTxId());
@@ -203,6 +240,15 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public Payment getPayment(String paymentId) {
         requireNonBlank(paymentId, "paymentId");
+        // D-182: cache read-only payment (120s, cacheEmpty=true).
+        if (cacheService == null) {
+            return getPaymentDirect(paymentId);
+        }
+        return cacheService.getOrLoad(CACHE_PAYMENT, paymentId,
+                () -> getPaymentDirect(paymentId), PAYMENT_TTL_SEC, true);
+    }
+
+    private Payment getPaymentDirect(String paymentId) {
         if (isJpa()) {
             return paymentRepository.findById(paymentId).map(PaymentServiceImpl::toDomain).orElse(null);
         }
@@ -213,6 +259,15 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public Payment getPaymentByOrder(String orderId) {
         requireNonBlank(orderId, "orderId");
+        // D-182: cache read-only payment-by-order (120s, cacheEmpty=true).
+        if (cacheService == null) {
+            return getPaymentByOrderDirect(orderId);
+        }
+        return cacheService.getOrLoad(CACHE_PAYMENT_BY_ORDER, orderId,
+                () -> getPaymentByOrderDirect(orderId), PAYMENT_TTL_SEC, true);
+    }
+
+    private Payment getPaymentByOrderDirect(String orderId) {
         if (isJpa()) {
             return paymentRepository.findFirstByOrderId(orderId)
                     .map(PaymentServiceImpl::toDomain).orElse(null);
@@ -283,6 +338,12 @@ public class PaymentServiceImpl implements PaymentService {
             assert paymentEntity != null;
             paymentEntity.setStatus(payment.getStatus());
             paymentRepository.save(paymentEntity);
+        }
+
+        // D-182: evict cache entries after refund (payment status changed).
+        if (cacheService != null) {
+            cacheService.evict(CACHE_PAYMENT, payment.getPaymentId());
+            cacheService.evict(CACHE_PAYMENT_BY_ORDER, orderId);
         }
 
         log.info("refund ok: orderId={}, paymentId={}, refundId={}, amount={}, paymentStatus={}",

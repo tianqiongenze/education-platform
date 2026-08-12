@@ -2,6 +2,7 @@ package com.ep.business.user;
 
 import com.ep.business.common.SnowflakeIdGenerator;
 import com.ep.business.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import jakarta.annotation.PostConstruct;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.slf4j.Logger;
@@ -19,17 +20,26 @@ public class UserServiceImpl implements UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserServiceImpl.class);
 
+    /** D-182: cache names and TTLs for the user domain. */
+    private static final String CACHE_USER = "user";
+    private static final String CACHE_USER_LIST = "user:list";
+    private static final String LIST_ALL_KEY = "all";
+    private static final long USER_TTL_SEC = 600;
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final PulsarEventPublisher eventPublisher;
+    private final CacheService cacheService;
 
     public UserServiceImpl(UserRepository userRepository,
                            ObjectProvider<PasswordEncoder> passwordEncoderProvider,
-                           PulsarEventPublisher eventPublisher) {
+                           PulsarEventPublisher eventPublisher,
+                           CacheService cacheService) {
         this.userRepository = userRepository;
         PasswordEncoder encoder = passwordEncoderProvider.getIfAvailable();
         this.passwordEncoder = encoder != null ? encoder : new BCryptPasswordEncoder();
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     /**
@@ -92,21 +102,26 @@ public class UserServiceImpl implements UserService {
         user.setTenantId(0L);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        // D-182: evict list cache after user creation.
+        cacheService.evict(CACHE_USER_LIST, LIST_ALL_KEY);
+        return saved;
     }
 
     @Override
     @Transactional(readOnly = true)
     public User getUserById(Long userId) {
         Objects.requireNonNull(userId, "userId must not be null");
-        return userRepository.findById(userId).orElse(null);
+        return cacheService.getOrLoad(CACHE_USER, String.valueOf(userId),
+                () -> userRepository.findById(userId).orElse(null), USER_TTL_SEC, true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public User getUserByPhone(String phone) {
         requireNonBlank(phone, "phone");
-        return userRepository.findByPhone(phone).orElse(null);
+        return cacheService.getOrLoad(CACHE_USER, "phone:" + phone,
+                () -> userRepository.findByPhone(phone).orElse(null), USER_TTL_SEC, true);
     }
 
     /**
@@ -119,7 +134,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<User> listUsers() {
-        return userRepository.findAll();
+        return cacheService.getOrLoad(CACHE_USER_LIST, LIST_ALL_KEY,
+                () -> userRepository.findAll(), USER_TTL_SEC, false);
     }
 
     @Override
@@ -134,6 +150,10 @@ public class UserServiceImpl implements UserService {
         if (cmd.getEmail() != null) user.setEmail(cmd.getEmail());
         user.setUpdatedAt(System.currentTimeMillis());
         userRepository.save(user);
+        // D-182: evict cached user entries after an update.
+        cacheService.evict(CACHE_USER, String.valueOf(cmd.getUserId()));
+        cacheService.evict(CACHE_USER, "phone:" + user.getPhone());
+        cacheService.evict(CACHE_USER_LIST, LIST_ALL_KEY);
     }
 
     @Override
@@ -151,6 +171,10 @@ public class UserServiceImpl implements UserService {
             log.info("D-066: domain event recorded: {}", event);
             eventPublisher.publish(event);
         }
+        // D-182: evict cached user entries after a state change.
+        cacheService.evict(CACHE_USER, String.valueOf(userId));
+        cacheService.evict(CACHE_USER, "phone:" + user.getPhone());
+        cacheService.evict(CACHE_USER_LIST, LIST_ALL_KEY);
     }
 
     private static void requireNonBlank(String value, String field) {

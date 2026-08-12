@@ -17,8 +17,9 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.12"
-# D-110: shared Python utilities (config, health, response, logging).
-ep-common = { path = "../ep-python-common", develop = true }
+# D-110: shared Python utilities (config, health, response, logging, cache).
+# D-184: directory renamed ep-python-common → ep-common-python (naming convention).
+ep-common = { path = "../ep-common-python", develop = true }
 litestar = "^2.14"
 granian = "^1.7"
 pydantic = "^2.10"

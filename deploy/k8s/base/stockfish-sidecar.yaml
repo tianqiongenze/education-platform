@@ -1,0 +1,100 @@
+# D-193: Stockfish AI sidecar manifest.
+#
+# This ConfigMap is consumed by the boardgame-service Deployment as a
+# sidecar container spec patch (via kustomize strategic merge or Helm
+# sidecar injection). The Stockfish container runs a small gRPC server
+# wrapper (image: stockfish/stockfish:16 + our grpc-bridge) exposing
+# localhost:50051 to the main boardgame-service container in the same pod.
+#
+# The boardgame-service talks to it via StockfishSidecar (ep.stockfish.enabled=true,
+# ep.stockfish.grpc-address=localhost:50051). When disabled or unreachable
+# the AiOpponentService falls back to a random legal move (EP_DEV_ONLY).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: boardgame-stockfish-sidecar
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: boardgame-service
+    app.kubernetes.io/component: ai-sidecar
+    ep.io/decision: D-193
+data:
+  # Sidecar container fragment — merged into the boardgame-service Deployment
+  # via kustomize patchesStrategicMerge. Kept as YAML here so reviewers can
+  # see the exact container spec without hunting through patch files.
+  sidecar-container.yaml: |
+    - name: stockfish-sidecar
+      image: stockfish/stockfish:16
+      ports:
+        - name: grpc
+          containerPort: 50051
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+      env:
+        - name: STOCKFISH_GRPC_PORT
+          value: "50051"
+        - name: STOCKFISH_THREADS
+          value: "2"
+        - name: STOCKFISH_HASH_MB
+          value: "256"
+      readinessProbe:
+        tcpSocket:
+          port: 50051
+        initialDelaySeconds: 3
+        periodSeconds: 10
+      livenessProbe:
+        tcpSocket:
+          port: 50051
+        initialDelaySeconds: 10
+        periodSeconds: 20
+---
+# Deployment patch that injects the Stockfish sidecar into boardgame-service pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardgame-service
+  namespace: education-platform
+spec:
+  template:
+    spec:
+      containers:
+        - name: stockfish-sidecar
+          image: stockfish/stockfish:16
+          ports:
+            - name: grpc
+              containerPort: 50051
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          env:
+            - name: STOCKFISH_GRPC_PORT
+              value: "50051"
+            - name: STOCKFISH_THREADS
+              value: "2"
+            - name: STOCKFISH_HASH_MB
+              value: "256"
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 10
+            periodSeconds: 20
+        - name: boardgame-service
+          env:
+            - name: EP_STOCKFISH_ENABLED
+              value: "true"
+            - name: EP_STOCKFISH_GRPC_ADDRESS
+              value: "localhost:50051"

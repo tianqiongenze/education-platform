@@ -42,6 +42,13 @@
             <version>1.0.0</version>
         </dependency>
 
+        <!-- D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast) -->
+        <dependency>
+            <groupId>com.ep</groupId>
+            <artifactId>ep-cache</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- D-050 P2-5: shared Dubbo API contract (GradingRpcService + DTOs).
              Kept in a sibling grading-api module so consumers (mcp-server,
              portal-bff) depend only on this thin jar, not on the full app. -->

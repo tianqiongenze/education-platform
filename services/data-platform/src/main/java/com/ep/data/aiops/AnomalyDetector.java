@@ -1,15 +1,37 @@
 package com.ep.data.aiops;
 
+import java.nio.FloatBuffer;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import ai.onnxruntime.OnnxTensor;
+import ai.onnxruntime.OrtEnvironment;
+import ai.onnxruntime.OrtException;
+import ai.onnxruntime.OrtSession;
 
 /**
  * Pure-Java anomaly detector combining a simplified Isolation Forest and a
- * 3-Sigma rule (§12.3.1).
+ * 3-Sigma rule (§12.3.1), with an optional ONNX Isolation Forest
+ * enhancement path (D-189).
+ *
+ * <p><b>Two inference paths:</b>
+ * <ul>
+ *   <li><b>ONNX Isolation Forest (D-189):</b> When an ONNX model is
+ *       available via {@link ModelManager}, feature vectors are fed to a
+ *       pre-trained IF model that outputs anomaly scores directly.</li>
+ *   <li><b>Pure-Java Isolation Forest (fallback):</b> The original
+ *       hand-written IF with random isolation trees. This is the default in
+ *       dev/CI and is always available.</li>
+ * </ul>
  *
  * <p><b>Simplified Isolation Forest.</b> For each sample we build a single
  * random isolation tree: at every level we pick a feature dimension at
@@ -26,12 +48,14 @@ import org.springframework.stereotype.Component;
  *
  * <p>Score > {@link #ANOMALY_THRESHOLD} (0.7) marks a sample as anomalous.
  *
- * <p>This class is pure (no Spring/IO deps) and instantiable with
- * {@code new AnomalyDetector()} for unit tests, mirroring
- * {@code PSICalculator}. A fixed seed makes results reproducible.
+ * <p>The pure-Java path is instantiable with {@code new AnomalyDetector()}
+ * in tests. The ONNX path requires a {@link ModelManager} (injected via
+ * {@link ObjectProvider} for graceful degradation).
  */
 @Component
 public final class AnomalyDetector {
+
+    private static final Logger log = LoggerFactory.getLogger(AnomalyDetector.class);
 
     /** Score threshold above which a sample is flagged as an anomaly. */
     public static final double ANOMALY_THRESHOLD = 0.7;
@@ -44,37 +68,151 @@ public final class AnomalyDetector {
 
     private final Random random;
     private final int numTrees;
+    private final ObjectProvider<ModelManager> modelManagerProvider;
 
     /**
      * Create a detector with the default tree count and a fixed seed for
-     * deterministic output in tests.
+     * deterministic output in tests (dev/CI mode — no ONNX).
      */
     public AnomalyDetector() {
-        this(NUM_TREES, 0x5EEDL);
+        this(NUM_TREES, 0x5EEDL, null);
     }
 
     /**
-     * Create a detector with a custom tree count and seed.
+     * Create a detector with a custom tree count and seed (dev/CI mode).
      *
      * @param numTrees number of isolation trees to average
      * @param seed     PRNG seed (use a fixed value for deterministic tests)
      */
     public AnomalyDetector(int numTrees, long seed) {
+        this(numTrees, seed, null);
+    }
+
+    /**
+     * Create a detector with a model manager provider (D-189 ONNX path).
+     *
+     * @param modelManagerProvider Spring {@link ObjectProvider} for
+     *        {@link ModelManager}; may be null in tests
+     */
+    public AnomalyDetector(ObjectProvider<ModelManager> modelManagerProvider) {
+        this(NUM_TREES, 0x5EEDL, modelManagerProvider);
+    }
+
+    /**
+     * Create a detector with custom params and model manager.
+     *
+     * @param numTrees             number of isolation trees
+     * @param seed                 PRNG seed
+     * @param modelManagerProvider ONNX model manager (null for pure-Java)
+     */
+    public AnomalyDetector(int numTrees, long seed, ObjectProvider<ModelManager> modelManagerProvider) {
         this.numTrees = Math.max(1, numTrees);
         this.random = new Random(seed);
+        this.modelManagerProvider = modelManagerProvider;
     }
 
     /**
      * Detect anomalies in a {@code [sampleCount][4]} feature matrix.
      *
-     * <p>Feature columns are, in order: CDC latency (ms), Flink checkpoint
-     * duration (ms), Iceberg compaction frequency (per hour), Trino P99
-     * query latency (ms).
+     * <p>Attempts the ONNX IF path first; falls back to the pure-Java
+     * Isolation Forest when the model is unavailable.
      *
      * @param features {@code [n][4]} feature matrix; may be null/empty
      * @return one {@link AnomalyResult} per sample (empty for null/empty input)
      */
     public List<AnomalyResult> detect(double[][] features) {
+        List<AnomalyResult> onnxResults = detectWithOnnx(features);
+        if (onnxResults != null) {
+            return onnxResults;
+        }
+        return detectWithJavaIf(features);
+    }
+
+    /**
+     * ONNX Isolation Forest inference path (D-189).
+     *
+     * <p>Flattens the feature matrix into a {@code [1][n][4]} float tensor,
+     * runs the IF model, and maps the output scores to {@link AnomalyResult}.
+     * Returns {@code null} when the model is unavailable or inference fails.
+     *
+     * @param features {@code [n][4]} feature matrix
+     * @return results, or {@code null} to fall back
+     */
+    List<AnomalyResult> detectWithOnnx(double[][] features) {
+        if (features == null || features.length == 0 || features.length == 1) {
+            return null; // delegate to pure-Java for edge cases
+        }
+        ModelManager manager = resolveModelManager();
+        if (manager == null || !manager.isAvailable(ModelManager.MODEL_ANOMALY_IF)) {
+            return null;
+        }
+        OrtSession session = manager.getSession(ModelManager.MODEL_ANOMALY_IF);
+        if (session == null) {
+            return null;
+        }
+        try {
+            int n = features.length;
+            int dims = features[0].length;
+            float[] flat = new float[n * dims];
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < dims; j++) {
+                    flat[i * dims + j] = (float) features[i][j];
+                }
+            }
+            long[] shape = {1, n, dims};
+            FloatBuffer buf = FloatBuffer.wrap(flat);
+            OrtEnvironment env = OrtEnvironment.getEnvironment();
+            try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, buf, shape)) {
+                Map<String, OnnxTensor> inputs = new HashMap<>();
+                String inputName = session.getInputNames().iterator().next();
+                inputs.put(inputName, inputTensor);
+                try (OrtSession.Result result = session.run(inputs)) {
+                    return extractOnnxScores(result, n);
+                }
+            }
+        } catch (OrtException e) {
+            log.warn("[AnomalyDetector] ONNX IF inference failed, falling back to Java IF: {}", e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.warn("[AnomalyDetector] ONNX IF path error, falling back to Java IF: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Extract ONNX output scores and build AnomalyResult list. */
+    private List<AnomalyResult> extractOnnxScores(OrtSession.Result result, int n) throws OrtException {
+        Object value = result.get(0).getValue();
+        float[] scores = null;
+        if (value instanceof float[] farr) {
+            scores = farr;
+        } else if (value instanceof long[] larr) {
+            scores = new float[larr.length];
+            for (int i = 0; i < larr.length; i++) {
+                scores[i] = (float) larr[i];
+            }
+        } else if (value instanceof double[] darr) {
+            scores = new float[darr.length];
+            for (int i = 0; i < darr.length; i++) {
+                scores[i] = (float) darr[i];
+            }
+        }
+        if (scores == null || scores.length < n) {
+            return null;
+        }
+        List<AnomalyResult> results = new ArrayList<>(n);
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < n; i++) {
+            double score = Math.max(0.0, Math.min(1.0, scores[i]));
+            boolean isAnomaly = score > ANOMALY_THRESHOLD;
+            results.add(new AnomalyResult(i, score, isAnomaly, now));
+        }
+        return results;
+    }
+
+    /**
+     * Pure-Java Isolation Forest detection (the original fallback).
+     */
+    List<AnomalyResult> detectWithJavaIf(double[][] features) {
         List<AnomalyResult> results = new ArrayList<>();
         if (features == null || features.length == 0) {
             return results;
@@ -125,6 +263,14 @@ public final class AnomalyDetector {
             results.add(new AnomalyResult(i, score, isAnomaly, now));
         }
         return results;
+    }
+
+    /** Resolve the ModelManager from the ObjectProvider (null if unavailable). */
+    private ModelManager resolveModelManager() {
+        if (modelManagerProvider == null) {
+            return null;
+        }
+        return modelManagerProvider.getIfAvailable();
     }
 
     /**

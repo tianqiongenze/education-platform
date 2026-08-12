@@ -1,5 +1,7 @@
 package com.ep.grading.grading.impl;
 
+import com.ep.grading.common.PlagiarismCheckFacade;
+import com.ep.grading.common.PlagiarismCheckResult;
 import com.ep.grading.common.SnowflakeIdGenerator;
 import com.ep.grading.config.IdempotencyService;
 import com.ep.grading.grading.GradePipelineRepository;
@@ -10,9 +12,9 @@ import com.ep.grading.grading.entity.GradePipelineStatus;
 import com.ep.grading.grading.entity.GradeStage;
 import com.ep.grading.grading.entity.GradeStageStatus;
 import com.ep.grading.grading.service.GradingService;
-import com.ep.grading.homework.entity.PlagiarismCheck;
-import com.ep.grading.homework.entity.PlagiarismStatus;
-import com.ep.grading.homework.service.PlagiarismService;
+import com.ep.grading.sandbox.ExecutionRequest;
+import com.ep.grading.sandbox.ExecutionResult;
+import com.ep.grading.sandbox.SandboxExecutor;
 import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.apache.dubbo.config.annotation.DubboService;
@@ -42,16 +44,26 @@ public class GradingServiceImpl implements GradingService {
     private final GradePipelineRepository pipelineRepository;
     private final GradeStageRepository stageRepository;
     private final IdempotencyService idempotencyService;
+    private final SandboxExecutor sandboxExecutor;
 
     @DubboReference
-    private PlagiarismService plagiarismService;
+    private PlagiarismCheckFacade plagiarismService;
 
     public GradingServiceImpl(GradePipelineRepository pipelineRepository,
                               GradeStageRepository stageRepository,
                               IdempotencyService idempotencyService) {
+        this(pipelineRepository, stageRepository, idempotencyService, null);
+    }
+
+    /** D-185: primary constructor — sandbox executor injected for auto_check. */
+    public GradingServiceImpl(GradePipelineRepository pipelineRepository,
+                              GradeStageRepository stageRepository,
+                              IdempotencyService idempotencyService,
+                              SandboxExecutor sandboxExecutor) {
         this.pipelineRepository = pipelineRepository;
         this.stageRepository = stageRepository;
         this.idempotencyService = idempotencyService;
+        this.sandboxExecutor = sandboxExecutor;
     }
 
     @Override
@@ -91,12 +103,46 @@ public class GradingServiceImpl implements GradingService {
         List<GradeStage> stages = new ArrayList<>();
 
         // Stage 1: auto_check
+        // D-185: when a SandboxExecutor is wired and source code is supplied,
+        // run the code in the sandbox and grade by exit code. Otherwise fall
+        // back to the legacy dev-mode PASSED result so existing tests / paths
+        // that don't carry source keep working.
         GradeStage autoCheck = newStage("auto_check", pipeline);
         autoCheck.setStatus(GradeStageStatus.RUNNING);
         autoCheck.setStartedAt(now);
-        autoCheck.setStatus(GradeStageStatus.PASSED);
-        autoCheck.setStageScore(40);
-        autoCheck.setStageResult("Auto checks passed");
+        int autoScore = 40;
+        GradeStageStatus autoStatus = GradeStageStatus.PASSED;
+        String autoResult = "Auto checks passed";
+        if (sandboxExecutor != null && cmd.submissionCode() != null && !cmd.submissionCode().isBlank()) {
+            String lang = cmd.language() != null && !cmd.language().isBlank() ? cmd.language() : "JAVA";
+            ExecutionRequest req = new ExecutionRequest(lang, cmd.submissionCode(), "", 10, 256);
+            try {
+                ExecutionResult exec = sandboxExecutor.execute(req);
+                if (exec.exitCode() == 0 && !exec.timedOut()) {
+                    autoStatus = GradeStageStatus.PASSED;
+                    autoScore = 40;
+                    autoResult = "sandbox: exit=0, time=" + exec.executionTimeMs() + "ms";
+                } else if (exec.timedOut()) {
+                    autoStatus = GradeStageStatus.FAILED;
+                    autoScore = 0;
+                    autoResult = "sandbox: timed out after " + exec.executionTimeMs() + "ms";
+                    autoCheck.setErrorMessage(exec.stderr());
+                } else {
+                    autoStatus = GradeStageStatus.FAILED;
+                    autoScore = 0;
+                    autoResult = "sandbox: exit=" + exec.exitCode();
+                    autoCheck.setErrorMessage(exec.stderr());
+                }
+            } catch (Exception e) {
+                autoStatus = GradeStageStatus.FAILED;
+                autoScore = 0;
+                autoResult = "sandbox error: " + e.getMessage();
+                autoCheck.setErrorMessage(e.getMessage());
+            }
+        }
+        autoCheck.setStatus(autoStatus);
+        autoCheck.setStageScore(autoScore);
+        autoCheck.setStageResult(autoResult);
         autoCheck.setCompletedAt(now);
         stages.add(autoCheck);
 
@@ -107,12 +153,11 @@ public class GradingServiceImpl implements GradingService {
         int plagiarismScore = 0;
         boolean plagiarismPassed = true;
         try {
-            PlagiarismCheck check = plagiarismService != null ? plagiarismService.check(cmd.submissionId()) : null;
+            PlagiarismCheckResult check = plagiarismService != null ? plagiarismService.checkResult(cmd.submissionId()) : null;
             if (check != null) {
-                plagiarismPassed = check.getStatus() == PlagiarismStatus.CLEAN
-                        || check.getStatus() == PlagiarismStatus.REVIEWING;
-                plagiarismStage.setStageResult("similarity=" + check.getSimilarityScore());
-                if (check.getStatus() == PlagiarismStatus.CLEAN) {
+                plagiarismPassed = check.isPassing();
+                plagiarismStage.setStageResult("similarity=" + check.similarityScore());
+                if (check.status() == PlagiarismCheckResult.Status.CLEAN) {
                     plagiarismScore = 30;
                 }
             } else {

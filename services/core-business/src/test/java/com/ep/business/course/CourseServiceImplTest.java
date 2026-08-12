@@ -2,6 +2,7 @@ package com.ep.business.course;
 
 import com.ep.business.event.PulsarClientProperties;
 import com.ep.business.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -13,12 +14,13 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class CourseServiceImplTest {
 
     private CourseRepository repository;
+    private CacheService cacheService;
     private CourseServiceImpl service;
 
     @BeforeEach
@@ -31,7 +33,14 @@ class CourseServiceImplTest {
             }
             return c;
         });
-        service = new CourseServiceImpl(repository, noopPublisher());
+        cacheService = mock(CacheService.class);
+        // By default, simulate a cache miss: invoke the loader so the repository is called.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        service = new CourseServiceImpl(repository, noopPublisher(), cacheService);
     }
 
     /** A disabled PulsarEventPublisher that never touches Pulsar. */
@@ -56,11 +65,14 @@ class CourseServiceImplTest {
         assertEquals(CourseStatus.DRAFT.getCode(), c.getStatus());
         assertEquals(0, c.getStudentCount());
         assertNotNull(c.getCreatedAt());
+        // D-182: create should evict the list cache.
+        verify(cacheService).evict("course:list", "all");
     }
 
     @Test
     void createCourse_blankTitleRejected() {
         assertThrows(IllegalArgumentException.class, () -> service.createCourse(cmd("  ")));
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -70,12 +82,29 @@ class CourseServiceImplTest {
         Course found = service.getCourseById(c.getCourseId());
         assertNotNull(found);
         assertEquals(c.getCourseId(), found.getCourseId());
+        // D-182: getCourseById should go through cache with cacheEmpty=true.
+        verify(cacheService).getOrLoad(eq("course"), eq(String.valueOf(c.getCourseId())), any(), eq(300L), eq(true));
     }
 
     @Test
     void getCourseById_notFound() {
         when(repository.findById(99999L)).thenReturn(Optional.empty());
         assertNull(service.getCourseById(99999L));
+        // D-182: null results are cached (cacheEmpty=true) to prevent cache penetration.
+        verify(cacheService).getOrLoad(eq("course"), eq("99999"), any(), eq(300L), eq(true));
+    }
+
+    @Test
+    void getCourseById_cacheHitReturnsCachedValue() {
+        // Simulate a cache hit — getOrLoad returns a cached course without calling the loader.
+        Course cached = new Course();
+        cached.setCourseId(42L);
+        when(cacheService.getOrLoad(eq("course"), eq("42"), any(), anyLong(), anyBoolean()))
+                .thenReturn(cached);
+        Course result = service.getCourseById(42L);
+        assertEquals(42L, result.getCourseId());
+        // Repository should NOT be called on a cache hit.
+        verify(repository, never()).findById(42L);
     }
 
     @Test
@@ -101,6 +130,8 @@ class CourseServiceImplTest {
         List<Course> page2 = service.listCourses(2, 10);
         assertEquals(10, page1.size());
         assertEquals(5, page2.size());
+        // D-182: list goes through cache.
+        verify(cacheService, times(2)).getOrLoad(eq("course:list"), eq("all"), any(), eq(300L), eq(false));
     }
 
     @Test
@@ -135,6 +166,9 @@ class CourseServiceImplTest {
         when(repository.findById(c.getCourseId())).thenReturn(Optional.of(c));
         service.publishCourse(c.getCourseId());
         assertEquals(CourseStatus.PUBLISHED.getCode(), c.getStatus());
+        // D-182: publish should evict both the course and list caches.
+        verify(cacheService).evict("course", String.valueOf(c.getCourseId()));
+        verify(cacheService, atLeastOnce()).evict("course:list", "all");
     }
 
     @Test
@@ -144,6 +178,8 @@ class CourseServiceImplTest {
         service.publishCourse(c.getCourseId());
         service.archiveCourse(c.getCourseId());
         assertEquals(CourseStatus.ARCHIVED.getCode(), c.getStatus());
+        // D-182: archive should evict both the course and list caches (publish also evicted).
+        verify(cacheService, atLeastOnce()).evict("course", String.valueOf(c.getCourseId()));
     }
 
     @Test

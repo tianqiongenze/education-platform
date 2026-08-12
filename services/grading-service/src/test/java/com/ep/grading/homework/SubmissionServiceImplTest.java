@@ -1,5 +1,6 @@
 package com.ep.grading.homework;
 
+import com.ep.cache.CacheService;
 import com.ep.grading.config.IdempotencyService;
 import com.ep.grading.homework.dto.GradeSubmissionCommand;
 import com.ep.grading.homework.dto.SubmissionCommand;
@@ -20,8 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,11 +36,14 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link SubmissionServiceImpl}. Repository and idempotency are mocked so
  * tests run without TiDB / Redis (those are exercised by @Tag("integration") tests).
+ * D-182: CacheService is mocked with cache-miss default (invokes loader), allowing
+ * cache interaction verification while keeping existing logic tests intact.
  */
 class SubmissionServiceImplTest {
 
     private SubmissionRepository submissionRepository;
     private IdempotencyService idempotencyService;
+    private CacheService cacheService;
     private SubmissionServiceImpl service;
     private final AtomicLong idSeq = new AtomicLong(0L);
 
@@ -44,6 +51,13 @@ class SubmissionServiceImplTest {
     void setUp() {
         submissionRepository = mock(SubmissionRepository.class);
         idempotencyService = mock(IdempotencyService.class);
+        cacheService = mock(CacheService.class);
+        // Cache-miss default: invoke the loader so the repository is called as before.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
         // Default: no prior claim in Redis -> service proceeds to create.
         when(idempotencyService.claimOrFetch(anyString(), any())).thenReturn(null);
         // Default save echoes the entity back with an assigned id.
@@ -54,7 +68,7 @@ class SubmissionServiceImplTest {
             }
             return s;
         });
-        service = new SubmissionServiceImpl(submissionRepository, idempotencyService);
+        service = new SubmissionServiceImpl(submissionRepository, idempotencyService, cacheService);
     }
 
     @Test
@@ -68,6 +82,7 @@ class SubmissionServiceImplTest {
         // @Version is null pre-persist; JPA assigns 0 on first insert.
         assertNotNull(s.getSubmittedAt());
         verify(submissionRepository, times(1)).save(any(Submission.class));
+        verify(cacheService).evict("submission:by-assignment", String.valueOf(1L));
     }
 
     @Test
@@ -92,6 +107,7 @@ class SubmissionServiceImplTest {
         assertEquals("content-a", b.getContent());
         // Second submit must not call save again.
         verify(submissionRepository, times(1)).save(any(Submission.class));
+        verify(cacheService, atLeastOnce()).evict("submission:by-assignment", String.valueOf(1L));
     }
 
     @Test
@@ -125,6 +141,8 @@ class SubmissionServiceImplTest {
         assertEquals(SubmissionStatus.GRADED, graded.getStatus());
         assertNotNull(graded.getGradedAt());
         verify(submissionRepository, times(1)).save(any(Submission.class));
+        verify(cacheService).evict("submission", String.valueOf(5L));
+        verify(cacheService).evict("submission:by-assignment", String.valueOf(1L));
     }
 
     @Test
@@ -167,6 +185,22 @@ class SubmissionServiceImplTest {
         Submission found = service.findById(1L);
         assertNotNull(found);
         assertEquals(1L, found.getId());
+        verify(cacheService).getOrLoad(eq("submission"), eq(String.valueOf(1L)), any(), eq(60L), eq(true));
+    }
+
+    @Test
+    void test_find_by_id_cache_hit_skips_repository() {
+        // Cache hit: CacheService returns cached value without invoking loader.
+        Submission cached = new Submission();
+        cached.setId(1L);
+        when(cacheService.getOrLoad(eq("submission"), eq(String.valueOf(1L)), any(), eq(60L), eq(true)))
+                .thenReturn(cached);
+
+        Submission found = service.findById(1L);
+        assertNotNull(found);
+        assertEquals(1L, found.getId());
+        // Repository must NOT be called on cache hit.
+        verify(submissionRepository, never()).findById(anyLong());
     }
 
     @Test
@@ -182,6 +216,7 @@ class SubmissionServiceImplTest {
         List<Submission> result = service.findByAssignmentId(1L);
         assertEquals(2, result.size());
         assertTrue(result.stream().allMatch(s -> s.getAssignmentId().equals(1L)));
+        verify(cacheService).getOrLoad(eq("submission:by-assignment"), eq(String.valueOf(1L)), any(), eq(60L), eq(false));
     }
 
     @Test

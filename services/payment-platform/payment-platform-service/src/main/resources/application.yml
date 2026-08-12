@@ -32,6 +32,8 @@ dubbo:
   registry:
     address: N/A
 ep:
+  cache:
+    enabled: true
   payment:
     dev-guard: true
 management:

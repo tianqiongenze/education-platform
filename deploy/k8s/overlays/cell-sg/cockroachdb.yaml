@@ -1,0 +1,60 @@
+# D-194: CockroachDB overlay for cell-sg (Singapore) — GDPR-compliant PoC.
+#
+# Patches the global CockroachDB cluster so the Singapore node acts as the
+# home region for overseas (non-mainland) tenant data. Adds GDPR annotations
+# and a NetworkPolicy restricting access to the SQL port from data-platform
+# and boardgame-service only.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base/cockroachdb-cluster.yaml
+
+patches:
+  - target:
+      kind: CrdbCluster
+      name: cockroachdb-global
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          ep.io/decision: D-194
+          ep.io/scope: poc
+          ep.io/data-residency: overseas
+          ep.io/gdpr-compliance: "true"
+          ep.io/pdpa-compliance: "true"
+          data-protection: at-rest-encryption-enabled
+      - op: add
+        path: /metadata/labels/ep.io~1home-region
+        value: singapore
+      # Pin the Singapore zone as the home region for overseas tenants.
+      - op: replace
+        path: /spec/topology/zones/0/name
+        value: ap-southeast-1
+---
+# NetworkPolicy: only data-platform and boardgame-service may reach CockroachDB SQL.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cockroachdb-sql-egress-sg
+  namespace: education-platform
+  annotations:
+    ep.io/decision: D-194
+    ep.io/gdpr-compliance: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cockroachdb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: data-platform
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: boardgame-service
+      ports:
+        - protocol: TCP
+          port: 26257

@@ -1,0 +1,90 @@
+# D-194: CockroachDB global cluster CRD (PoC).
+#
+# Deploys a 3-node CockroachDB cluster spanning Singapore, Frankfurt and Tokyo
+# to validate REGIONAL BY ROW tables, cross-region write latency, CDC→Pulsar
+# adapter and 1M-connection schema stress (see ADR D-194).
+#
+# Prerequisite: the CockroachDB Operator (crdb.cockroachlabs.com/v1beta1) must
+# be installed in the cluster:
+#   kubectl apply -f https://github.com/cockroachdb/cockroach-operator/releases/latest/download/operator.yaml
+apiVersion: crdb.cockroachlabs.com/v1beta1
+kind: CrdbCluster
+metadata:
+  name: cockroachdb-global
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: cockroachdb
+    ep.io/decision: D-194
+    ep.io/scope: poc
+spec:
+  dataStore:
+    volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: cockroachdb-data
+  topology:
+    zones:
+      - name: singapore
+        nodes: 1
+      - name: frankfurt
+        nodes: 1
+      - name: tokyo
+        nodes: 1
+  nodes: 3
+  image:
+    name: cockroachdb/cockroach:v24.1.0
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+  # CockroachDB exposes the PostgreSQL wire protocol on 26257 and the DB
+  # Console on 8080. The data-platform connects via JDBC
+  # (jdbc:postgresql://cockroachdb-global:26257) when ep.db.dual.enabled=true.
+  ingress:
+    ui: true
+  # GDPR: enable at-rest encryption and TTL-based row expiry on the cluster.
+  # Per-cell tenant data is pinned to its region via REGIONAL BY ROW + region
+  # config; see the cell-sg overlay for the GDPR annotations.
+  cache:
+    autoSize: true
+  maxSQLMemory:
+    autoSize: true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cockroachdb-data
+  namespace: education-platform
+  labels:
+    ep.io/decision: D-194
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: standard
+---
+# Service exposing the CockroachDB SQL (PostgreSQL wire) port to data-platform.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cockroachdb-global
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: cockroachdb
+    ep.io/decision: D-194
+spec:
+  selector:
+    app.kubernetes.io/name: cockroachdb
+  ports:
+    - name: sql
+      port: 26257
+      targetPort: 26257
+    - name: ui
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

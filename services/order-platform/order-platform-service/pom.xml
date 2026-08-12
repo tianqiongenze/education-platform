@@ -16,6 +16,8 @@
   <properties>
     <!-- D-115: JIB build port (order-platform-service listens on 8084). -->
     <jib.container.port>8084</jib.container.port>
+    <!-- D-195: unified Pulsar version (upgrade target 4.0 / 2027 Q1) -->
+    <pulsar.version>3.3.9</pulsar.version>
   </properties>
 
   <dependencies>
@@ -39,6 +41,20 @@
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+    </dependency>
+
+    <!-- D-182: Multi-level cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast).
+         spring-boot-starter-data-redis is required because ep-cache's CacheService
+         references RedisTemplate in its constructor signature; Mockito needs the
+         class on the classpath to create a mock of CacheService. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-cache</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
 
     <dependency>
@@ -97,7 +113,7 @@
     <dependency>
       <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-client</artifactId>
-      <version>3.3.9</version>
+      <version>${pulsar.version}</version>
     </dependency>
 
     <!-- Jackson (domain-event serialization to Pulsar). -->
@@ -121,6 +137,13 @@
       <groupId>com.mysql</groupId>
       <artifactId>mysql-connector-j</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <!-- D-182: Redis for ep-cache L2 backend (ep-cache declares it as 'provided',
+         so it must be pulled in directly by each consumer). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
 
     <dependency>

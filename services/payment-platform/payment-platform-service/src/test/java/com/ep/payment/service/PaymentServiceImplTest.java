@@ -1,5 +1,6 @@
 package com.ep.payment.service;
 
+import com.ep.cache.CacheService;
 import com.ep.payment.api.Payment;
 import com.ep.payment.api.PaymentChannel;
 import com.ep.payment.api.PaymentRequest;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,6 +23,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Unit tests for {@link PaymentServiceImpl}. Uses the in-memory
@@ -36,6 +47,30 @@ class PaymentServiceImplTest {
         // devGuard=true forces the MOCK channel even if ALIPAY/WECHAT beans
         // were registered — that is exactly the dev/CI contract.
         service = new PaymentServiceImpl(List.of(new MockPaymentChannel()), true);
+    }
+
+    /**
+     * D-182: Create a CacheService mock that simulates a cache miss by invoking
+     * the supplied loader. This lets tests verify getOrLoad/evict integration
+     * while exercising the real in-memory store beneath.
+     */
+    private static CacheService cacheMiss() {
+        CacheService cs = mock(CacheService.class);
+        lenient().when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        return cs;
+    }
+
+    /**
+     * Construct a PaymentServiceImpl with a cache-miss CacheService mock injected
+     * (uses the D-182 test constructor; in-memory store is used).
+     */
+    private PaymentServiceImpl serviceWithCache() {
+        return new PaymentServiceImpl(
+                List.of(new MockPaymentChannel()), true, cacheMiss());
     }
 
     private PaymentRequest request(String orderId, PaymentChannel channel) {
@@ -226,5 +261,62 @@ class PaymentServiceImplTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> service.createPayment(req));
         assertTrue(ex.getMessage().contains("channel"));
+    }
+
+    // ---------------- D-182: CacheService integration ----------------
+
+    @Test
+    void getPayment_cacheMiss_invokesLoader_andCachesResult() {
+        PaymentServiceImpl cached = serviceWithCache();
+        PaymentResult result = cached.createPayment(request("order-c1", PaymentChannel.MOCK));
+
+        Payment fetched = cached.getPayment(result.paymentId());
+
+        assertNotNull(fetched);
+        assertEquals(result.paymentId(), fetched.getPaymentId());
+        // D-182: getPayment must go through cache getOrLoad (TTL 120s, cacheEmpty=true).
+        verify(cached.getCacheServiceForTest()).getOrLoad(
+                eq("payment:detail"), eq(result.paymentId()),
+                any(Supplier.class), eq(120L), eq(true));
+    }
+
+    @Test
+    void getPaymentByOrder_cacheMiss_invokesLoader() {
+        PaymentServiceImpl cached = serviceWithCache();
+        PaymentResult result = cached.createPayment(request("order-c2", PaymentChannel.MOCK));
+
+        Payment fetched = cached.getPaymentByOrder("order-c2");
+
+        assertNotNull(fetched);
+        assertEquals(result.paymentId(), fetched.getPaymentId());
+        // D-182: getPaymentByOrder must go through cache getOrLoad.
+        verify(cached.getCacheServiceForTest()).getOrLoad(
+                eq("payment:by-order"), eq("order-c2"),
+                any(Supplier.class), eq(120L), eq(true));
+    }
+
+    @Test
+    void refund_evictsCacheEntries_afterStatusChange() {
+        PaymentServiceImpl cached = serviceWithCache();
+        PaymentResult result = cached.createPayment(request("order-c3", PaymentChannel.MOCK));
+        String paymentId = result.paymentId();
+
+        // Reset the mock so we only verify evicts from refund (createPayment also evicts).
+        org.mockito.Mockito.clearInvocations(cached.getCacheServiceForTest());
+
+        cached.refund("order-c3", new BigDecimal("100.00"), "user request");
+
+        // D-182: refund (full → REFUNDED) must evict both cache entries.
+        verify(cached.getCacheServiceForTest()).evict("payment:detail", paymentId);
+        verify(cached.getCacheServiceForTest()).evict("payment:by-order", "order-c3");
+    }
+
+    @Test
+    void getPayment_noCacheService_worksWithoutCache() {
+        // The default service (back-compat constructor, cacheService=null) must
+        // still work — no NPE, reads go directly to the in-memory store.
+        PaymentResult result = service.createPayment(request("order-c4", PaymentChannel.MOCK));
+        Payment fetched = service.getPayment(result.paymentId());
+        assertNotNull(fetched);
     }
 }

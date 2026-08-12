@@ -1,14 +1,38 @@
 package com.ep.data.aiops;
 
+import java.nio.FloatBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import ai.onnxruntime.OnnxTensor;
+import ai.onnxruntime.OrtEnvironment;
+import ai.onnxruntime.OrtException;
+import ai.onnxruntime.OrtSession;
 
 /**
  * Pure-Java capacity forecaster using least-squares linear regression and
- * EWMA smoothing (§12.3.2).
+ * EWMA smoothing (§12.3.2), with an optional ONNX LSTM enhancement path
+ * (D-189).
  *
- * <p>Workflow:
+ * <p><b>Two inference paths:</b>
+ * <ul>
+ *   <li><b>ONNX LSTM (D-189):</b> When an ONNX model is available via
+ *       {@link ModelManager}, the forecaster feeds the EWMA-smoothed history
+ *       into a pre-trained LSTM and produces multi-step predictions. This
+ *       captures non-linear trends that linear regression cannot.</li>
+ *   <li><b>Pure-Java EWMA + linear regression (fallback):</b> When no ONNX
+ *       model is available (dev/CI, or production without a trained model),
+ *       the forecaster uses the original least-squares approach. This is the
+ *       default path in dev mode and is always available.</li>
+ * </ul>
+ *
+ * <p>Workflow (pure-Java path):
  * <ol>
  *   <li>Optionally smooth the history with an EWMA filter.</li>
  *   <li>Fit a line {@code y = intercept + slope * x} by least squares.</li>
@@ -19,19 +43,30 @@ import org.springframework.stereotype.Component;
  * <p>Edge cases: empty history → empty forecast; single point → flat
  * forecast; all-zeros → flat zero forecast with zero variance.
  *
- * <p>Pure (no Spring/IO deps), instantiable with {@code new} in tests.
+ * <p>The pure-Java path is instantiable with {@code new CapacityForecaster()}
+ * in tests. The ONNX path requires a {@link ModelManager} (injected via
+ * {@link ObjectProvider} for graceful degradation).
  */
 @Component
 public final class CapacityForecaster {
 
+    private static final Logger log = LoggerFactory.getLogger(CapacityForecaster.class);
+
     /** EWMA alpha (smoothing factor); 0 &lt; alpha ≤ 1. */
     private static final double DEFAULT_ALPHA = 0.3;
 
-    private final double alpha;
+    /** LSTM input sequence length (number of time steps). */
+    static final int LSTM_SEQ_LEN = 14;
 
-    /** Create a forecaster with the default EWMA alpha (0.3). */
+    /** LSTM input feature dimension (1: univariate). */
+    static final int LSTM_FEATURE_DIM = 1;
+
+    private final double alpha;
+    private final ObjectProvider<ModelManager> modelManagerProvider;
+
+    /** Create a forecaster with the default EWMA alpha (0.3) — dev/CI mode. */
     public CapacityForecaster() {
-        this(DEFAULT_ALPHA);
+        this(DEFAULT_ALPHA, null);
     }
 
     /**
@@ -40,14 +75,38 @@ public final class CapacityForecaster {
      * @param alpha EWMA smoothing factor in (0, 1]
      */
     public CapacityForecaster(double alpha) {
+        this(alpha, null);
+    }
+
+    /**
+     * Create a forecaster with a model manager provider (D-189 ONNX path).
+     *
+     * @param modelManagerProvider Spring {@link ObjectProvider} for
+     *        {@link ModelManager}; may be null in tests
+     */
+    public CapacityForecaster(ObjectProvider<ModelManager> modelManagerProvider) {
+        this(DEFAULT_ALPHA, modelManagerProvider);
+    }
+
+    /**
+     * Create a forecaster with custom alpha and model manager.
+     *
+     * @param alpha                 EWMA smoothing factor
+     * @param modelManagerProvider  ONNX model manager (null for pure-Java)
+     */
+    public CapacityForecaster(double alpha, ObjectProvider<ModelManager> modelManagerProvider) {
         if (alpha <= 0.0 || alpha > 1.0 || Double.isNaN(alpha)) {
             alpha = DEFAULT_ALPHA;
         }
         this.alpha = alpha;
+        this.modelManagerProvider = modelManagerProvider;
     }
 
     /**
      * Forecast future values for a metric.
+     *
+     * <p>Attempts the ONNX LSTM path first; falls back to pure-Java EWMA +
+     * linear regression when the model is unavailable.
      *
      * @param history      observed history (oldest first)
      * @param forecastDays number of future points to predict
@@ -57,6 +116,124 @@ public final class CapacityForecaster {
         if (history == null || history.length == 0 || forecastDays <= 0) {
             return new ForecastResult(new double[0], new double[0], new double[0], 0.0, 0.0);
         }
+        // Try ONNX LSTM path.
+        ForecastResult onnxResult = forecastWithLstm(history, forecastDays);
+        if (onnxResult != null) {
+            return onnxResult;
+        }
+        // Fall back to pure-Java.
+        return forecastWithEwma(history, forecastDays);
+    }
+
+    /**
+     * ONNX LSTM inference path (D-189).
+     *
+     * <p>Prepares the EWMA-smoothed history as a {@code [1][LSTM_SEQ_LEN][1]}
+     * float tensor, runs the LSTM model, and extracts the predicted values.
+     * Returns {@code null} when the model is unavailable or inference fails.
+     *
+     * @param history      observed history
+     * @param forecastDays number of points to predict
+     * @return forecast result, or {@code null} to fall back
+     */
+    ForecastResult forecastWithLstm(double[] history, int forecastDays) {
+        ModelManager manager = resolveModelManager();
+        if (manager == null || !manager.isAvailable(ModelManager.MODEL_CAPACITY_LSTM)) {
+            return null;
+        }
+        OrtSession session = manager.getSession(ModelManager.MODEL_CAPACITY_LSTM);
+        if (session == null) {
+            return null;
+        }
+        try {
+            // Prepare input: EWMA-smoothed, padded/truncated to LSTM_SEQ_LEN.
+            double[] smoothed = ewma(history);
+            float[] inputData = prepareLstmInput(smoothed);
+            long[] shape = {1, LSTM_SEQ_LEN, LSTM_FEATURE_DIM};
+            FloatBuffer buf = FloatBuffer.wrap(inputData);
+
+            OrtEnvironment env = OrtEnvironment.getEnvironment();
+            try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, buf, shape)) {
+                Map<String, OnnxTensor> inputs = new HashMap<>();
+                String inputName = session.getInputNames().iterator().next();
+                inputs.put(inputName, inputTensor);
+                try (OrtSession.Result result = session.run(inputs)) {
+                    return extractLstmOutput(result, history, forecastDays);
+                }
+            }
+        } catch (OrtException e) {
+            log.warn("[CapacityForecaster] ONNX LSTM inference failed, falling back to EWMA: {}", e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.warn("[CapacityForecaster] ONNX LSTM path error, falling back to EWMA: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Prepare EWMA-smoothed history as a padded/truncated LSTM input. */
+    private float[] prepareLstmInput(double[] smoothed) {
+        float[] out = new float[LSTM_SEQ_LEN * LSTM_FEATURE_DIM];
+        int offset = Math.max(0, smoothed.length - LSTM_SEQ_LEN);
+        int copyLen = Math.min(smoothed.length, LSTM_SEQ_LEN);
+        int dstStart = LSTM_SEQ_LEN - copyLen;
+        for (int i = 0; i < copyLen; i++) {
+            out[(dstStart + i) * LSTM_FEATURE_DIM] = (float) smoothed[offset + i];
+        }
+        return out;
+    }
+
+    /** Extract the LSTM output tensor and build a ForecastResult. */
+    private ForecastResult extractLstmOutput(OrtSession.Result result, double[] history, int forecastDays) throws OrtException {
+        Object value = result.get(0).getValue();
+        float[] preds = null;
+        if (value instanceof float[] farr) {
+            preds = farr;
+        } else if (value instanceof long[] larr) {
+            preds = new float[larr.length];
+            for (int i = 0; i < larr.length; i++) {
+                preds[i] = (float) larr[i];
+            }
+        } else if (value instanceof double[] darr) {
+            preds = new float[darr.length];
+            for (int i = 0; i < darr.length; i++) {
+                preds[i] = (float) darr[i];
+            }
+        }
+        if (preds == null || preds.length == 0) {
+            return null;
+        }
+        int n = Math.min(preds.length, forecastDays);
+        double[] predicted = new double[n];
+        double[] lower = new double[n];
+        double[] upper = new double[n];
+        // Compute residual stddev from history for confidence band.
+        double residualStddev = computeResidualStddev(history);
+        for (int i = 0; i < n; i++) {
+            predicted[i] = preds[i];
+            lower[i] = preds[i] - 2.0 * residualStddev;
+            upper[i] = preds[i] + 2.0 * residualStddev;
+        }
+        // Slope and rSquared not meaningful for LSTM; set to 0.
+        return new ForecastResult(predicted, lower, upper, 0.0, 0.0);
+    }
+
+    /** Compute a simple residual stddev from the history for CI bands. */
+    private double computeResidualStddev(double[] history) {
+        if (history == null || history.length < 3) {
+            return 0.0;
+        }
+        double mean = Arrays.stream(history).average().orElse(0.0);
+        double ss = 0.0;
+        for (double v : history) {
+            ss += (v - mean) * (v - mean);
+        }
+        return Math.sqrt(ss / (history.length - 1));
+    }
+
+    /**
+     * Pure-Java EWMA + linear regression forecast (the original fallback).
+     */
+    ForecastResult forecastWithEwma(double[] history, int forecastDays) {
         if (history.length == 1) {
             double v = history[0];
             double[] pred = filled(forecastDays, v);
@@ -150,6 +327,14 @@ public final class CapacityForecaster {
                 thresholdPct,
                 alertType,
                 suggestedAction);
+    }
+
+    /** Resolve the ModelManager from the ObjectProvider (null if unavailable). */
+    private ModelManager resolveModelManager() {
+        if (modelManagerProvider == null) {
+            return null;
+        }
+        return modelManagerProvider.getIfAvailable();
     }
 
     /** Apply an EWMA filter to the history. */

@@ -2,6 +2,7 @@ package com.ep.boardgame.room;
 
 import com.ep.boardgame.event.PulsarClientProperties;
 import com.ep.boardgame.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -11,21 +12,36 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * D-149: GameRoomServiceImpl unit tests.
+ * <p>
+ * D-182: Tests also verify CacheService getOrLoad is called on reads and
+ * evict is called after writes.
  */
 class GameRoomServiceImplTest {
 
     private GameRoomRepository roomRepo;
     private GameMatchRepository matchRepo;
+    private CacheService cacheService;
     private GameRoomServiceImpl service;
 
     @BeforeEach
     void setUp() {
         roomRepo = mock(GameRoomRepository.class);
         matchRepo = mock(GameMatchRepository.class);
+        cacheService = mock(CacheService.class);
+        // Cache miss: always invoke the loader so the real repo call happens.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
         when(roomRepo.save(any(GameRoom.class))).thenAnswer(inv -> {
             GameRoom r = inv.getArgument(0);
             if (r.getRoomId() == null) r.setRoomId(System.nanoTime() % 100000L);
@@ -36,7 +52,7 @@ class GameRoomServiceImplTest {
             if (m.getMatchId() == null) m.setMatchId(System.nanoTime() % 100000L);
             return m;
         });
-        service = new GameRoomServiceImpl(roomRepo, matchRepo, noopPublisher());
+        service = new GameRoomServiceImpl(roomRepo, matchRepo, noopPublisher(), cacheService);
     }
 
     private static PulsarEventPublisher noopPublisher() {
@@ -62,6 +78,7 @@ class GameRoomServiceImplTest {
         assertEquals("Test Room", room.getRoomName());
         assertEquals(GameRoom.STATUS_WAITING, room.getStatus());
         assertNotNull(room.getCreatedAt());
+        verify(cacheService).evict(eq("boardgame:room"), anyString());
     }
 
     @Test
@@ -81,12 +98,14 @@ class GameRoomServiceImplTest {
         GameRoom room = newRoom(1L);
         when(roomRepo.findById(1L)).thenReturn(Optional.of(room));
         assertNotNull(service.getRoomById(1L));
+        verify(cacheService).getOrLoad(eq("boardgame:room"), eq("1"), any(), eq(60L), eq(true));
     }
 
     @Test
     void getRoomById_notFound() {
         when(roomRepo.findById(999L)).thenReturn(Optional.empty());
         assertNull(service.getRoomById(999L));
+        verify(cacheService).getOrLoad(eq("boardgame:room"), eq("999"), any(), eq(60L), eq(true));
     }
 
     @Test
@@ -116,6 +135,7 @@ class GameRoomServiceImplTest {
         when(roomRepo.findById(1L)).thenReturn(Optional.of(room));
         service.joinRoom(1L, 100L);
         assertEquals(100L, room.getRedPlayerId());
+        verify(cacheService).evict("boardgame:room", "1");
     }
 
     @Test
@@ -131,6 +151,7 @@ class GameRoomServiceImplTest {
         when(roomRepo.findById(1L)).thenReturn(Optional.of(room));
         service.leaveRoom(1L, 100L);
         assertNull(room.getRedPlayerId());
+        verify(cacheService).evict("boardgame:room", "1");
     }
 
     @Test
@@ -145,6 +166,7 @@ class GameRoomServiceImplTest {
         assertEquals(GameMatch.RESULT_ONGOING, match.getResult());
         assertEquals(100L, match.getRedPlayerId());
         assertEquals(200L, match.getBlackPlayerId());
+        verify(cacheService).evict("boardgame:room", "1");
     }
 
     @Test
@@ -175,6 +197,7 @@ class GameRoomServiceImplTest {
         GameMatch result = service.makeMove(cmd);
         assertEquals(1, result.getMoveCount());
         assertEquals(1, result.getCurrentSide()); // BLACK's turn
+        verify(cacheService).evict("boardgame:match", String.valueOf(match.getMatchId()));
     }
 
     @Test
@@ -207,6 +230,7 @@ class GameRoomServiceImplTest {
 
         GameMatch result = service.resign(match.getMatchId(), 100L);
         assertEquals(GameMatch.RESULT_BLACK_WIN, result.getResult());
+        verify(cacheService).evict("boardgame:match", String.valueOf(match.getMatchId()));
     }
 
     @Test
@@ -214,12 +238,14 @@ class GameRoomServiceImplTest {
         GameMatch match = newMatch(1L);
         when(matchRepo.findById(1L)).thenReturn(Optional.of(match));
         assertNotNull(service.getMatchById(1L));
+        verify(cacheService).getOrLoad(eq("boardgame:match"), eq("1"), any(), eq(60L), eq(true));
     }
 
     @Test
     void getMatchById_notFound() {
         when(matchRepo.findById(999L)).thenReturn(Optional.empty());
         assertNull(service.getMatchById(999L));
+        verify(cacheService).getOrLoad(eq("boardgame:match"), eq("999"), any(), eq(60L), eq(true));
     }
 
     @Test
@@ -234,6 +260,19 @@ class GameRoomServiceImplTest {
         when(matchRepo.findByTenantIdOrderByMatchIdDesc(10L))
                 .thenReturn(List.of(newMatch(1L)));
         assertEquals(1, service.listMatchesByTenant(10L).size());
+    }
+
+    @Test
+    void getRoomById_cache_hit_skips_repository() {
+        // Simulate a cache hit: getOrLoad returns the room without invoking the loader.
+        GameRoom cached = newRoom(1L);
+        when(cacheService.getOrLoad(eq("boardgame:room"), eq("1"), any(), eq(60L), eq(true)))
+                .thenReturn(cached);
+        GameRoom result = service.getRoomById(1L);
+        assertNotNull(result);
+        assertEquals(1L, result.getRoomId());
+        // Repository must NOT be called on a cache hit.
+        verify(roomRepo, never()).findById(anyLong());
     }
 
     // --- Helpers ---

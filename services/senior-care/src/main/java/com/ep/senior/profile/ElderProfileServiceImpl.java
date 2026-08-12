@@ -1,6 +1,7 @@
 package com.ep.senior.profile;
 
 import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.ep.cache.CacheService;
 import com.ep.senior.common.DomainEvent;
 import com.ep.senior.common.SnowflakeIdGenerator;
 import com.ep.senior.event.PulsarEventPublisher;
@@ -15,17 +16,30 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * D-148: ElderProfile service implementation.
+ * <p>
+ * D-182: getElderById cached via ep-cache SDK (L1 Caffeine + L2 Redis +
+ * Pub/Sub broadcast). Writes evict the affected cache entry.
+ */
 @DubboService
 public class ElderProfileServiceImpl implements ElderProfileService {
 
     private static final Logger log = LoggerFactory.getLogger(ElderProfileServiceImpl.class);
 
+    private static final String CACHE_ELDER = "senior:elder";
+    private static final long ELDER_TTL_SEC = 600;
+
     private final ElderProfileRepository repository;
     private final PulsarEventPublisher eventPublisher;
+    private final CacheService cacheService;
 
-    public ElderProfileServiceImpl(ElderProfileRepository repository, PulsarEventPublisher eventPublisher) {
+    public ElderProfileServiceImpl(ElderProfileRepository repository,
+                                   PulsarEventPublisher eventPublisher,
+                                   CacheService cacheService) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -54,14 +68,17 @@ public class ElderProfileServiceImpl implements ElderProfileService {
         elder.setStatus(ElderStatus.ACTIVE.getCode());
         elder.setCreatedAt(now);
         elder.setUpdatedAt(now);
-        return repository.save(elder);
+        ElderProfile saved = repository.save(elder);
+        cacheService.evict(CACHE_ELDER, String.valueOf(saved.getElderId()));
+        return saved;
     }
 
     @Override
     @Transactional(readOnly = true)
     public ElderProfile getElderById(Long elderId) {
         Objects.requireNonNull(elderId, "elderId must not be null");
-        return repository.findById(elderId).orElse(null);
+        return cacheService.getOrLoad(CACHE_ELDER, String.valueOf(elderId),
+                () -> repository.findById(elderId).orElse(null), ELDER_TTL_SEC, true);
     }
 
     @Override
@@ -88,6 +105,7 @@ public class ElderProfileServiceImpl implements ElderProfileService {
                 .orElseThrow(() -> new IllegalStateException("Elder not found: " + elderId));
         elder.pause();
         repository.save(elder);
+        cacheService.evict(CACHE_ELDER, String.valueOf(elderId));
         publishEvents(elder);
     }
 
@@ -99,6 +117,7 @@ public class ElderProfileServiceImpl implements ElderProfileService {
                 .orElseThrow(() -> new IllegalStateException("Elder not found: " + elderId));
         elder.activate();
         repository.save(elder);
+        cacheService.evict(CACHE_ELDER, String.valueOf(elderId));
         publishEvents(elder);
     }
 
@@ -110,6 +129,7 @@ public class ElderProfileServiceImpl implements ElderProfileService {
                 .orElseThrow(() -> new IllegalStateException("Elder not found: " + elderId));
         elder.discharge();
         repository.save(elder);
+        cacheService.evict(CACHE_ELDER, String.valueOf(elderId));
         publishEvents(elder);
     }
 

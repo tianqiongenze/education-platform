@@ -1,5 +1,6 @@
 package com.ep.grading.homework.impl;
 
+import com.ep.cache.CacheService;
 import com.ep.grading.common.SnowflakeIdGenerator;
 import com.ep.grading.config.IdempotencyService;
 import com.ep.grading.homework.SubmissionRepository;
@@ -26,17 +27,26 @@ import java.util.Objects;
  *             so cross-service grading (sp05 grade + sp03 order completion) cannot diverge.</li>
  * </ul>
  * Service interface is unchanged; only the implementation has been rewritten.
+ * D-182: L1+L2 cache via ep-cache SDK. Submission status cached 60s (cacheEmpty=true);
+ * reads wrapped with {@code getOrLoad}, writes evict.
  */
 @DubboService
 public class SubmissionServiceImpl implements SubmissionService {
 
+    private static final String CACHE_SUBMISSION = "submission";
+    private static final String CACHE_SUBMISSION_BY_ASSIGNMENT = "submission:by-assignment";
+    private static final long SUBMISSION_TTL_SEC = 60;
+
     private final SubmissionRepository submissionRepository;
     private final IdempotencyService idempotencyService;
+    private final CacheService cacheService;
 
     public SubmissionServiceImpl(SubmissionRepository submissionRepository,
-                                 IdempotencyService idempotencyService) {
+                                 IdempotencyService idempotencyService,
+                                 CacheService cacheService) {
         this.submissionRepository = submissionRepository;
         this.idempotencyService = idempotencyService;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -72,6 +82,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (key != null && !key.isBlank()) {
             idempotencyService.claimOrFetch(key, String.valueOf(saved.getId()));
         }
+        cacheService.evict(CACHE_SUBMISSION_BY_ASSIGNMENT, String.valueOf(cmd.assignmentId()));
         return saved;
     }
 
@@ -110,6 +121,8 @@ public class SubmissionServiceImpl implements SubmissionService {
             if (key != null && !key.isBlank()) {
                 idempotencyService.claimOrFetch(key, String.valueOf(saved.getId()));
             }
+            cacheService.evict(CACHE_SUBMISSION, String.valueOf(submissionId));
+            cacheService.evict(CACHE_SUBMISSION_BY_ASSIGNMENT, String.valueOf(submission.getAssignmentId()));
             return saved;
         } catch (ObjectOptimisticLockingFailureException ex) {
             // D-048 P0-6: JPA @Version enforces optimistic locking at the DB layer.
@@ -126,7 +139,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (id == null) {
             return null;
         }
-        return submissionRepository.findById(id).orElse(null);
+        return cacheService.getOrLoad(CACHE_SUBMISSION, String.valueOf(id),
+                () -> submissionRepository.findById(id).orElse(null),
+                SUBMISSION_TTL_SEC, true);
     }
 
     @Override
@@ -135,6 +150,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (assignmentId == null) {
             return List.of();
         }
-        return submissionRepository.findByAssignmentId(assignmentId);
+        return cacheService.getOrLoad(CACHE_SUBMISSION_BY_ASSIGNMENT, String.valueOf(assignmentId),
+                () -> submissionRepository.findByAssignmentId(assignmentId),
+                SUBMISSION_TTL_SEC, false);
     }
 }

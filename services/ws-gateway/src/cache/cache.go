@@ -1,74 +1,41 @@
+// Package cache is the ws-gateway local facade over the shared
+// github.com/education-platform/ep-common-go/cache CacheService.
+//
+// D-10.3 (Iron Law: shared SDK mandatory use): the hand-written LRU+Redis
+// implementation that previously lived here has been removed. All cache
+// behaviour (L1 LRU+TTL, L2 Redis, Pub/Sub invalidation on
+// "ep:cache:invalidate") is provided by ep-common-go/cache and merely wrapped
+// here so existing ws-gateway callers keep their signatures.
+//
+// Bug fix carried over from the migration: Evict now broadcasts an invalidation
+// message on "ep:cache:invalidate" via the shared CacheService, so peer pods
+// evict their L1 entries. The previous local implementation only cleared the
+// local L1+L2 and never broadcast, which left stale L1 entries on other pods.
 package cache
 
 import (
-	"container/list"
 	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"sync"
-	"time"
 
+	commoncache "github.com/education-platform/ep-common-go/cache"
 	"github.com/redis/go-redis/v9"
 )
 
-const EmptySentinel = "__EP_CACHE_EMPTY__"
+// EmptySentinel mirrors the shared cache's sentinel for backward compatibility.
+const EmptySentinel = commoncache.EmptySentinel
 
-type entry struct {
-	k string
-	v any
-}
+var (
+	mu   sync.Mutex
+	svc  *commoncache.CacheService
+	rdb  *redis.Client
+	once sync.Once
+)
 
-type l1Cache struct {
-	mu  sync.Mutex
-	cap int
-	m   map[string]*list.Element
-	l   *list.List
-}
-
-var l1 = newL1(4096)
-var rdbOnce sync.Once
-var rdb *redis.Client
-
-func newL1(cap int) *l1Cache {
-	return &l1Cache{cap: cap, m: map[string]*list.Element{}, l: list.New()}
-}
-
-func (c *l1Cache) get(k string) (any, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.m[k]; ok {
-		c.l.MoveToFront(e)
-		return e.Value.(entry).v, true
-	}
-	return nil, false
-}
-
-func (c *l1Cache) put(k string, v any) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.m[k]; ok {
-		e.Value = entry{k, v}
-		c.l.MoveToFront(e)
-		return
-	}
-	c.m[k] = c.l.PushFront(entry{k, v})
-	for c.l.Len() > c.cap {
-		e := c.l.Back()
-		c.l.Remove(e)
-		delete(c.m, e.Value.(entry).k)
-	}
-}
-
-func (c *l1Cache) remove(k string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.m[k]; ok {
-		c.l.Remove(e)
-		delete(c.m, k)
-	}
-}
-
+// keyFor builds the canonical cache key from a name and variadic parts, exactly
+// as the previous implementation did ("name:p1:p2:...").
 func keyFor(name string, parts []any) string {
 	k := name
 	for _, p := range parts {
@@ -77,84 +44,85 @@ func keyFor(name string, parts []any) string {
 	return k
 }
 
-func getClient() *redis.Client {
-	rdbOnce.Do(func() {
-		host := os.Getenv("REDIS_HOST")
-		if host == "" {
-			host = "redis-cluster"
+// getService returns the singleton CacheService, lazily constructing it from the
+// environment on first use. When no Redis client has been injected (via
+// SetClientForTest), a real client is built from REDIS_HOST/REDIS_PORT.
+func getService() *commoncache.CacheService {
+	mu.Lock()
+	defer mu.Unlock()
+	if svc != nil {
+		return svc
+	}
+	once.Do(func() {
+		if rdb == nil {
+			rdb = newClientFromEnv()
 		}
-		port := os.Getenv("REDIS_PORT")
-		if port == "" {
-			port = "6379"
-		}
-		rdb = redis.NewClient(&redis.Options{Addr: host + ":" + port})
 	})
-	return rdb
+	svc = commoncache.NewCacheService(rdb, 0)
+	return svc
 }
 
-// SetClientForTest injects a mock redis client for testing.
+// newClientFromEnv builds a Redis client from REDIS_HOST/REDIS_PORT, defaulting
+// to redis-cluster:6379.
+func newClientFromEnv() *redis.Client {
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		host = "redis-cluster"
+	}
+	port := os.Getenv("REDIS_PORT")
+	if port == "" {
+		port = "6379"
+	}
+	return redis.NewClient(&redis.Options{Addr: host + ":" + port})
+}
+
+// SetClientForTest injects a mock Redis client and resets the singleton
+// CacheService so the next call to GetOrLoad/Evict rebuilds it. Pass nil to
+// force offline (L1-only) mode. This preserves the prior test-only API.
 func SetClientForTest(c *redis.Client) {
+	mu.Lock()
+	defer mu.Unlock()
+	if svc != nil {
+		svc.Close()
+		svc = nil
+	}
 	rdb = c
-	rdbOnce = sync.Once{} // reset so getClient doesn't override
+	once = sync.Once{}
 }
 
-// GetRedisClientForHub returns a Redis client suitable for the Hub to use
-// for Pub/Sub. D-149: the Hub needs its own client reference (not the
-// singleton) so it can be nil-checked independently. This returns the same
-// underlying client as getClient() if one has been initialized, or nil if
-// Redis is not available (dev/offline mode).
+// GetRedisClientForHub returns the Redis client backing the cache singleton, or
+// nil when Redis is unavailable (dev/offline mode). The Hub reuses this client
+// for its own Pub/Sub rather than allocating a second one (D-149).
 func GetRedisClientForHub() *redis.Client {
-	return getClient()
+	// Ensure the singleton (and its client) is initialized.
+	s := getService()
+	return s.RedisClient()
 }
 
-// GetOrLoad: L1 LRU → L2 Redis → loader. cacheEmpty controls nil sentinel caching.
-func GetOrLoad(ctx context.Context, name string, parts []any, loader func(context.Context) (any, error), cacheEmpty bool) (any, error) {
-	k := keyFor(name, parts)
-	if v, ok := l1.get(k); ok {
-		if v == EmptySentinel {
-			return nil, nil
-		}
-		return v, nil
+// GetOrLoad is the ws-gateway cache facade: L1 LRU → L2 Redis → loader.
+// parts are joined into the cache key as "name:p1:p2:...". cacheEmpty controls
+// nil-sentinel caching. The shared CacheService handles TTL, L2, and Pub/Sub.
+func GetOrLoad(
+	ctx context.Context,
+	name string,
+	parts []any,
+	loader func(context.Context) (any, error),
+	cacheEmpty bool,
+) (any, error) {
+	key := keyFor(name, parts)
+	ttl, _ := strconv.ParseInt(getEnvDefault("CACHE_L2_TTL", "300"), 10, 64)
+	if ttl <= 0 {
+		ttl = 300
 	}
-	c := getClient()
-	if c != nil {
-		if raw, err := c.Get(ctx, k).Result(); err == nil {
-			if raw == EmptySentinel {
-				l1.put(k, EmptySentinel)
-				return nil, nil
-			}
-			l1.put(k, raw)
-			return raw, nil
-		}
-	}
-	v, err := loader(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if v != nil {
-		l1.put(k, v)
-		if c != nil {
-			ttl, _ := strconv.Atoi(getEnvDefault("CACHE_L2_TTL", "300"))
-			c.Set(ctx, k, v, time.Duration(ttl)*time.Second)
-		}
-	}
-	if v == nil && cacheEmpty {
-		if c != nil {
-			c.Set(ctx, k, EmptySentinel, 30*time.Second)
-		}
-		l1.put(k, EmptySentinel)
-	}
-	return v, nil
+	return getService().GetOrLoad(ctx, name, key, loader, ttl, cacheEmpty)
 }
 
-// Evict removes from L1 + L2 + broadcasts invalidation.
+// Evict removes name:parts... from L1+L2 and broadcasts an invalidation on
+// "ep:cache:invalidate" so peer pods clear their L1. This is the correctness
+// fix: the old implementation did not broadcast.
 func Evict(ctx context.Context, name string, parts ...any) {
-	k := keyFor(name, parts)
-	c := getClient()
-	if c != nil {
-		c.Del(ctx, k)
-	}
-	l1.remove(k)
+	key := keyFor(name, parts)
+	getService().Evict(ctx, name, key)
 }
 
 func getEnvDefault(k, d string) string {

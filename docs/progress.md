@@ -1,6 +1,6 @@
 # 教育平台项目群 —— 总进度看板 (热区)
 
-> 最后更新: 2026-08-12 | 维护: ZCode(首席架构师) | 同步: decisions.jsonl (181条)
+> 最后更新: 2026-08-12 | 维护: ZCode(首席架构师) | 同步: decisions.jsonl (196条)
 > 📌 本文件仅保留热区(当前状态 + 铁律 + 决策登记簿)。历史执行详情见冷区归档:
 >    `docs/archive/progress-history.md` (按需 Grep 检索, 不全量加载)
 
@@ -237,6 +237,8 @@
 | 6 | D-032 | SCA+Dubbo技术栈锁定,禁Spring Cloud Netflix | ✅ 已锁定 |
 | 7 | D-033 | 审计/调研结果缓存Redis+本地兜底 | ✅ 执行中 |
 | 8 | D-048 | 所有技术决策必须≥3方案对比分析, CI静态扫描 | ✅ 执行中 |
+| 9 | D-140 | 运行验证真相律: 制品≠运行, mock≤60%, kubectl证据强制 | ✅ 执行中 |
+| 10 | D-196 | 设计-实现可追溯性强制律: SDD↔代码双向追溯+简化实现技术债登记+共享SDK强制使用+设计合规性审计 | ✅ 立法 |
 ---
 
 ## 5. 决策登记簿 (D-027 ~ D-112)
@@ -373,7 +375,7 @@
 | D-154 | 安全P1/P2修复: P1-4 ActuatorSecurityAutoConfiguration(ep-web-common, /actuator/**鉴权,14服务spring.security.user) + P1-5 jwt_auth.py decode-only移除(PyJWT唯一后端,RuntimeError) + P1-6 ws-gateway fail-closed(APP_ENV=production log.Fatalf+failclosed.go纯函数6测试) + P2-7 CORS显式headers(8 Java+1 Python) + P2-9 Bean Validation(GlobalExceptionHandler 2 handler+9 Controller @Valid+12 DTO约束) + P2-10 Resilience4j RateLimiter(RateLimitAutoConfiguration+ProxyController @RateLimiter+14服务yml); 14服务pom补齐security+validation+resilience4j+ep-web-common(provided scope不传递) | 2026-08-12 |
 | D-155 | CI/CD管线路径修复: 7个workflow文件(java-test/go-test/python-test/build-and-push/coverage-gate/mutation-test/deploy-gitops)路径全量更新到D-148新目录名 + grep验证零旧路径残留 + YAML lint 11文件语法正确 | 2026-08-12 |
 
-> 完整决策记录: `~/.zcode/sessions/education-platform/decisions.jsonl` (181条)
+> 完整决策记录: `~/.zcode/sessions/education-platform/decisions.jsonl` (196条)
 > 测试基线: 14 Java模块编译全PASS + 14 Java模块测试全PASS(excl预存ArchUnit) + Go build+test PASS + Python 134p/26skip PASS + 前端11tasks typecheck PASS (D-155全量验证)
 > **安全修复(D-154): P1全修复(3/3) + P2全修复(3/3), 安全维度6.5→8.0+; 14服务pom补齐provided scope依赖; order-platform ArchUnit修复(SagaStateMachineConfig移至config包)**
 > **CI/CD修复(D-155): 7个workflow文件路径全量同步D-148新目录名, CI可在真实GitHub Actions运行**
@@ -449,3 +451,83 @@
 - Iron Law 9: ✅ 358 tests真实通过, 无stub
 
 - 决策总数: 170 → 177
+
+## D-178~D-196: 全量未落实架构决策落实 + 多级缓存统一 + 铁律10立法 (2026-08-12)
+
+### 背景
+用户要求"检查之前所有的分析、架构设计、详细设计等资料，看看哪些是没有落实的，要做到好的架构决策一一落实，包括下面的都去落实，不要跳过"。
+首轮(D-178~D-181)落实4项HIGH/MEDIUM后，用户要求将剩余14项全部落实（Firecracker/Yjs/SRS/GNN/ONNX/Trino/Boardgame Phase2+3/CockroachDB/Pulsar 4.0/多级缓存统一）。
+同时发现各服务多级缓存实现不一致(仅1/9 Java服务接入ep-cache, Go缺Pub/Sub广播, Python无L1)，用户要求全量统一。
+最后用户追问"为什么好好的设计方案在实现上差距这么大"，产出铁律10(设计-实现可追溯性强制律)。
+
+### 执行 (5路并行Agent + 收尾修复)
+
+| 决策 | 描述 | 测试 | 状态 |
+|------|------|------|------|
+| D-182 | Java 8服务接入ep-cache SDK: core-business+grading+boardgame+senior-care+order+payment+portal-bff+knowledge, getOrLoad/evict包裹热点查询 | 各服务测试全绿 | ✅ |
+| D-183 | Go ep-common-go/cache统一模块: L1(LRU+TTL)+L2(Redis)+Pub/Sub广播; ws-gateway Evict补广播(修复正确性bug); 11 tests | 11t | ✅ |
+| D-184 | Python ep-common-python/cache统一模块: L1(TTL dict)+L2(redis-py)+Pub/Sub thread; ai-platform semantic_cache接入; 56 tests | 56t | ✅ |
+| D-185 | Firecracker沙箱(Iron Law 8 Option C): ProcessSandboxExecutor(ProcessBuilder+CPU/内存/超时限制)+SandboxWarmPool+Judge0Queue(Redis BRPOP)+Judge0Worker; K8s CRD | sandbox tests | ✅ |
+| D-186 | Yjs+WebContainer IDE: IdeSession聚合根(7态状态机)+YjsDocument CRDT+YjsSyncHandler(y-websocket协议)+YjsSnapshotStore+ws-gateway yjs/handler.go+room.go | ide tests | ✅ |
+| D-187 | SRS+LiveKit直播: live-go新Go服务(srs/proxy.go+origin.go+livekit/client.go+sfu.go+danmaku/pipeline.go 100ms batch)+LiveRoom聚合(6态状态机)+K8s YAML | srs+danmaku tests | ✅ |
+| D-188 | GNN字段级血缘: Druid SQL AST Parser(替代正则)+GraphSAGE 2-layer纯Java推理(Xavier初始化+mean-aggregator+confidence>0.8 auto-add)+LineageController新增gnn-infer端点 | lineage tests | ✅ |
+| D-189 | AIOps ONNX Runtime: ModelManager(EP_DEV_ONLY guard)+CapacityForecaster LSTM+AnomalyDetector IsolationForest+ScheduleOptimizer GBT; 纯Java降级路径 | 357t(data-platform) | ✅ |
+| D-190 | Text-to-SQL Trino: TrinoExecutor(JDBC 30s超时)+SqlValidator(Antlr4 Trino方言)+IcebergAuditWriter+Redis令牌桶限流(10q/min/user) | nlquery tests | ✅ |
+| D-191 | Boardgame Phase 2: 7态状态机(CREATED→WAITING→READY→PLAYING→FINISHING→FINISHED+ABORTED)+ELO(K=32)+MatchmakingService(Redis ZSet±200)+GoRuleEngine(19x19提子/劫争/数子) | boardgame 198t | ✅ |
+| D-192 | Boardgame Phase 3: Tournament(瑞士制SwissPairing同分回避+颜色平衡)+BoardCastService+FriendService+GameStatsService | tournament tests | ✅ |
+| D-193 | AI棋力引擎sidecar: StockfishSidecar(gRPC)+AiOpponentService(ELO等级→depth/时间限制)+K8s sidecar YAML | ai tests | ✅ |
+| D-194 | CockroachDB PoC: CrdbCluster CRD(3节点2区域)+CockroachDbPocService(REGIONAL BY ROW/AUTO_RANDOM/Changefeeds)+DualDbConfig(DataSource路由)+PoC脚本+ADR | poc tests | ✅ |
+| D-195 | Pulsar 4.0升级准备: PulsarVersionAdapter(3.x/4.x API差异封装)+升级就绪评估ADR+检查脚本+所有pom统一${pulsar.version}属性 | — | ✅ |
+| D-196 | **铁律10立法**: 设计-实现可追溯性强制律(SDD↔代码双向追溯+简化实现技术债ADR登记+共享SDK强制使用+设计合规性审计+DoD扩展) | CLAUDE.md已写入 | ✅ |
+
+### 多级缓存一致性审计 → 三语言统一
+
+| 维度 | 审计前 | 审计后 |
+|------|--------|--------|
+| Java ep-cache接入 | 1/9服务(portal-bff) | **8/8服务全接入** (D-182) |
+| Go cache | 手写LRU+Redis, **Evict缺Pub/Sub广播(正确性bug)** | **ep-common-go/cache统一**, Evict广播修复 (D-183) |
+| Python cache | 无L1, ad-hoc Redis模式 | **ep-common-python/cache统一**, L1+L2+Pub/Sub (D-184) |
+| 跨语言互通 | ❌ 不互通 | ✅ 同一channel `ep:cache:invalidate` + 同一EMPTY_SENTINEL |
+| 三语言API一致 | ❌ 各自实现 | ✅ getOrLoad/put/evict 同名同语义 |
+
+### 铁律10: 设计-实现可追溯性强制律 (D-196)
+
+**根因分析:** 设计方案与实现差距大的5个原因:
+1. SDD设计组件无代码层强制落实机制(设计写完就忘)
+2. 简化实现未登记技术债(无ADR, 无追踪)
+3. 共享SDK存在但服务自行手写(如缓存)
+4. 无设计合规性审计(上线前不查SDD覆盖率)
+5. DoD(完成定义)不含"设计文档标注实现状态"
+
+**铁律10五条款:**
+1. **10.1 双向追溯**: 每个 SDD 章节/组件必须标注实现状态(✅/⚠️/❌+ADR链接); 每个核心实现类必须注释引用SDD章节号
+2. **10.2 技术债登记**: 任何简化/stub实现必须创建ADR记录决策+原因+复活条件, 禁止无声简化
+3. **10.3 共享SDK强制使用**: 存在共享SDK(ep-cache/ep-web-common/ep-common-go/ep-common-python)时, 禁止手写等价功能
+4. **10.4 设计合规性审计**: 每个迭代结束前, 运行SDD↔代码交叉比对, 输出未落实清单
+5. **10.5 DoD扩展**: "完成"定义新增: SDD实现状态标注更新 + 无未登记简化 + 共享SDK已接入
+
+### 验证结果 (Iron Law 9 — 真实测试通过)
+
+| 模块 | 语言 | 测试数 | 结果 |
+|------|------|--------|------|
+| core-business | Java | 69 | ✅ ALL PASS |
+| grading-service | Java | 217 | ✅ ALL PASS (4 skipped) |
+| data-platform | Java | 357 | ✅ ALL PASS |
+| boardgame-service | Java | 198 | ✅ ALL PASS |
+| senior-care | Java | 66 | ✅ ALL PASS |
+| order-platform | Java | 37 | ✅ ALL PASS |
+| payment-platform | Java | 40 | ✅ ALL PASS |
+| ws-gateway | Go | all | ✅ ALL PASS (cache+hub+jwt+ws+yjs) |
+| live-go | Go | all | ✅ ALL PASS (srs+danmaku) |
+| ep-common-go | Go | all | ✅ ALL PASS (cache+health+httpresp+jwt) |
+| ai-platform | Python | 185 | ✅ ALL PASS (26 skipped) |
+| ep-common-python | Python | 56 | ✅ ALL PASS |
+| **总计** | **3语言** | **~1225** | **✅ ALL PASS** |
+
+### 修复明细
+- **order-platform**: pom.xml补spring-boot-starter-data-redis(ep-cache CacheService构造器引用RedisTemplate, Mockito需classpath可见) + OrderServiceImplTest补`import static Mockito.lenient`
+- **core-business**: RepositoryTestSupport补EmptyObjectProvider<CacheService> + ArchitectureTest 4条规则修复(ArchUnit 1.3.0 API: haveSimpleNameNotEndingWith)
+- **grading-service**: PlagiarismCheckFacade抽象解耦homework↔grading上下文 + ArchUnit规则修复(全限定包名匹配)
+- **ai-platform**: pyproject.toml路径修复(ep-python-common→ep-common-python, D-150命名重构遗留)
+
+- 决策总数: 177 → **196**

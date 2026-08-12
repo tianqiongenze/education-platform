@@ -33,6 +33,8 @@ dubbo:
     address: N/A
 
 ep:
+  cache:
+    enabled: true
   pulsar:
     enabled: false
     topic:

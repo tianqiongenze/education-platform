@@ -120,3 +120,63 @@ CI 流水线扫描以下反模式，命中即 **降级标注 + 警告**（首次
 - architecture-scorecard.md 部署运维维度满分子项无 kubectl 证据 → 该子项封顶 60%
 - production-readiness-report.md 上线结论与 go-live-checklist 勾选数不一致 → CRITICAL
 - 同一项目存在两个不同上线结论 → CRITICAL
+
+### 铁律 10 — 设计-实现可追溯性强制律 (D-196，最高优先级与铁律9并列)
+> **每一份 SDD/SAD/ADR 设计章节，必须在代码中有可追溯的实现文件路径与之对应。设计文档中的每一处"简化实现/Phase 2/PROPOSED"必须登记为带截止日期的技术债 ADR。EP_DEV_ONLY 守卫必须关联一个"生产就绪"升级工单。已存在共享 SDK 时，禁止手写替代实现。功能"完成"的定义必须包含"设计章节对应代码已实现并通过测试"，而不仅仅是"有测试通过"。**
+
+**根本动机**：Iron Law 1-9 保证了方向正确、过程规范、文档齐全、运行真实，但没有任何一条保证"设计文档中的每个决策都被代码兑现"。实践中，设计文档写了 GNN 字段血缘、ONNX Runtime 推理、Trino JDBC 执行，但代码里是正则解析器、EWMA 回归、5 条规则决策树——"简化版"成为永久事实标准，无人跟踪何时升级。共享 SDK（ep-cache）存在 7 个月，9 个服务中只有 1 个使用，其余手写 LRU+Redis 且有正确性 bug。5/7 SDD 没有"实现状态"章节，设计文档写完即冻结，失去对实现的约束力。铁律 10 堵住这个裂缝。
+
+#### 10.1 设计-代码双向追溯
+```
+SDD/SAD/ADR 每个设计章节
+  ↓ 必须标注
+实现文件路径 (com.ep.xxx.YyyImpl.java / services/zzz/handler.go)
+  ↓ 必须标注
+对应测试文件 (YyyImplTest.java)
+  ↓ 必须标注
+设计章节编号 (SDD §3.2 / ADR-D07)
+```
+- 新建 SDD/SAD 时，每个设计章节末尾必须有 `> 实现文件: <路径>` 标注
+- 已有 SDD/SAD 必须补充"实现状态"章节（5/7 SDD 当前缺失，限期补齐）
+- 代码文件类注释必须引用设计章节编号：`// SDD §3.2 LiveRoom 状态机`
+
+#### 10.2 简化实现技术债登记
+- 设计文档中标注"简化实现/PARTIAL/Phase 2"的每一项，**必须**在 `docs/adr/` 中创建一个技术债 ADR：
+  - ADR 标题：`D-xxx-<feature>-tech-debt.md`
+  - 必须包含：当前简化实现描述、完整设计目标、差距分析、升级触发条件、目标截止日期
+- 禁止"简化"变为永久——技术债 ADR 必须有具体的升级截止日期（最长 6 个月）
+- `EP_DEV_ONLY` 守卫的每个使用点，必须关联一个 GitHub Issue 或 ADR，描述"何时移除此守卫"
+- CI 静态扫描：`EP_DEV_ONLY` 出现在 `src/main/` 而非 `src/test/` 中 → 警告 + 要求关联 ADR 编号
+
+#### 10.3 共享 SDK 强制使用
+- 当项目中已存在共享 SDK（ep-cache, ep-rw-java, ep-disruptor, ep-go-common, ep-python-common）时：
+  - **禁止**手写替代实现（手写 LRU + Redis、手写限流器、手写读写分离逻辑）
+  - 新建服务必须在首个 PR 中接入相关共享 SDK
+  - 已有服务有 1 个迭代周期的时间迁移到共享 SDK
+  - 迁移完成前，必须在 PR 中标注技术债 ADR 编号
+- CI 静态扫描：
+  - `container/list` + `redis.Client` 同文件出现（Go 手写 LRU） → 警告：应使用 ep-common-go/cache
+  - `ConcurrentHashMap` 字段声明出现在 `*ServiceImpl` 中且项目有 ep-cache 依赖 → 警告：应使用 CacheService
+  - `functools.lru_cache` 出现在 `services/` Python 文件中 → 警告：应使用 ep-python-common cache
+
+#### 10.4 设计合规性审计（每个版本必须执行）
+- 每个版本发布前，必须执行设计合规性审计：
+  1. 遍历所有 SDD/SAD/ADR 设计章节
+  2. 对每个章节，验证"实现文件路径"指向的代码是否存在
+  3. 对每个 PARTIAL/PROPOSED 标注，验证技术债 ADR 是否存在且未过期
+  4. 对每个 EP_DEV_ONLY，验证关联的升级工单/ADR 是否存在
+  5. 输出 `docs/audit/design-compliance-report.md`，列出所有不合规项
+- 审计结果与 architecture-scorecard.md 挂钩：不合规项 > 5 → 架构评分降一级
+
+#### 10.5 完成定义扩展（补充铁律 9.1）
+```
+功能完成 = 铁律 9.1 全部条件
+         + 设计章节对应代码已实现（非简化版）
+         + 简化实现已登记技术债 ADR 且有截止日期
+         + 共享 SDK 已接入（如适用）
+         + SDD/SAD "实现状态"章节已更新
+
+  代码写了 + 测试通过 ──✕──→ 不算完成（可能只实现了简化版）
+  代码 + 测试 + 设计章节标注 ──✕──→ 不算完成（可能缺技术债 ADR）
+  代码 + 测试 + 设计标注 + 技术债 ADR + SDK接入 + 实现状态更新 ──✓──→ 完成
+```

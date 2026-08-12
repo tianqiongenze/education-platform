@@ -124,6 +124,8 @@ springdoc:
 # ai-platform integration: subjective-question AI grading via Dubbo.
 # Disabled by default so dev/test never depends on sp04 being up.
 ep:
+  cache:
+    enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)
   ai-grading:
     enabled: ${AI_GRADING_ENABLED:false}
     timeout-ms: 30000

@@ -119,3 +119,5 @@ ep:
     service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
     topic:
       domain-events: persistent://public/default/core-business-domain-events
+  cache:
+    enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)

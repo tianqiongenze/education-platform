@@ -6,6 +6,7 @@ import com.ep.order.api.OrderStatus;
 import com.ep.order.model.OrderModel;
 import com.ep.order.infrastructure.PulsarEventPublisher;
 import com.ep.order.repository.OrderRepository;
+import com.ep.cache.CacheService;
 import com.ep.payment.api.PaymentChannel;
 import com.ep.payment.api.PaymentRequest;
 import com.ep.payment.api.PaymentResult;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,9 +37,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,6 +56,8 @@ import static org.mockito.Mockito.when;
  * The {@link PaymentService} Dubbo reference is field-injected by the container
  * in production; here we set it via {@link ReflectionTestUtils} so the test
  * does not need a Spring context.
+ * <p>
+ * D-182: also verifies {@link CacheService} getOrLoad/evict integration.
  */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
@@ -64,6 +70,8 @@ class OrderServiceImplTest {
     private PaymentService paymentService;
     @Mock
     private StateMachineEngine sagaEngine;
+
+    private CacheService cacheService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -84,10 +92,29 @@ class OrderServiceImplTest {
         return null;
     }
 
+    /**
+     * D-182: Create a CacheService mock that simulates a cache miss by invoking
+     * the supplied loader. This keeps existing logic intact while allowing
+     * cache-hit tests to override the stub.
+     */
+    private static CacheService cacheMiss() {
+        CacheService cs = org.mockito.Mockito.mock(CacheService.class);
+        // lenient: not every test exercises getOrLoad (create/pay/refund only evict).
+        lenient().when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        return cs;
+    }
+
     @BeforeEach
     void wireDubboReference() {
+        // D-182: inject CacheService mock (cache-miss default) before each test.
+        cacheService = cacheMiss();
         // @DubboReference field - inject the mock directly.
         ReflectionTestUtils.setField(orderService, "paymentService", paymentService);
+        ReflectionTestUtils.setField(orderService, "cacheService", cacheService);
     }
 
     // ---------------- createOrder ----------------
@@ -109,6 +136,9 @@ class OrderServiceImplTest {
         assertEquals("COURSE", result.productType());
         assertEquals("default", result.tenantId());
         verify(orderRepository, times(1)).save(any(OrderModel.class));
+        // D-182: create should evict the order cache entries.
+        verify(cacheService).evict("order:detail", "7");
+        verify(cacheService).evict("order:by-user-course", "100:200");
     }
 
     @Test
@@ -119,6 +149,7 @@ class OrderServiceImplTest {
                 () -> orderService.createOrder(cmd));
         assertTrue(ex.getMessage().contains("userId"));
         verify(orderRepository, never()).save(any());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -132,6 +163,7 @@ class OrderServiceImplTest {
                 () -> orderService.createOrder(cmd));
         assertTrue(ex.getMessage().contains("Duplicate idempotency key"));
         verify(orderRepository, never()).save(any());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -178,6 +210,9 @@ class OrderServiceImplTest {
         assertEquals(new BigDecimal("99.00"), req.amount());
         // event published post-commit
         verify(eventPublisher, times(1)).publish(any());
+        // D-182: pay should evict the order cache entries.
+        verify(cacheService).evict("order:detail", "5");
+        verify(cacheService).evict("order:by-user-course", "100:200");
     }
 
     @Test
@@ -188,6 +223,7 @@ class OrderServiceImplTest {
                 () -> orderService.payOrder(404L, "WECHAT"));
         assertTrue(ex.getMessage().contains("Order not found"));
         verify(paymentService, never()).createPayment(any());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     @Test
@@ -201,6 +237,7 @@ class OrderServiceImplTest {
                 () -> orderService.payOrder(6L, "ALIPAY"));
         assertTrue(ex.getMessage().contains("PENDING"));
         verify(paymentService, never()).createPayment(any());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     // ---------------- refundOrder ----------------
@@ -229,6 +266,9 @@ class OrderServiceImplTest {
         verify(paymentService, times(1)).refund(eq("8"), eq(new BigDecimal("50.00")), eq("user request"));
         // event published
         verify(eventPublisher, times(1)).publish(any());
+        // D-182: refund should evict the order cache entries.
+        verify(cacheService).evict("order:detail", "8");
+        verify(cacheService).evict("order:by-user-course", "100:200");
     }
 
     @Test
@@ -242,6 +282,7 @@ class OrderServiceImplTest {
                 () -> orderService.refundOrder(9L, "mistake"));
         assertTrue(ex.getMessage().contains("PAID"));
         verify(paymentService, never()).refund(anyString(), any(BigDecimal.class), anyString());
+        verify(cacheService, never()).evict(anyString(), anyString());
     }
 
     // ---------------- getOrderById ----------------
@@ -266,6 +307,8 @@ class OrderServiceImplTest {
         assertEquals(100L, result.userId());
         assertEquals(new BigDecimal("10.00"), result.amount());
         assertEquals(OrderStatus.PAID.getCode(), result.status());
+        // D-182: getOrderById goes through cache with cacheEmpty=true (TTL 300s).
+        verify(cacheService).getOrLoad(eq("order:detail"), eq("11"), any(Supplier.class), eq(300L), eq(true));
     }
 
     @Test
@@ -275,6 +318,25 @@ class OrderServiceImplTest {
         OrderDto result = orderService.getOrderById(99L);
 
         assertNull(result);
+        verify(cacheService).getOrLoad(eq("order:detail"), eq("99"), any(Supplier.class), eq(300L), eq(true));
+    }
+
+    // D-182: cache hit skips the repository lookup.
+    @Test
+    void getOrderById_cacheHit_skipsRepository() {
+        // Simulate a cache hit: getOrLoad returns the order without invoking the loader.
+        OrderDto cached = new OrderDto(11L, 100L, 200L, "default", "COURSE",
+                new BigDecimal("10.00"), OrderStatus.PAID.getCode(), null,
+                "idem-11", 1L, 2L);
+        when(cacheService.getOrLoad(eq("order:detail"), eq("11"), any(Supplier.class), eq(300L), eq(true)))
+                .thenReturn(cached);
+
+        OrderDto result = orderService.getOrderById(11L);
+
+        assertNotNull(result);
+        assertEquals(11L, result.orderId());
+        // Repository must NOT be called on a cache hit.
+        verify(orderRepository, never()).findById(anyLong());
     }
 
     // ---------------- listUserOrders ----------------

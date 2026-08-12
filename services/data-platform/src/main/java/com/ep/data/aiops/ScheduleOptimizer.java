@@ -1,12 +1,37 @@
 package com.ep.data.aiops;
 
+import java.nio.FloatBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import ai.onnxruntime.OnnxTensor;
+import ai.onnxruntime.OrtEnvironment;
+import ai.onnxruntime.OrtException;
+import ai.onnxruntime.OrtSession;
 
 /**
  * Flink job scheduler optimizer driven by a hand-written decision tree
- * (§12.3.3).
+ * (§12.3.3), with an optional ONNX Gradient-Boosted Trees enhancement
+ * path (D-189).
  *
- * <p>Rules (evaluated in priority order):
+ * <p><b>Two inference paths:</b>
+ * <ul>
+ *   <li><b>ONNX GBT (D-189):</b> When an ONNX model is available via
+ *       {@link ModelManager}, the job profile features are fed to a
+ *       pre-trained GBT model that predicts the optimal parallelism, cores,
+ *       and memory. The GBT captures non-linear interactions that the rule
+ *       tree cannot.</li>
+ *   <li><b>Pure-Java rules (fallback):</b> The original hand-written
+ *       decision tree. This is the default in dev/CI and is always
+ *       available.</li>
+ * </ul>
+ *
+ * <p>Rules (evaluated in priority order, pure-Java fallback):
  * <ol>
  *   <li>{@code backpressureRatio > 0.5} → increase parallelism by 50%,
  *       estimated cost change -10% (cost increase, SLA improvement).</li>
@@ -25,8 +50,33 @@ import org.springframework.stereotype.Component;
 @Component
 public final class ScheduleOptimizer {
 
+    private static final Logger log = LoggerFactory.getLogger(ScheduleOptimizer.class);
+
+    /** Number of features fed to the GBT model. */
+    static final int GBT_FEATURE_DIM = 6;
+
+    private final ObjectProvider<ModelManager> modelManagerProvider;
+
+    /** Default constructor — pure-Java rules (dev/CI mode). */
+    public ScheduleOptimizer() {
+        this(null);
+    }
+
+    /**
+     * Create an optimizer with a model manager provider (D-189 ONNX path).
+     *
+     * @param modelManagerProvider Spring {@link ObjectProvider} for
+     *        {@link ModelManager}; may be null in tests
+     */
+    public ScheduleOptimizer(ObjectProvider<ModelManager> modelManagerProvider) {
+        this.modelManagerProvider = modelManagerProvider;
+    }
+
     /**
      * Produce an optimization suggestion for a single Flink job profile.
+     *
+     * <p>Attempts the ONNX GBT path first; falls back to the pure-Java
+     * rule tree when the model is unavailable.
      *
      * @param profile job profile (must not be null)
      * @return an {@link OptimizationSuggestion}
@@ -37,6 +87,114 @@ public final class ScheduleOptimizer {
             return new OptimizationSuggestion("unknown", "n/a", "n/a", 0.0, "No profile provided");
         }
 
+        // Try ONNX GBT path.
+        OptimizationSuggestion gbtResult = optimizeWithGbt(profile, current);
+        if (gbtResult != null) {
+            return gbtResult;
+        }
+
+        // Fall back to pure-Java rules.
+        return optimizeWithRules(profile, current);
+    }
+
+    /**
+     * ONNX GBT inference path (D-189).
+     *
+     * <p>Packs the profile features into a {@code [1][6]} float tensor
+     * (backpressure, parallelism, tmCores, tmMemoryMb, inputRecords/1M,
+     * durationMs/1000), runs the GBT model, and maps the output to an
+     * {@link OptimizationSuggestion}. Returns {@code null} when the model
+     * is unavailable or inference fails.
+     *
+     * @param profile job profile
+     * @param current current config string
+     * @return suggestion, or {@code null} to fall back
+     */
+    OptimizationSuggestion optimizeWithGbt(FlinkJobProfile profile, String current) {
+        ModelManager manager = resolveModelManager();
+        if (manager == null || !manager.isAvailable(ModelManager.MODEL_SCHEDULE_GBT)) {
+            return null;
+        }
+        OrtSession session = manager.getSession(ModelManager.MODEL_SCHEDULE_GBT);
+        if (session == null) {
+            return null;
+        }
+        try {
+            float[] features = prepareGbtFeatures(profile);
+            long[] shape = {1, GBT_FEATURE_DIM};
+            FloatBuffer buf = FloatBuffer.wrap(features);
+            OrtEnvironment env = OrtEnvironment.getEnvironment();
+            try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, buf, shape)) {
+                Map<String, OnnxTensor> inputs = new HashMap<>();
+                String inputName = session.getInputNames().iterator().next();
+                inputs.put(inputName, inputTensor);
+                try (OrtSession.Result result = session.run(inputs)) {
+                    return extractGbtOutput(result, profile, current);
+                }
+            }
+        } catch (OrtException e) {
+            log.warn("[ScheduleOptimizer] ONNX GBT inference failed, falling back to rules: {}", e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.warn("[ScheduleOptimizer] ONNX GBT path error, falling back to rules: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Prepare the 6-feature vector for the GBT model. */
+    private float[] prepareGbtFeatures(FlinkJobProfile profile) {
+        float[] f = new float[GBT_FEATURE_DIM];
+        f[0] = (float) profile.backpressureRatio();
+        f[1] = profile.parallelism();
+        f[2] = profile.tmCores();
+        f[3] = profile.tmMemoryMb();
+        f[4] = (float) (profile.inputRecords() / 1_000_000.0);
+        f[5] = (float) (profile.durationMs() / 1000.0);
+        return f;
+    }
+
+    /** Extract GBT output and build an OptimizationSuggestion. */
+    private OptimizationSuggestion extractGbtOutput(OrtSession.Result result,
+                                                     FlinkJobProfile profile,
+                                                     String current) throws OrtException {
+        Object value = result.get(0).getValue();
+        // GBT may output: [newParallelism, newTmCores, newTmMemoryMb, costSavingPct]
+        // or a classification label. We handle the float[] case.
+        float[] preds = null;
+        if (value instanceof float[] farr) {
+            preds = farr;
+        } else if (value instanceof long[] larr) {
+            preds = new float[larr.length];
+            for (int i = 0; i < larr.length; i++) {
+                preds[i] = (float) larr[i];
+            }
+        } else if (value instanceof double[] darr) {
+            preds = new float[darr.length];
+            for (int i = 0; i < darr.length; i++) {
+                preds[i] = (float) darr[i];
+            }
+        }
+        if (preds == null || preds.length < 3) {
+            return null;
+        }
+        int newParallelism = Math.max(1, (int) preds[0]);
+        int newTmCores = Math.max(1, (int) preds[1]);
+        int newTmMemoryMb = Math.max(1024, (int) preds[2]);
+        double costSaving = preds.length > 3 ? preds[3] : 0.0;
+        String suggested = describe(newParallelism, newTmCores, newTmMemoryMb);
+        return new OptimizationSuggestion(
+                profile.jobId(),
+                current,
+                suggested,
+                costSaving,
+                "GBT model suggested parallelism=" + newParallelism
+                        + ", tmCores=" + newTmCores + ", tmMemory=" + newTmMemoryMb + "MB");
+    }
+
+    /**
+     * Pure-Java rule-based optimization (the original fallback).
+     */
+    OptimizationSuggestion optimizeWithRules(FlinkJobProfile profile, String current) {
         double backpressure = profile.backpressureRatio();
         long inputRecords = profile.inputRecords();
         long durationMs = profile.durationMs();
@@ -104,6 +262,14 @@ public final class ScheduleOptimizer {
                 current,
                 0.0,
                 "Optimal configuration — no optimization needed");
+    }
+
+    /** Resolve the ModelManager from the ObjectProvider (null if unavailable). */
+    private ModelManager resolveModelManager() {
+        if (modelManagerProvider == null) {
+            return null;
+        }
+        return modelManagerProvider.getIfAvailable();
     }
 
     /** Build a human-readable config string for the current profile. */

@@ -15,6 +15,7 @@ import (
 	"github.com/education-platform/ws-gateway/src/hub"
 	"github.com/education-platform/ws-gateway/src/middleware"
 	"github.com/education-platform/ws-gateway/src/ws"
+	"github.com/education-platform/ws-gateway/src/yjs"
 )
 
 // ws-gateway: WebSocket gateway for education-platform.
@@ -102,6 +103,10 @@ func main() {
 	registry := ws.NewRegistry()
 	wsHandler := ws.NewHandler(registry, h, validator, allowAnonymous)
 
+	// D-186: Yjs collaborative IDE WebSocket handler for /ws/ide/{sessionId}.
+	// Reuses the same JWT validator and allowAnonymous flag as the /ws handler.
+	yjsHandler := yjs.NewHandler(yjs.NewRoomRegistry(), validator, allowAnonymous)
+
 	// D-149: start the Redis Pub/Sub subscribe loop for cross-pod broadcast.
 	subscribeCtx, subscribeCancel := context.WithCancel(context.Background())
 	defer subscribeCancel()
@@ -118,6 +123,11 @@ func main() {
 	// Authorization: Bearer ... header.
 	mux.Handle("/ws", wsHandler)
 
+	// D-186: Yjs collaborative IDE WebSocket endpoint. Clients connect to
+	// /ws/ide/{sessionId}?token=<JWT> and exchange binary y-websocket sync
+	// frames for real-time collaborative editing.
+	mux.Handle("/ws/ide/", yjsHandler)
+
 	// D-118: wrap the entire mux with OTel HTTP middleware so every inbound
 	// request becomes a server span and trace context is propagated to
 	// downstream calls via the W3C traceparent header.
@@ -131,7 +141,7 @@ func main() {
 
 	// Graceful shutdown: flush pending OTel spans before exit.
 	go func() {
-		log.Printf("ws-gateway listening on :%s (ws=/ws, auth=%v)", port, !allowAnonymous)
+		log.Printf("ws-gateway listening on :%s (ws=/ws, ide=/ws/ide/, auth=%v)", port, !allowAnonymous)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}

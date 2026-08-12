@@ -2,6 +2,7 @@ package com.ep.business.user;
 
 import com.ep.business.event.PulsarClientProperties;
 import com.ep.business.event.PulsarEventPublisher;
+import com.ep.cache.CacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -25,6 +26,7 @@ class UserControllerTest {
     private MockMvc mockMvc;
     private final ObjectMapper mapper = new ObjectMapper();
     private UserRepository repository;
+    private CacheService cacheService;
 
     @BeforeEach
     void setUp() {
@@ -36,7 +38,14 @@ class UserControllerTest {
             }
             return u;
         });
-        UserService userService = new UserServiceImpl(repository, encoderProvider(), noopPublisher());
+        cacheService = mock(CacheService.class);
+        // Simulate cache miss — loader is invoked, so the repository is exercised.
+        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    return loader.get();
+                });
+        UserService userService = new UserServiceImpl(repository, encoderProvider(), noopPublisher(), cacheService);
         UserController controller = new UserController(userService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -76,7 +85,7 @@ class UserControllerTest {
     @Test
     void getUserById_endpoint() throws Exception {
         CreateUserCmd cmd = new CreateUserCmd("carol", "13800002222", "carol@ep.com", "pw", "Cara");
-        User created = new UserServiceImpl(repository, encoderProvider(), noopPublisher()).createUser(cmd);
+        User created = new UserServiceImpl(repository, encoderProvider(), noopPublisher(), cacheService).createUser(cmd);
         when(repository.findById(created.getUserId())).thenReturn(Optional.of(created));
 
         mockMvc.perform(get("/api/v1/users/{id}", created.getUserId()))

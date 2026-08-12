@@ -10,6 +10,10 @@ dist/
 *.out
 gateway-go/src/gateway-go
 
+# python
+__pycache__/
+*.pyc
+
 # IDE
 .idea/
 *.iml

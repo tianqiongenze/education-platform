@@ -37,6 +37,8 @@ resources:
   - agent-service.yaml
   - tenant-service.yaml
   - ws-gateway.yaml
+  # D-187: SRS + LiveKit live streaming service
+  - live-go.yaml
   # D-149: 康养养老 + 棋牌教育+对弈 事业群
   - senior-care.yaml
   - boardgame-service.yaml
@@ -61,6 +63,8 @@ resources:
   # D-120 / ADR-INF-02 v2.0: NebulaGraph 分布式图数据库 (重图负载)
   # 依赖 nebula-operator CRD (apps.nebula-graph.io/v1alpha1) 已在集群安装
   - nebulagraph.yaml
+  # D-185: Firecracker microVM SandboxWarmPool CRD (ProcessBuilder backend in MVP)
+  - sandboxwarmpool-crd.yaml
 
 # NamePrefix applied to all resources for namespace collision avoidance
 namePrefix: edu-
@@ -107,4 +111,6 @@ images:
   - name: harbor.edu.internal/education-platform/senior-care
     newTag: 1.0.0
   - name: harbor.edu.internal/education-platform/boardgame-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/live-go
     newTag: 1.0.0

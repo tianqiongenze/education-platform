@@ -7,6 +7,7 @@ import com.ep.boardgame.common.SnowflakeIdGenerator;
 import com.ep.boardgame.event.PulsarEventPublisher;
 import com.ep.boardgame.rule.Move;
 import com.ep.boardgame.rule.XiangqiRuleEngine;
+import com.ep.cache.CacheService;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,23 +20,34 @@ import java.util.List;
  * <p>
  * Uses the XiangqiRuleEngine to validate moves before applying them to the
  * GameMatch aggregate. Events are pulled post-commit and published best-effort.
+ * <p>
+ * D-182: GET-by-id reads are cached via ep-cache SDK (L1 Caffeine + L2 Redis +
+ * Pub/Sub broadcast). Writes evict the affected cache entries.
  */
 @DubboService
 public class GameRoomServiceImpl implements GameRoomService {
 
     private static final Logger log = LoggerFactory.getLogger(GameRoomServiceImpl.class);
 
+    private static final String CACHE_GAME_ROOM = "boardgame:room";
+    private static final String CACHE_GAME_MATCH = "boardgame:match";
+    private static final long ROOM_TTL_SEC = 60;
+    private static final long MATCH_TTL_SEC = 60;
+
     private final GameRoomRepository roomRepo;
     private final GameMatchRepository matchRepo;
     private final PulsarEventPublisher eventPublisher;
     private final XiangqiRuleEngine ruleEngine;
+    private final CacheService cacheService;
 
     public GameRoomServiceImpl(GameRoomRepository roomRepo,
                                GameMatchRepository matchRepo,
-                               PulsarEventPublisher eventPublisher) {
+                               PulsarEventPublisher eventPublisher,
+                               CacheService cacheService) {
         this.roomRepo = roomRepo;
         this.matchRepo = matchRepo;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
         this.ruleEngine = new XiangqiRuleEngine();
     }
 
@@ -55,15 +67,19 @@ public class GameRoomServiceImpl implements GameRoomService {
         room.setCourseId(cmd.getCourseId());
         room.setLessonId(cmd.getLessonId());
         room.setRoomName(cmd.getRoomName());
-        room.setStatus(GameRoom.STATUS_WAITING);
+        room.setStatus(GameRoom.STATUS_CREATED);
         room.setCreatedAt(System.currentTimeMillis());
         room.setUpdatedAt(System.currentTimeMillis());
-        return roomRepo.save(room);
+        room.open(); // CREATED → WAITING
+        GameRoom saved = roomRepo.save(room);
+        cacheService.evict(CACHE_GAME_ROOM, String.valueOf(saved.getRoomId()));
+        return saved;
     }
 
     @Override
     public GameRoom getRoomById(Long roomId) {
-        return roomRepo.findById(roomId).orElse(null);
+        return cacheService.getOrLoad(CACHE_GAME_ROOM, String.valueOf(roomId),
+                () -> roomRepo.findById(roomId).orElse(null), ROOM_TTL_SEC, true);
     }
 
     @Override
@@ -84,7 +100,9 @@ public class GameRoomServiceImpl implements GameRoomService {
         GameRoom room = roomRepo.findById(roomId)
                 .orElseThrow(() -> new IllegalStateException("Room not found: " + roomId));
         room.join(playerId);
-        return roomRepo.save(room);
+        GameRoom saved = roomRepo.save(room);
+        cacheService.evict(CACHE_GAME_ROOM, String.valueOf(roomId));
+        return saved;
     }
 
     @Override
@@ -94,7 +112,9 @@ public class GameRoomServiceImpl implements GameRoomService {
         GameRoom room = roomRepo.findById(roomId)
                 .orElseThrow(() -> new IllegalStateException("Room not found: " + roomId));
         room.leave(playerId);
-        return roomRepo.save(room);
+        GameRoom saved = roomRepo.save(room);
+        cacheService.evict(CACHE_GAME_ROOM, String.valueOf(roomId));
+        return saved;
     }
 
     @Override
@@ -107,6 +127,7 @@ public class GameRoomServiceImpl implements GameRoomService {
         Long matchId = SnowflakeIdGenerator.getInstance().nextId();
         room.start(matchId);
         roomRepo.save(room);
+        cacheService.evict(CACHE_GAME_ROOM, String.valueOf(roomId));
         publishEvents(room);
 
         // Create the match
@@ -162,6 +183,7 @@ public class GameRoomServiceImpl implements GameRoomService {
 
         matchRepo.save(match);
         publishEvents(match);
+        cacheService.evict(CACHE_GAME_MATCH, String.valueOf(match.getMatchId()));
         return match;
     }
 
@@ -175,12 +197,14 @@ public class GameRoomServiceImpl implements GameRoomService {
         match.resign(side);
         matchRepo.save(match);
         publishEvents(match);
+        cacheService.evict(CACHE_GAME_MATCH, String.valueOf(matchId));
         return match;
     }
 
     @Override
     public GameMatch getMatchById(Long matchId) {
-        return matchRepo.findById(matchId).orElse(null);
+        return cacheService.getOrLoad(CACHE_GAME_MATCH, String.valueOf(matchId),
+                () -> matchRepo.findById(matchId).orElse(null), MATCH_TTL_SEC, true);
     }
 
     @Override

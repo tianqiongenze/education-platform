@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package boardgame.ai;
+
+option java_package = "com.ep.boardgame.ai.proto";
+option java_multiple_files = true;
+
+// D-193: Stockfish AI sidecar gRPC contract.
+// Runs in the same pod as boardgame-service (localhost:50051) and exposes a
+// minimal subset of Stockfish: best-move search and static evaluation.
+
+service StockfishService {
+  // Returns the best move in UCI notation for a given position.
+  rpc GetBestMove(BestMoveRequest) returns (BestMoveResponse);
+
+  // Returns a static evaluation of the position (centipawns / mate).
+  rpc GetEvaluation(EvalRequest) returns (EvalResponse);
+}
+
+message BestMoveRequest {
+  string fen = 1;          // FEN position to search
+  int32 depth = 2;         // search depth (plies); 0 = unlimited
+  int32 time_limit_ms = 3; // optional wall-clock limit; 0 = unlimited
+}
+
+message BestMoveResponse {
+  string best_move = 1;     // UCI format e.g. "e2e4"
+  string ponder_move = 2;   // expected opponent reply, or empty
+}
+
+message EvalRequest {
+  string fen = 1;
+  int32 depth = 2;
+}
+
+message EvalResponse {
+  int32 score_centipawns = 1; // positive = side-to-move winning; 0 when mate_in set
+  int32 mate_in = 2;          // mate in N moves, 0 if no forced mate
+  string best_line = 3;       // principal variation (PV) line, space separated UCI
+}

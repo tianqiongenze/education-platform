@@ -164,6 +164,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
+    <!-- D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-cache</artifactId>
+      <version>1.0.0</version>
+    </dependency>
     <!-- D-136: ArchUnit — architecture rule enforcement (layering, no cycles). -->
     <dependency>
       <groupId>com.tngtech.archunit</groupId>

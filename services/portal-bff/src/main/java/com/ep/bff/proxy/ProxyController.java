@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ep.bff.config.ProxyConfig;
+import com.ep.cache.CacheService;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
@@ -43,12 +44,16 @@ import java.util.Set;
  *       returns 503 with a clear message instead of attempting to proxy.</li>
  *   <li>D-039: stateless per-request handling, no synchronized blocks.</li>
  *   <li>D-040: only JDK + Spring built-ins, GraalVM friendly.</li>
+ *   <li>D-182: GET responses cached 120s via ep-cache SDK (L1+L2+Pub/Sub).</li>
  * </ul>
  */
 @RestController
 public class ProxyController {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyController.class);
+
+    private static final String CACHE_AGGREGATION = "bff:aggregation";
+    private static final long AGGREGATION_TTL_SEC = 120;
 
     /**
      * Hop-by-hop headers (RFC 7230 §6.1) that must not be forwarded by a
@@ -66,11 +71,14 @@ public class ProxyController {
     private final RestClient proxyRestClient;
     private final boolean enabled;
     private final Map<String, String> routes;
+    private final CacheService cacheService;
 
-    public ProxyController(RestClient proxyRestClient, ProxyConfig.ProxyProps props) {
+    public ProxyController(RestClient proxyRestClient, ProxyConfig.ProxyProps props,
+                           CacheService cacheService) {
         this.proxyRestClient = proxyRestClient;
         this.enabled = props.enabled();
         this.routes = props.routes() == null ? Map.of() : props.routes();
+        this.cacheService = cacheService;
     }
 
     /**
@@ -104,10 +112,31 @@ public class ProxyController {
         URI target = URI.create(match.baseUrl() + match.downstreamPath());
         HttpMethod method = HttpMethod.valueOf(request.getMethod() != null ? request.getMethod() : "GET");
 
+        // D-182: cache GET aggregation responses (120s, cacheEmpty=false).
+        // Only safe to cache idempotent GETs; writes bypass the cache.
+        if (method == HttpMethod.GET) {
+            String cacheKey = method.name() + ":" + target.toString();
+            ResponseEntity<byte[]> cached = cacheService.getOrLoad(
+                    CACHE_AGGREGATION, cacheKey,
+                    () -> doForward(method, target, request),
+                    AGGREGATION_TTL_SEC, false);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        return doForward(method, target, request);
+    }
+
+    /**
+     * Performs the actual upstream forward via RestClient. Extracted so the
+     * cache loader can invoke it without duplicating the exchange logic.
+     */
+    private ResponseEntity<byte[]> doForward(HttpMethod method, URI target, HttpServletRequest request) {
         byte[] body = readBody(request);
         HttpHeaders forwardHeaders = copyForwardableHeaders(request);
 
-        log.debug("proxy {} {} → {}", method, path, target);
+        log.debug("proxy {} {} → {}", method, request.getRequestURI(), target);
         try {
             return proxyRestClient.method(method)
                 .uri(target)
