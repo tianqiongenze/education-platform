@@ -19,7 +19,7 @@ jobs:
       run:
         working-directory: services/ai-platform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -76,7 +76,7 @@ jobs:
       run:
         working-directory: services/ep-common-python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:

@@ -47,7 +47,7 @@ jobs:
           - services/senior-care
           - services/boardgame-service
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -103,7 +103,7 @@ jobs:
             context: frontend
             dockerfile: frontend/apps/portal-web/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set image tag
         id: tag
         run: |
