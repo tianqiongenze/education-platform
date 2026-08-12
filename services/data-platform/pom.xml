@@ -41,6 +41,12 @@
       <artifactId>ep-web-common</artifactId>
       <version>1.0.0</version>
     </dependency>
+    <!-- D-171: Disruptor high-frequency ingest pipeline (SDD §5.5 Worker Separation Pattern) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-disruptor</artifactId>
+      <version>1.0.0</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>

@@ -32,6 +32,25 @@
 
 ---
 
+## D-171~D-176: Disruptor 多级队列落地 + BFF Netty+Disruptor 重构
+
+| 决策 | 描述 | 状态 |
+|----------|-------------|--------|
+| D-171 | ep-disruptor 重新激活 (archive→services, 移除@Deprecated) | ✅ |
+| D-172 | data-platform DisruptorIngestService (SDD §5.5 Worker分离+Pulsar降级) | ✅ |
+| D-173 | BFF GatewayRingBuffer (Disruptor 65536 ingress, drop-on-full→429) | ✅ |
+| D-174 | BFF NettyEdgeServer (Netty edge→RingBuffer→Jetty WebMVC) | ✅ |
+| D-175 | IdempotentInterceptor + GrayInterceptor (SDD §5.1 未落实拦截器) | ✅ |
+| D-176 | SDD 实现状态标注 + 文档更新 | ✅ |
+
+**关键变化:**
+- ep-disruptor: 0消费者 → data-platform + portal-bff 双消费
+- BFF: Spring Boot+Jetty → Netty edge + Disruptor ingress + Jetty WebMVC (SDD原设计)
+- SDD §5.1: 10/12 设计组件已实现 (2项用替代方案: Sentinel→Resilience4j, Jwks→JwtService)
+- SDD §5.5: DisruptorIngestService 双角色(API/Worker) + Pulsar降级 已落地
+
+---
+
 ## 1. 项目群总览
 
 | 子项目 | 名称 | SRS | SAD | SDD | Prototype | Test | Deploy | 代码 | 状态 |
@@ -329,3 +348,43 @@
 - 16个服务全覆盖(JIB构建+推送+GitOps部署+Dependabot监控)
 - GitHub main + sp01-tech-platform-m0 分支已推送
 - 决策总数: 165 → 170
+
+## D-171~D-177: Disruptor多级队列落地 + BFF Netty+Disruptor重构 + SDD未落实决策补齐 (2026-08-12)
+
+### 背景
+用户要求将Disruptor多级队列调度真正落地到技术中台、将BFF重构为Netty+Disruptor架构、并检查所有SDD设计文档中未落实的好架构决策一一实现。
+
+### 执行 (3路并行Agent)
+| 决策 | 描述 | 测试 | 状态 |
+|------|------|------|------|
+| D-171 | ep-disruptor从archive重新激活: 移除@Deprecated + pom重新启用, 9测试 | 9t | ✅ |
+| D-172 | data-platform DisruptorIngestService落地(SDD §5.5 Worker分离): tryNext()削峰+PulsarFallback降级+EP_ROLE双角色+DisruptorIngestController(202/429/400) | +8t(222总) | ✅ |
+| D-173 | BFF GatewayRingBuffer实现(SDD §5.2.1): Disruptor 65536 ingress, MULTI producer, SLEEPING wait, drop-on-full→429, batch 64/10ms | +3t | ✅ |
+| D-174 | BFF NettyEdgeServer实现(SDD §5.1, D-032/ADR-T07 rev2): Netty ServerBootstrap 8091→RingBuffer→Jetty 8090, HttpServerCodec+HttpObjectAggregator, 429 on DROPPED | +4t | ✅ |
+| D-175 | IdempotentInterceptor+GrayInterceptor(SDD §5.1未落实): Redis SETNX 409 Conflict + 用户ID哈希金丝雀分流+X-Gray-Tag | +14t | ✅ |
+| D-176 | SDD实现状态标注+文档更新: sp01-sdd.md §5.1后添加D-171~D-176实现状态块 | — | ✅ |
+| D-177 | ProxyConfig从proxy包移至config包: 修复ArchTest @Configuration包归属违规(pre-existing D-106遗留) | 127t全绿 | ✅ |
+
+### 验证结果 (Iron Law 9)
+- **ep-disruptor**: 9 tests, 0 failures ✅
+- **data-platform**: 222 tests, 0 failures ✅ (含8个新ingest测试)
+- **portal-bff**: 127 tests, 0 failures ✅ (含14个新拦截器测试+7个新edge测试+ArchTest全绿)
+- **总计**: 358 tests, 0 failures
+
+### SDD未落实决策清单(全部补齐)
+| SDD设计组件 | 实现前状态 | 实现后 |
+|-------------|-----------|--------|
+| NettyEdgeServer (§5.1) | ❌ 从未实现 | ✅ D-174 |
+| GatewayRingBuffer (§5.2.1) | ❌ 从未实现 | ✅ D-173 |
+| DisruptorIngestService (§5.5) | ❌ 从未实现 | ✅ D-172 |
+| IdempotentInterceptor (§5.1) | ❌ 从未实现 | ✅ D-175 |
+| GrayInterceptor (§5.1) | ❌ 从未实现 | ✅ D-175 |
+| EP_ROLE双角色模式 (§5.5) | ❌ 从未实现 | ✅ D-172 |
+| ep-disruptor 0消费者 | ⚠️ D-094弃用归档 | ✅ D-171重新激活 |
+
+### 架构合规
+- Iron Law 6: ✅ 自建Netty edge, 非SCG/WebFlux (SDD §5.2.1 footnote: SCG是Spring Cloud原生组件, 且WebFlux .block()与Dubbo Triple阻塞RPC冲突)
+- Iron Law 8: ✅ BFF评估3方案(A: Disruptor+Servlet / B: Netty+Disruptor+WebMVC [选] / C: 全Netty/WebFlux [拒])
+- Iron Law 9: ✅ 358 tests真实通过, 无stub
+
+- 决策总数: 170 → 177

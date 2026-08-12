@@ -1,4 +1,4 @@
-package com.ep.bff.proxy;
+package com.ep.bff.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -23,6 +23,11 @@ import java.util.Map;
  *   <li>{@code routes} — path prefix → backend base URL map.</li>
  * </ul>
  * D-040 (GraalVM): uses only JDK + Spring built-ins, no reflective access.
+ *
+ * <p>D-177: Moved from {@code com.ep.bff.proxy} to {@code com.ep.bff.config}
+ * to satisfy the ArchUnit rule that {@code @Configuration} classes must reside
+ * in a {@code ..config..} package. The {@code ProxyProps} record is still
+ * accessible as {@code com.ep.bff.config.ProxyConfig.ProxyProps}.
  */
 @Configuration
 @ConfigurationProperties(prefix = "ep.proxy")

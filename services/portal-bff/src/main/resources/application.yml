@@ -76,6 +76,27 @@ ep:
     cell-base-url-template: ""
   ratelimit:
     enabled: true
+  # D-173: Netty edge + Disruptor ingress (SDD §5.1-5.2, D-032/ADR-T07 rev2)
+  # When enabled, Netty listens on port 8091 and forwards to Jetty on 8090
+  # via Disruptor RingBuffer(65536) with drop-on-full → 429 backpressure.
+  gateway:
+    netty:
+      enabled: ${EP_GATEWAY_NETTY_ENABLED:false}  # dev default off, production on
+      port: ${EP_GATEWAY_PORT:8091}
+      boss-threads: 1
+      worker-threads: 0  # 0 = auto (2x CPU cores)
+    ring-buffer:
+      size: 65536       # SDD §5.2.1: 65536 slots
+      batch-size: 64    # SDD §5.2.1: batch dispatch 64 events
+      batch-timeout-ms: 10
+      backend-url: http://localhost:8090  # Jetty WebMVC backend
+  # D-175: Idempotency interceptor (SDD §5.1, ADR-T06 — replaces Seata for idempotency)
+  idempotent:
+    enabled: ${EP_IDEMPOTENT_ENABLED:true}
+  # D-175: Gray/canary traffic interceptor (SDD §5.1 GrayInterceptor)
+  gray:
+    enabled: ${EP_GRAY_ENABLED:false}
+    ratio: ${EP_GRAY_RATIO:0.0}  # 0.0 = no canary, 5.0 = 5% canary traffic
   # D-106: Unified API gateway proxy routes.
   # EP_DEV_ONLY guard: disabled by default so a dev box without the backend
   # services running fails fast with 503 instead of hanging on timeouts.

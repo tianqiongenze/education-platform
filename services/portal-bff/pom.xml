@@ -116,6 +116,18 @@
       <artifactId>ep-web-common</artifactId>
       <version>1.0.0</version>
     </dependency>
+    <!-- D-173: Netty edge server (SDD §5.1 — replaces SCG, self-built Netty edge) -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-all</artifactId>
+      <version>4.1.118.Final</version>
+    </dependency>
+    <!-- D-173: Disruptor RingBuffer ingress (SDD §5.2.1 — 65536 buffer, drop-on-full, batch dispatch) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-disruptor</artifactId>
+      <version>1.0.0</version>
+    </dependency>
     <dependency>
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-prometheus</artifactId>

@@ -1,6 +1,6 @@
 package com.ep.bff.proxy;
 
-import com.ep.bff.proxy.ProxyConfig.ProxyProps;
+import com.ep.bff.config.ProxyConfig.ProxyProps;
 import com.ep.bff.proxy.ProxyController.Match;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

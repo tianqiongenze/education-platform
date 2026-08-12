@@ -714,6 +714,21 @@ com.ep.gateway
 └── GatewayConfig.java          // WebMVC 配置(InterceptorRegistry 注册拦截器链)
 ```
 
+> **D-171~D-176 实现状态** (2026-08-12):
+> - ✅ NettyEdgeServer — 已实现 (services/portal-bff/src/main/java/com/ep/bff/edge/NettyEdgeServer.java)
+> - ✅ GatewayRingBuffer — 已实现 (GatewayRingBuffer.java, Disruptor 65536, drop-on-full→429, batch 64)
+> - ✅ GrayInterceptor — 已实现 (GrayInterceptor.java, X-Gray-Tag header)
+> - ✅ IdempotentInterceptor — 已实现 (IdempotentInterceptor.java, Redis SETNX, 409 Conflict)
+> - ✅ RouteTable — 已实现 (D-068 双路由系统调和)
+> - ✅ GatewayConfig — 已实现 (GatewayInterceptorConfig.java, InterceptorRegistry)
+> - ✅ AuthInterceptor — 已实现 (AuthFilter.java, OncePerRequestFilter)
+> - ✅ TraceInterceptor — 已实现 (TraceIdFilter.java + TracePropagationUtil.java)
+> - ✅ DisruptorIngestService — 已实现 (data-platform, SDD §5.5 Worker Separation Pattern)
+> - ✅ ep-disruptor — 已重新激活 (D-171, 从 archive 移回 services/)
+> - ⚠️ SentinelGatewayFilter — 使用 Resilience4j RateLimiter 替代 (D-154)
+> - ⚠️ JwksVerifier — 使用 JwtService RS256 验签替代 (D-117)
+> - ⚠️ JwtIssuer — 使用 JwtService 签发替代 (D-117)
+
 ### 5.2 关键时序：请求鉴权
 
 ```

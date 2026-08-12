@@ -55,3 +55,15 @@ resilience4j:
     instances:
       default:
         base-config: default
+
+# D-171: Disruptor ingest pipeline (SDD §5.5 Worker Separation Pattern)
+ep:
+  role: ${EP_ROLE:api}
+  disruptor:
+    buffer-size: 65536
+    wait-strategy: SLEEPING
+    batch-size: 64
+    batch-timeout-ms: 100
+  pulsar:
+    enabled: ${EP_PULSAR_ENABLED:false}
+    service-url: pulsar://pulsar-broker:6650

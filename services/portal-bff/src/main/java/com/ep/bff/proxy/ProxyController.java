@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.ep.bff.config.ProxyConfig;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
