@@ -28,7 +28,7 @@
     "@tarojs/taro": "4.0.9",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "@tanstack/react-query": "5.62.10"
+    "@tanstack/react-query": "5.101.4"
   },
   "devDependencies": {
     "@ep/lint-config": "workspace:*",
