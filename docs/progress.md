@@ -308,3 +308,24 @@
 
 **热区结束**。冷区内容(D-039~D-048详细重构清单、审计执行详情、K8s基础设施状态、诚实声明等)已归档至 `docs/archive/progress-history.md`。
 冷区检索示例: `grep -n "Milvus" docs/archive/progress-history.md`
+
+## D-166~D-170: CI/CD + ArgoCD GitOps Complete Fix (2026-08-12)
+
+### 问题
+- CI/CD workflow路径在D-155修复但未验证完整性
+- ArgoCD GitOps manifest有5个阻断性问题(repoURL错误/集群URL占位符/ApplicationSet不完整/README旧名/冒烟测试bug)
+- CI/CD workflow有6个问题(矩阵遗漏/kustomization镜像名不匹配/dependabot死路径/registry不统一)
+- Rust/Cargo: 确认无需处理(D-144已拒绝Rust)
+
+### 修复
+- D-166: ArgoCD 6个manifest repoURL修复 + ApplicationSet 8→16服务 + README + 冒烟测试3bug
+- D-167: build-and-push.yml矩阵补全 + kustomization镜像名对齐JIB artifactId
+- D-168: dependabot 5死路径修复+4新条目 + registry统一 + run-all-tests.sh修复
+- D-169: 14个YAML解析验证 + grep 10种旧引用扫描 + kustomization对齐验证
+- D-170: Git提交推送 + 决策登记
+
+### 结果
+- CI/CD + ArgoCD GitOps配置全部修复完成
+- 16个服务全覆盖(JIB构建+推送+GitOps部署+Dependabot监控)
+- GitHub main + sp01-tech-platform-m0 分支已推送
+- 决策总数: 165 → 170
