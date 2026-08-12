@@ -271,7 +271,7 @@ class DocumentServiceImplTest {
 
         service.delete("t1", "doc-del2");
 
-        verify(documentMapper, never()).deleteById(any());
+        verify(documentMapper, never()).deleteById(any(java.io.Serializable.class));
         verify(cacheService, never()).evict(anyString(), anyString());
     }
 }
