@@ -24,7 +24,7 @@
         <nacos.client.version>3.1.1</nacos.client.version>
         <sentinel.version>1.8.9</sentinel.version>
         <pulsar.version>3.3.9</pulsar.version>
-        <jjwt.version>0.12.6</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <jacoco.version>0.8.13</jacoco.version>
         <redisson.version>3.51.0</redisson.version>
         <seata.version>2.0.0</seata.version>
