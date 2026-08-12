@@ -208,7 +208,7 @@
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-models-jakarta</artifactId>
-            <version>2.2.36</version>
+            <version>2.2.53</version>
         </dependency>
         <!-- D-070: Structured JSON logging for Loki/ELK ingestion -->
         <dependency>
