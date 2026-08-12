@@ -1,0 +1,121 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.knowledge.tenant.TenantServiceApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.controller.TenantController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.config.OpenApiConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.config.MybatisPlusConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.config.CorsConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.entity.Tenant",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.entity.ApiKey",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.entity.UsageRecord",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.tenant.entity.BillingInvoice",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.service.KnowledgeServiceApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.service.controller.KnowledgeController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.service.entity.Document",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.service.entity.Category",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.agent.AgentServiceApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.agent.controller.AgentController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.agent.entity.AgentSession",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.knowledge.retrieval.RetrievalServiceApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.retrieval.controller.RetrievalController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.bff.BffKnowledgeApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.knowledge.bff.controller.BffController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.sp07.mcp.McpServerApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    }
+  ]
+}

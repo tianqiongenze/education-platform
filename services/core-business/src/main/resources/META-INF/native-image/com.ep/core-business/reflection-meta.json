@@ -1,0 +1,39 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.business.BusinessApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.business.course.CourseController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.business.user.UserController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.business.course.Course",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.business.user.User",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.business.course.CreateCourseCmd",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allRecordComponents": true
+    }
+  ]
+}

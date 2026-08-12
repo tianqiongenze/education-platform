@@ -1,0 +1,53 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.order.OrderApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.order.controller.OrderController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.order.config.OpenApiConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.order.config.SagaStateMachineConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.order.config.CorsConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.order.config.DevGuardConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.order.model.OrderModel",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.order.api.CreateOrderCmd",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.order.api.OrderDto",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    }
+  ]
+}

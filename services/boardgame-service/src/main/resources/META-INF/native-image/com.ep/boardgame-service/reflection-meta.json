@@ -1,0 +1,49 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.boardgame.BoardGameApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.boardgame.room.GameRoomController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.boardgame.replay.GameReplayController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.boardgame.event.PulsarClientConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.boardgame.event.PulsarClientProperties",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.boardgame.room.GameRoom",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.boardgame.room.GameMatch",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.boardgame.replay.GameReplay",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    }
+  ]
+}

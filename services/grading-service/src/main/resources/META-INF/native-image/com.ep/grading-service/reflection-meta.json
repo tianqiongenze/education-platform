@@ -1,0 +1,45 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.grading.ItBackendApplication",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.grading.controller.GradingController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.grading.controller.AssignmentController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.grading.controller.SubmissionController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.grading.grading.entity.GradePipeline",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.grading.grading.entity.GradeStage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "name": "com.ep.grading.grading.dto.StartGradingCmd",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allRecordComponents": true
+    }
+  ]
+}

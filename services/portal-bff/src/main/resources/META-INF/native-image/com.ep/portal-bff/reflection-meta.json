@@ -1,0 +1,26 @@
+{
+  "reflection": [
+    {
+      "name": "com.ep.bff.proxy.ProxyController",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true
+    },
+    {
+      "name": "com.ep.bff.config.ProxyConfig",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "name": "com.ep.bff.config.ProxyConfig$ProxyProps",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allRecordComponents": true
+    },
+    {
+      "name": "com.ep.bff.edge.GatewayEvent",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    }
+  ]
+}

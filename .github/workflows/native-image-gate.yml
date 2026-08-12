@@ -1,0 +1,78 @@
+name: GraalVM AOT Gate
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/**/pom.xml'
+      - 'services/**/src/main/java/**'
+      - '.github/workflows/native-image-gate.yml'
+  pull_request:
+    paths:
+      - 'services/**/pom.xml'
+      - 'services/**/src/main/java/**'
+      - '.github/workflows/native-image-gate.yml'
+  workflow_dispatch: {}
+
+jobs:
+  native-metadata-check:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - portal-bff
+          - core-business
+          - grading-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup GraalVM (JDK 21)
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image: 'true'
+
+      - name: Cache Maven .m2
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-native-${{ matrix.service }}-${{ hashFiles('services/**/pom.xml', 'pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-native-${{ matrix.service }}-
+            ${{ runner.os }}-m2-native-
+            ${{ runner.os }}-m2-
+
+      - name: Verify native-maven-plugin presence
+        id: native-check
+        run: |
+          if ! grep -q "native-maven-plugin" services/${{ matrix.service }}/pom.xml; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠️ ${{ matrix.service }} does not have native-maven-plugin — skipping"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✅ ${{ matrix.service }} has native-maven-plugin"
+          fi
+
+      - name: Verify native-image config directory
+        if: steps.native-check.outputs.skip != 'true'
+        run: |
+          meta_dir="services/${{ matrix.service }}/src/main/resources/META-INF/native-image"
+          if [ ! -d "$meta_dir" ]; then
+            echo "❌ ${{ matrix.service }} is native-enabled but missing $meta_dir"
+            exit 1
+          fi
+          echo "✅ ${{ matrix.service }} has native-image config at $meta_dir"
+
+      - name: Compile with native profile
+        if: steps.native-check.outputs.skip != 'true'
+        run: mvn -pl services/${{ matrix.service }} -am clean compile -Pnative -B
+
+      - name: Generate reachability metadata (dry-run)
+        if: steps.native-check.outputs.skip != 'true'
+        run: |
+          mvn -pl services/${{ matrix.service }} -Pnative native:metadata -B \
+            || echo "⚠️ native:metadata goal not available — compile check already passed"

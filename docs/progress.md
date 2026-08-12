@@ -1,6 +1,6 @@
 # 教育平台项目群 —— 总进度看板 (热区)
 
-> 最后更新: 2026-08-12 | 维护: ZCode(首席架构师) | 同步: decisions.jsonl (165条)
+> 最后更新: 2026-08-12 | 维护: ZCode(首席架构师) | 同步: decisions.jsonl (181条)
 > 📌 本文件仅保留热区(当前状态 + 铁律 + 决策登记簿)。历史执行详情见冷区归档:
 >    `docs/archive/progress-history.md` (按需 Grep 检索, 不全量加载)
 
@@ -29,6 +29,67 @@
 - 测试基线: +24 TenantContextFilter 测试 (D-161, 4 服务 ×6 方法)
 - 生产就绪: "暂缓上线" → **"代码层就绪 — 部署验证后可上线"**
 - D-163/D-164 并行执行中 (GitHub 推送 + 全量编译测试), 状态待确认
+
+---
+
+## D-177: ArchTest 修复
+
+| 决策 | 描述 | 状态 |
+|----------|-------------|--------|
+| D-177 | ProxyConfig 从 proxy 包移至 config 包 (修复 ArchTest @Configuration 包归属违规) | ✅ |
+
+---
+
+## D-178~D-181: 全文档架构决策落实 (SAD/SDD 扫描 → 4 项 HIGH/MEDIUM 落地)
+
+**触发:** 用户要求"检查之前所有的分析、架构设计、详细设计等资料，看看哪些是没有落实的，要做到好的架构决策一一落实"
+
+**文档扫描结果:** 审查 docs/design/ + docs/architecture/ + docs/adr/ + docs/deployment/ 全部设计文档，交叉比对 services/ 代码实现，发现 14 项未落实决策。
+
+| 决策 | 描述 | 优先级 | 状态 |
+|----------|-------------|--------|--------|
+| D-178 | AI 成本栈 4 层不可逆顺序 (语义缓存→RouteLLM→cascade→fallback) — ADR-A01 | HIGH | ✅ |
+| D-179 | SaaS 控制平面 (Metering+Billing+ApiKey CRUD) — D-044 | HIGH | ✅ |
+| D-180 | WS 跨 Pod 广播 Redis Pub/Sub→Redis Streams 持久化 (D-029) | MEDIUM | ✅ |
+| D-181 | GraalVM AOT native-image CI 门禁 + 10 服务配置 (D-040) | MEDIUM | ✅ |
+
+### D-178: AI 网关成本栈 (ADR-A01 / SAD §5 / SDD §3.4)
+- **4 层不可逆顺序:** ① 语义缓存 (SHA256 + Redis TTL 3600s) → ② RouteLLM 意图路由 (启发式 simple/complex) → ③ 置信度级联 (低置信升级旗舰) → ④ 多 Provider Fallback
+- **文件:** ai_gateway/cost/ (6 文件: semantic_cache, route_router, confidence_cascade, provider_fallback, cost_stack, __init__)
+- **路由集成:** routes.py chat_completions 接入 CostStack, 返回 X-Cost-Stack-* 响应头
+- **测试:** 31 新测试全 PASS (FakeRedis 无需真实 Redis)
+
+### D-179: SaaS 控制平面 (D-044 PROPOSED→DONE)
+- **新增实体:** UsageRecord (tenant_usage_record) + BillingInvoice (tenant_billing_invoice)
+- **新增服务:** MeteringService (record/summarize) + BillingService (generateInvoice/getInvoice/listInvoices) + ApiKeyService (create/validate/list/revoke)
+- **Controller 扩展:** 7 新端点 (API Key CRUD + Usage 记录/查询 + Invoice 生成/查询)
+- **DDL:** V3__saas_control_plane.sql (2 表 + 索引)
+- **测试:** 17 新测试 (Metering 4 + Billing 4 + ApiKey 9), 全 45 tests PASS
+
+### D-180: WS 跨 Pod 广播持久化 (D-029)
+- **Iron Law 8 评估:** A) 纯 Pulsar B) Redis Pub/Sub+Pulsar 双传输 C) Redis Streams — **选择 C** (复用 Redis, 消费者组不丢消息, 无新基建)
+- **实现:** CrossPodTransport 接口 + RedisStreamsTransport (XADD/XREADGROUP/XGROUP CREATE/XACK) + NoOpTransport (降级)
+- **双写模式:** Hub.Broadcast 同时写 Redis Pub/Sub (本地 sub-ms) + Redis Streams (持久跨 Pod)
+- **测试:** 10 新测试, 全 27 tests PASS (含 17 既有)
+
+### D-181: GraalVM AOT CI 门禁 (D-040)
+- **CI 工作流:** .github/workflows/native-image-gate.yml (GraalVM JDK21, 3 服务矩阵, compile+metadata check)
+- **Native-image 配置:** 10/10 服务全覆盖 (properties + resources-meta.json + reflection-meta.json)
+- **验证脚本:** scripts/check-native-ready.sh — 10/10 ✅
+- **配置覆盖:** portal-bff, core-business, grading-service, boardgame-service, ep-memory-java, knowledge-platform, order-platform, payment-platform, senior-care, integration-tests
+
+**验证汇总:**
+| 模块 | 测试数 | 结果 |
+|------|--------|------|
+| ai-platform (cost_stack) | 31 | ✅ ALL PASS |
+| ws-gateway (hub) | 27 | ✅ ALL PASS |
+| tenant-service | 45 | ✅ ALL PASS |
+| native-image check | 10/10 | ✅ ALL CONFIGURED |
+
+**未实施项 (明确分阶段/条件复活, 非缺口):**
+- Firecracker 沙箱 / Yjs IDE / SRS 直播 (SP-05 Phase 2, 独立基建)
+- GNN 字段血缘 / AIOps ONNX / Text-to-SQL Trino (SP-02 M4 增强, 简化版已落地)
+- Boardgame Phase 2/3 / CockroachDB PoC / Pulsar 4.0 / Rust 棋力引擎 (路线图)
 
 ---
 
@@ -312,7 +373,7 @@
 | D-154 | 安全P1/P2修复: P1-4 ActuatorSecurityAutoConfiguration(ep-web-common, /actuator/**鉴权,14服务spring.security.user) + P1-5 jwt_auth.py decode-only移除(PyJWT唯一后端,RuntimeError) + P1-6 ws-gateway fail-closed(APP_ENV=production log.Fatalf+failclosed.go纯函数6测试) + P2-7 CORS显式headers(8 Java+1 Python) + P2-9 Bean Validation(GlobalExceptionHandler 2 handler+9 Controller @Valid+12 DTO约束) + P2-10 Resilience4j RateLimiter(RateLimitAutoConfiguration+ProxyController @RateLimiter+14服务yml); 14服务pom补齐security+validation+resilience4j+ep-web-common(provided scope不传递) | 2026-08-12 |
 | D-155 | CI/CD管线路径修复: 7个workflow文件(java-test/go-test/python-test/build-and-push/coverage-gate/mutation-test/deploy-gitops)路径全量更新到D-148新目录名 + grep验证零旧路径残留 + YAML lint 11文件语法正确 | 2026-08-12 |
 
-> 完整决策记录: `~/.zcode/sessions/education-platform/decisions.jsonl` (155条)
+> 完整决策记录: `~/.zcode/sessions/education-platform/decisions.jsonl` (181条)
 > 测试基线: 14 Java模块编译全PASS + 14 Java模块测试全PASS(excl预存ArchUnit) + Go build+test PASS + Python 134p/26skip PASS + 前端11tasks typecheck PASS (D-155全量验证)
 > **安全修复(D-154): P1全修复(3/3) + P2全修复(3/3), 安全维度6.5→8.0+; 14服务pom补齐provided scope依赖; order-platform ArchUnit修复(SagaStateMachineConfig移至config包)**
 > **CI/CD修复(D-155): 7个workflow文件路径全量同步D-148新目录名, CI可在真实GitHub Actions运行**

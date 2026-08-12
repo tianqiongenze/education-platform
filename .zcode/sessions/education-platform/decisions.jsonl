@@ -98,3 +98,7 @@
 {"id":"D-175","title":"IdempotentInterceptor+GrayInterceptor实现(SDD §5.1未落实拦截器)","date":"2026-08-12","status":"done"}
 {"id":"D-176","title":"SDD实现状态标注+文档更新","date":"2026-08-12","status":"done"}
 {"id":"D-177","title":"ProxyConfig从proxy包移至config包(修复ArchTest @Configuration包归属违规)","date":"2026-08-12","status":"done"}
+{"id":"D-178","title":"AI网关成本栈4层不可逆顺序(语义缓存→RouteLLM→cascade→fallback) ADR-A01落地","date":"2026-08-12","status":"done"}
+{"id":"D-179","title":"SaaS控制平面(Metering+Billing+ApiKey CRUD) D-044落地","date":"2026-08-12","status":"done"}
+{"id":"D-180","title":"WS跨Pod广播Redis Pub/Sub→Redis Streams持久化(XADD/XREADGROUP) D-029","date":"2026-08-12","status":"done"}
+{"id":"D-181","title":"GraalVM AOT native-image CI门禁+10服务native-image配置 D-040","date":"2026-08-12","status":"done"}

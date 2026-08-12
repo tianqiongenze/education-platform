@@ -26,8 +26,12 @@ func roomChannel(roomID string) string {
 }
 
 // Hub manages WS broadcast routing with sharded channels.
-// D-029: cross-pod broadcast will use Pulsar (persistent://public/ws/broadcast),
-// but M0 skeleton uses Redis Pub/Sub for local shard routing.
+// D-029: cross-pod broadcast was originally planned for Pulsar
+// (persistent://public/ws/broadcast); D-180 selected Redis Streams
+// (XADD/XREADGROUP) as the durable cross-pod transport — see crosspod.go
+// (Iron Law 8 Alternative B). The Hub dual-writes: Redis Pub/Sub for sub-ms
+// local delivery to in-memory subscribers on the publishing pod, plus the
+// cross-pod transport for durable delivery to other pods.
 //
 // D-149: added room-level broadcast for board game live play. Each room has
 // its own Redis Pub/Sub channel; the subscribe loop (StartSubscribe) bridges
@@ -43,8 +47,13 @@ type Hub struct {
 
 	// D-149: subscription management — tracks which shard/room channels are
 	// currently subscribed so we only open one Redis subscription per channel.
-	subMu     sync.Mutex
+	subMu      sync.Mutex
 	subscribed map[string]bool // channel → subscribed?
+
+	// D-180: durable cross-pod transport. Defaults to NoOpTransport so behavior
+	// is identical to pre-D-180 when not explicitly configured. main.go injects
+	// a RedisStreamsTransport when Redis is available.
+	crossPod CrossPodTransport
 }
 
 // New creates a Hub with the given Redis client and shard count.
@@ -53,18 +62,39 @@ func New(rdb *redis.Client, shards int) *Hub {
 		shards = 8
 	}
 	return &Hub{
-		rdb:       rdb,
-		shards:    shards,
-		conns:     map[string][]chan []byte{},
-		roomConns: map[string][]chan []byte{},
+		rdb:        rdb,
+		shards:     shards,
+		conns:      map[string][]chan []byte{},
+		roomConns:  map[string][]chan []byte{},
 		subscribed: map[string]bool{},
+		// D-180: default cross-pod transport is a no-op so the Hub is fully
+		// backward compatible until main.go injects a real transport.
+		crossPod: NoOpTransport{},
 	}
 }
 
+// SetCrossPodTransport replaces the Hub's cross-pod transport. D-180: called
+// by main.go after creating a RedisStreamsTransport (when Redis is available).
+// Passing nil resets to NoOpTransport. Must be called before StartSubscribe.
+func (h *Hub) SetCrossPodTransport(t CrossPodTransport) {
+	if t == nil {
+		h.crossPod = NoOpTransport{}
+		return
+	}
+	h.crossPod = t
+}
+
 // Broadcast publishes a message to the shard channel for the given session.
+// D-180: dual-writes — Redis Pub/Sub for local sub-ms delivery, plus the
+// cross-pod transport for durable cross-pod delivery. A cross-pod error is
+// logged but does not fail the call (best-effort durability); the Redis
+// Pub/Sub publish result is the authoritative return value.
 func (h *Hub) Broadcast(ctx context.Context, sessionID string, payload []byte) error {
 	if h.rdb == nil {
 		return fmt.Errorf("no redis client")
+	}
+	if err := h.crossPod.Broadcast(ctx, payload); err != nil {
+		logSubscribeError("crosspod:shard", err)
 	}
 	return h.rdb.Publish(ctx, shardChannelFor(sessionID, h.shards), payload).Err()
 }
@@ -72,12 +102,16 @@ func (h *Hub) Broadcast(ctx context.Context, sessionID string, payload []byte) e
 // BroadcastToRoom publishes a message to all subscribers of a game room.
 // D-149: used by board game live play to push move updates to both players
 // and spectators. Returns an error if Redis is not configured.
+// D-180: dual-writes the payload to the cross-pod transport as well.
 func (h *Hub) BroadcastToRoom(ctx context.Context, roomID string, payload []byte) error {
 	if h.rdb == nil {
 		return fmt.Errorf("no redis client")
 	}
 	if roomID == "" {
 		return fmt.Errorf("empty room id")
+	}
+	if err := h.crossPod.Broadcast(ctx, payload); err != nil {
+		logSubscribeError("crosspod:room", err)
 	}
 	return h.rdb.Publish(ctx, roomChannel(roomID), payload).Err()
 }
@@ -199,6 +233,19 @@ func (h *Hub) StartSubscribe(ctx context.Context) {
 		roomID := extractRoomID([]byte(payload))
 		if roomID != "" {
 			h.DeliverToRoom(roomID, []byte(payload))
+		}
+	})
+
+	// D-180: also consume from the durable cross-pod transport (Redis Streams
+	// in production, NoOpTransport in dev). Each message is bridged to local
+	// in-memory subscribers the same way Redis Pub/Sub messages are: we try
+	// session-targeted delivery first, then room delivery.
+	go h.crossPod.StartReceiving(ctx, func(payload []byte) {
+		if sid := extractSessionID(payload); sid != "" {
+			h.DeliverToSession(sid, payload)
+		}
+		if roomID := extractRoomID(payload); roomID != "" {
+			h.DeliverToRoom(roomID, payload)
 		}
 	})
 }

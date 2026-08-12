@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "application\\.yml$"},
+      {"pattern": "application-.*\\.yml$"},
+      {"pattern": "META-INF/spring/.*\\.imports$"},
+      {"pattern": "META-INF/spring\\.factories$"},
+      {"pattern": "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports"},
+      {"pattern": "META-INF/maven/.*"},
+      {"pattern": "schema-.*\\.sql$"},
+      {"pattern": "data-.*\\.sql$"}
+    ]
+  }
+}

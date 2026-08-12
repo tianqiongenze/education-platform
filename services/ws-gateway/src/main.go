@@ -84,6 +84,21 @@ func main() {
 	// Create a dedicated Redis client for the Hub.
 	rdb := cache.GetRedisClientForHub()
 	h := hub.New(rdb, 8)
+
+	// D-180: inject the durable cross-pod transport (Redis Streams). When Redis
+	// is available, each pod joins a shared consumer group so every pod
+	// receives a copy of every broadcast. When Redis is unavailable (dev/offline
+	// mode), the Hub keeps its default NoOpTransport and degrades gracefully to
+	// Redis-only / in-memory behavior.
+	if rdb != nil {
+		transport := hub.NewRedisStreamsTransport(rdb, hub.DefaultStreamKey, hub.DefaultGroupName)
+		h.SetCrossPodTransport(transport)
+		log.Printf("cross-pod transport: redis streams (stream=%s group=%s)",
+			hub.DefaultStreamKey, hub.DefaultGroupName)
+	} else {
+		log.Printf("cross-pod transport: noop (redis unavailable)")
+	}
+
 	registry := ws.NewRegistry()
 	wsHandler := ws.NewHandler(registry, h, validator, allowAnonymous)
 

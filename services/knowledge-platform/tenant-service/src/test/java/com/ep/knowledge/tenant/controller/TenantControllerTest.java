@@ -2,6 +2,9 @@ package com.ep.knowledge.tenant.controller;
 
 import com.ep.web.common.ForbiddenException;
 import com.ep.knowledge.tenant.entity.Tenant;
+import com.ep.knowledge.tenant.service.ApiKeyService;
+import com.ep.knowledge.tenant.service.BillingService;
+import com.ep.knowledge.tenant.service.MeteringService;
 import com.ep.knowledge.tenant.service.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,12 +23,18 @@ import static org.mockito.Mockito.*;
 class TenantControllerTest {
 
     private TenantService tenantService;
+    private ApiKeyService apiKeyService;
+    private MeteringService meteringService;
+    private BillingService billingService;
     private TenantController controller;
 
     @BeforeEach
     void setUp() {
         tenantService = mock(TenantService.class);
-        controller = new TenantController(tenantService);
+        apiKeyService = mock(ApiKeyService.class);
+        meteringService = mock(MeteringService.class);
+        billingService = mock(BillingService.class);
+        controller = new TenantController(tenantService, apiKeyService, meteringService, billingService);
     }
 
     private HttpServletRequest requestWithRole(String role) {
