@@ -25,7 +25,7 @@
     "@tarojs/plugin-framework-react": "4.0.9",
     "@tarojs/plugin-platform-h5": "4.0.9",
     "@tarojs/react": "4.0.9",
-    "@tarojs/router": "4.0.9",
+    "@tarojs/router": "4.2.1",
     "@tarojs/runtime": "4.0.9",
     "@tarojs/shared": "4.0.9",
     "@tarojs/taro": "4.0.9",
