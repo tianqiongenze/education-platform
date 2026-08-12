@@ -57,7 +57,7 @@
 │    tech/data/business/ai 中台副本                                       │
 │                                                                        │
 │  namespace: infra(复用基础设施)                                         │
-│    TiDB/Redis/Pulsar/Kafka/Milvus/MinIO/CDN/SRS/LiveKit/OTel          │
+│    TiDB/Redis/Pulsar(CDC+事件统一)/Milvus/MinIO/CDN/SRS/LiveKit/OTel          │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 

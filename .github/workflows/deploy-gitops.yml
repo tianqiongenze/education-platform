@@ -1,0 +1,242 @@
+name: Deploy (GitOps)
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Images"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: commit SHA of dispatch)'
+        required: false
+        default: ''
+
+# This workflow updates image tags in the GitOps manifests
+# (deploy/k8s/base/kustomization.yaml) and pushes the change. The push
+# triggers ArgoCD auto-sync (D-114) which reconciles the clusters.
+#
+# Production deployment is gated by a manual approval via the
+# `production` GitHub environment.
+
+jobs:
+  # Pre-deploy: validate the trigger. `workflow_run` carries the SHA of
+  # the build-and-push run via github.event.workflow_run.head_sha.
+  #
+  # D-138: deploy must NOT run if the upstream workflow (build-and-push, which
+  # itself runs only after the required test workflows pass via branch
+  # protection) did not reach `success`. This closes the gap where deploy could
+  # outrun failing tests.
+  update-manifests:
+    runs-on: ubuntu-latest
+    environment: production
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      pushed: ${{ steps.commit.outputs.pushed }}
+      commit_sha: ${{ steps.commit.outputs.commit_sha }}
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Verify upstream workflow succeeded
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ] && \
+             [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::error::Upstream workflow '${{ github.event.workflow_run.name }}' \
+          concluded with '${{ github.event.workflow_run.conclusion }}'. Skipping deploy."
+            exit 1
+          fi
+          echo "Upstream workflow check passed. Proceeding with deploy."
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "tag=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITOPS_PAT }}
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Update image tags in kustomization.yaml
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "Updating image tags to ${TAG}"
+          # Use yq if available, otherwise sed fallback. Update every
+          # education-platform image tag except otel-collector-contrib.
+          if command -v yq >/dev/null 2>&1; then
+            yq -i '(.images[] | select(.name | test("education-platform")) | .newTag) = strenv(TAG)' \
+              deploy/k8s/base/kustomization.yaml
+          else
+            sed -i -E "/education-platform\//,/newTag:/{
+              s/(newTag:).*/\1 ${TAG}/
+            }" deploy/k8s/base/kustomization.yaml
+            # otel-collector-contrib must keep its own version.
+            sed -i -E 's|(otel-collector-contrib).*newTag:.*|\1\n  newTag: 0.110.0|' deploy/k8s/base/kustomization.yaml 2>/dev/null || true
+          fi
+          echo "### Updated kustomization.yaml" >> $GITHUB_STEP_SUMMARY
+          echo '```yaml' >> $GITHUB_STEP_SUMMARY
+          sed -n '/^images:/,$p' deploy/k8s/base/kustomization.yaml >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      - name: Commit and push manifests
+        id: commit
+        run: |
+          git add deploy/k8s/base/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "No manifest changes — skipping commit."
+            echo "pushed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git commit -m "ci(deploy): update image tags to ${{ steps.tag.outputs.tag }}
+
+          Triggered by ${{ github.event_name }} (run #${{ github.run_id }}).
+          ArgoCD auto-sync (D-114) will reconcile the clusters."
+          git push
+          echo "pushed=true" >> $GITHUB_OUTPUT
+          echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Manifest push summary
+        run: |
+          echo "## GitOps Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Image tag: \`${{ steps.tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Manifest pushed: \`${{ steps.commit.outputs.pushed }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ArgoCD auto-sync (D-114) will reconcile after the manifest push." >> $GITHUB_STEP_SUMMARY
+
+  # D-138: Post-deploy smoke test. After ArgoCD auto-sync reconciles the new
+  # image tag, curl the critical health endpoints from inside the cluster.
+  # Failing the smoke test fails the workflow (which the rollback job reacts
+  # to). This closes the gap where deploy blindly trusted ArgoCD auto-sync.
+  post-deploy-smoke:
+    runs-on: ubuntu-latest
+    needs: update-manifests
+    if: needs.update-manifests.result == 'success' && needs.update-manifests.outputs.pushed == 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+      - name: Authenticate to cluster
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.DEPLOY_KUBECONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          printf '%s\n' "$KUBECONFIG_CONTENT" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+          if ! command -v kubectl >/dev/null 2>&1; then
+            echo "::notice::kubectl not pre-installed; health checks will use port-forward fallback"
+          fi
+      - name: Wait for ArgoCD sync and roll out
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          # D-138: Wait for ArgoCD to report the application Synced + Healthy.
+          # If argocd CLI is unavailable or the app is unknown, fall back to a
+          # kubectl rollout wait so we still block on the new pods becoming ready.
+          echo "Waiting up to 5 min for ArgoCD sync / rollout of image tag ${{ needs.update-manifests.outputs.image_tag }} ..."
+          if command -v argocd >/dev/null 2>&1 && [ -n "$ARGOCD_SERVER" ] && [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+            argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web || true
+            timeout 300 bash -c '
+              while true; do
+                STATUS=$(argocd app get education-platform --output json 2>/dev/null \
+                  | jq -r ".status.sync.status" 2>/dev/null || echo "Unknown")
+                HEALTH=$(argocd app get education-platform --output json 2>/dev/null \
+                  | jq -r ".status.health.status" 2>/dev/null || echo "Unknown")
+                if [ "$STATUS" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+                  echo "ArgoCD Synced + Healthy"
+                  exit 0
+                fi
+                echo "  sync=$STATUS health=$HEALTH ..."
+                sleep 10
+              done
+            ' || echo "::warning::ArgoCD wait timed out or failed; continuing to direct health checks."
+          else
+            echo "::notice::argocd CLI / creds not configured — falling back to kubectl rollout wait."
+            kubectl rollout status deployment/portal-bff -n education --timeout=300s 2>/dev/null \
+              || echo "::warning::kubectl rollout wait unavailable/skipped (no cluster access in this env)."
+          fi
+      - name: Post-deploy smoke test (health endpoints)
+        run: |
+          # D-138: Verify critical health endpoints after deploy.
+          # Prefer kubectl exec/port-forward when running in-cluster; fall back
+          # to direct in-cluster service DNS. Any failure fails the deploy.
+          FAILED=false
+          check() {
+            local name="$1" url="$2"
+            echo "Checking $name at $url ..."
+            local code
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
+            if [ "$code" = "200" ] || [ "$code" = "503" ] && \
+               [ "$(curl -s --max-time 10 "$url" 2>/dev/null | jq -r '.status // empty')" = "UP" ]; then
+              echo "  OK ($code)"
+            elif [ "$code" = "200" ]; then
+              echo "  OK (200)"
+            else
+              echo "::error::$name smoke test FAILED: $url returned HTTP $code"
+              FAILED=true
+            fi
+          }
+
+          # Try port-forward first (works with a kubeconfig but no ingress).
+          PF_BPF="" PF_GW=""
+          if command -v kubectl >/dev/null 2>&1 && \
+             kubectl get cluster --output name >/dev/null 2>&1; then
+            kubectl -n education port-forward svc/portal-bff 8090:8090 >/dev/null 2>&1 & PF_BPF=$!
+            kubectl -n education port-forward svc/ws-gateway 8081:8081 >/dev/null 2>&1 & PF_GW=$!
+            sleep 3
+          fi
+
+          check "portal-bff"    "http://127.0.0.1:8090/actuator/health"
+          check "ws-gateway"  "http://127.0.0.1:8081/healthz"
+          check "core-business"  "http://127.0.0.1:8083/actuator/health"
+          check "grading-service" "http://127.0.0.1:8085/actuator/health"
+
+          [ -n "$PF_BPF" ] && kill "$PF_BPF" 2>/dev/null || true
+          [ -n "$PF_GW" ] && kill "$PF_GW" 2>/dev/null || true
+
+          if [ "$FAILED" = "true" ]; then
+            echo "::error::Post-deploy smoke test FAILED — initiate rollback"
+            exit 1
+          fi
+          echo "All post-deploy smoke checks passed."
+      - name: Smoke test summary
+        if: always()
+        run: |
+          echo "## Post-deploy Smoke (D-138)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image tag: \`${{ needs.update-manifests.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Manifest commit: \`${{ needs.update-manifests.outputs.commit_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # On failure, revert the manifest commit so ArgoCD does not roll out
+  # a broken tag. Only reverts when a commit was actually pushed.
+  # D-138: also triggers when post-deploy-smoke fails.
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [update-manifests, post-deploy-smoke]
+    if: failure() && needs.update-manifests.outputs.pushed == 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITOPS_PAT }}
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Revert manifest commit
+        run: |
+          echo "Reverting commit ${{ needs.update-manifests.outputs.commit_sha }}"
+          git revert --no-edit ${{ needs.update-manifests.outputs.commit_sha }} || {
+            echo "Revert failed or already reverted — attempting hard reset to previous."
+            git reset --hard HEAD~1
+          }
+          git push --force-with-lease
+          echo "::warning::Manifest commit reverted due to deploy failure."

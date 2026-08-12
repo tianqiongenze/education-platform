@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/name: common-config
+data:
+  # Nacos 3.1.1 service discovery + config center
+  NACOS_SERVER_ADDR: "nacos.edu.svc:8848"
+  NACOS_NAMESPACE: "education-platform"
+
+  # Pulsar 3.3.9 message broker
+  PULSAR_URL: "pulsar://pulsar.edu.svc:6650"
+  PULSAR_WEB_URL: "http://pulsar.edu.svc:8080"
+
+  # Redis Cluster (6 nodes)
+  REDIS_CLUSTER_NODES: "redis-0.redis.edu.svc:6379,redis-1.redis.edu.svc:6379,redis-2.redis.edu.svc:6379,redis-3.redis.edu.svc:6379,redis-4.redis.edu.svc:6379,redis-5.redis.edu.svc:6379"
+
+  # TiDB JDBC URL
+  TIDB_JDBC_URL: "jdbc:mysql://tidb.edu.svc:4000/education?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true"
+
+  # OpenTelemetry collector
+  # D-118: ws-gateway and ai-platform now export traces via OTLP. The collector
+  # Service is named otel-collector (ClusterIP) on port 4317 (gRPC).
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_SERVICE_NAMESPACE: "education-platform"
+  # D-118: head-based sampling for client libraries that support it. The
+  # collector's tail_sampling processor (D-035 rule 5) makes the final
+  # retention decision, so this only reduces egress for SDKs that honor it.
+  OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+
+  # Milvus vector DB (for AI service)
+  MILVUS_HOST: "milvus.edu.svc"
+  MILVUS_PORT: "19530"
+
+  # D-120 / ADR-INF-02 v2.0: NebulaGraph 分布式图数据库 (重图负载)
+  # 承载 SP-07 知识图谱 / SP-02 字段级血缘 / SP-04 Agent 拓扑。
+  # 应用通过 graphd 服务连接 (nGQL/openCypher, 端口 9669)。
+  # metad/storaged 仅集群内部 Raft 通信，不对应用暴露。
+  # 注意: kustomization namePrefix=edu- 会将 Service 前缀化为 edu-nebulagraph-graphd-svc。
+  # 此处 host 不带前缀，应用 Pod 内通过 FQDN
+  # edu-nebulagraph-graphd-svc.education-platform.svc.cluster.local 访问，
+  # 或在 overlay 中覆盖为短名 (本地 k3s 验证场景)。
+  NEBULA_GRAPH_HOST: "nebulagraph-graphd-svc"
+  NEBULA_GRAPH_PORT: "9669"
+  NEBULA_GRAPH_USER: "root"
+  NEBULA_GRAPH_PASSWORD: ""
+  NEBULA_GRAPH_SPACE: "education_platform"
+
+  # JetStream (NATS streaming)
+  JETSTREAM_URL: "nats://jetstream.edu.svc:4222"
+
+  # D-041: 多区域多活配置
+  CELL_NAME: "cell-hz"  # 当前单元: cell-hz/cell-sz/cell-bj/cell-sg/cell-us/cell-eu
+  CELL_REGION: "cn-east-1"  # 地域: cn-east-1/cn-south-1/cn-north-1/ap-southeast-1/us-east-1/eu-west-1
+  CELL_ZONE: "hz-a"  # 可用区
+
+  # TiDB Follower Read (D-041)
+  TIDB_FOLLOWER_READ: "true"
+  TIDB_FOLLOWER_READ_STRATEGY: "follower-read"
+
+  # Pulsar Geo-Replication clusters (D-041)
+  PULSAR_REPLICATION_CLUSTERS: "hz,sz,bj"
+  PULSAR_GLOBAL_TOPIC: "persistent://ep/global-events"
+
+  # Redis Cluster 跨cell CRDT (D-041)
+  REDIS_CLUSTER_CRDT_ENABLED: "true"
+  REDIS_CLUSTER_LOCAL_CELL: "cell-hz"
+
+  # GSLB domain
+  GSLB_DOMAIN: "edu.example.com"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dubbo-config
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/name: dubbo-config
+data:
+  # Dubbo 3.3.6 protocol configuration
+  DUBBO_PROTOCOL_NAME: "dubbo"
+  DUBBO_PROTOCOL_THREADS: "200"
+
+  # Registry: Nacos 3.1.1
+  DUBBO_REGISTRY_TYPE: "nacos"
+  DUBBO_REGISTRY_ADDRESS: "nacos://nacos.edu.svc:8848?namespace=education-platform"
+
+  # QoS disabled for production security (D-035 ops hardening)
+  DUBBO_APPLICATION_QOS_ENABLE: "false"
+  DUBBO_APPLICATION_QOS_ACCEPT_FOREIGN_IP: "false"
+
+  # Metadata center (Nacos)
+  DUBBO_METADATA_REPORT_ADDRESS: "nacos://nacos.edu.svc:8848?namespace=education-platform"
+
+  # Config center (Nacos)
+  DUBBO_CONFIG_CENTER_ADDRESS: "nacos://nacos.edu.svc:8848?namespace=education-platform"

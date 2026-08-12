@@ -1590,7 +1590,7 @@ Expected: 总覆盖率 ≥80%；进一步验证 JwtService/AuthFilter 单类 100
 
 **Interfaces:**
 - Consumes: golang-jwt/jwt v5.3.1, gorilla/websocket v1.5.3, go-redis v9.21.0, miniredis v2（test）
-- Produces: `jwt.Validator`（RS256 验签取 user_id）、`cache.GetOrLoad/Evict`（L1 LRU + L2 Redis，明文 key）、`hub.Hub`（WS 广播，按 fnv1a(session)%N 分片，跨 pod Redis Pub/Sub）
+- Produces: `jwt.Validator`（RS256 验签取 user_id）、`cache.GetOrLoad/Evict`（L1 LRU + L2 Redis，明文 key）、`hub.Hub`（WS 广播，按 fnv1a(session)%N 分片，跨 pod Pulsar 广播，topic=`persistent://public/ws/broadcast`）
 
 - [ ] **Step 1: go.mod 初始化 + 依赖**
 

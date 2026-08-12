@@ -1,0 +1,40 @@
+{
+  "name": "@ep/ui-kit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme/index.ts",
+    "./components": "./src/components/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ep/shared": "workspace:*",
+    "clsx": "2.1.1"
+  },
+  "peerDependencies": {
+    "@tarojs/components": ">=4.0.0",
+    "@tarojs/taro": ">=4.0.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@ep/lint-config": "workspace:*",
+    "eslint": "9.18.0",
+    "@tarojs/components": "4.0.9",
+    "@tarojs/taro": "4.0.9",
+    "@types/react": "19.0.7",
+    "react": "19.0.0",
+    "typescript": "5.8.3",
+    "vitest": "2.1.9",
+    "@vitejs/plugin-react": "4.3.4",
+    "jsdom": "25.0.1",
+    "@testing-library/react": "16.1.0"
+  }
+}

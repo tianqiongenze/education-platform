@@ -1,0 +1,119 @@
+.assign-detail {
+  padding: 24px;
+
+  &__head {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 24px;
+    margin-bottom: 24px;
+  }
+
+  &__title {
+    display: block;
+    font-size: 36px;
+    font-weight: 600;
+    color: #262626;
+    margin-bottom: 20px;
+  }
+
+  &__meta {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  &__due {
+    font-size: 24px;
+    color: #595959;
+
+    &--overdue {
+      color: #ff4d4f;
+    }
+  }
+
+  &__max-score {
+    font-size: 24px;
+    color: #fa8c16;
+  }
+
+  &__desc {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+
+    &-title {
+      display: block;
+      font-size: 28px;
+      font-weight: 500;
+      color: #262626;
+      margin-bottom: 16px;
+    }
+
+    &-body {
+      display: block;
+      font-size: 26px;
+      color: #595959;
+      line-height: 1.6;
+    }
+  }
+
+  &__attachments {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+
+    &-title {
+      display: block;
+      font-size: 28px;
+      font-weight: 500;
+      color: #262626;
+      margin-bottom: 16px;
+    }
+  }
+
+  &__attachment {
+    display: flex;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #f5f5f5;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      margin-right: 16px;
+    }
+
+    &-name {
+      font-size: 26px;
+      color: #1890ff;
+    }
+  }
+
+  &__empty {
+    text-align: center;
+    color: #8c8c8c;
+    font-size: 28px;
+    margin-top: 80px;
+  }
+
+  &__footer {
+    margin-top: 24px;
+
+    & .assign-detail__submit-btn {
+      width: 100%;
+      height: 88px;
+      line-height: 88px;
+      font-size: 32px;
+      color: #fff;
+      background: #1890ff;
+      border-radius: 44px;
+    }
+  }
+}

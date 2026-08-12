@@ -99,6 +99,12 @@ public class CacheService {
 
     public void evict(String cacheName, String key) {
         String fullKey = cacheName + ":" + key;
+        // P1-8 (audit D-048): removed manual delayed-double-delete (virtual-thread
+        // sleep + re-delete). That hand-rolled pattern violated the iron rule
+        // "禁止手写已存在中间件内置能力". Cross-node L1 invalidation is now handled
+        // by the Redis Pub/Sub CacheEvictionListener (P1-5), and L2 is deleted
+        // synchronously below. The broadcast then notifies other nodes to clear
+        // their L1, which closes the stale-read window the double-delete patched.
         CacheManager cm = cmProvider.getIfAvailable();
         if (cm != null) {
             Cache c = cm.getCache(cacheName);
@@ -114,13 +120,6 @@ public class CacheService {
         }
         CacheBroadcast b = broadcastProvider.getIfAvailable();
         if (b != null) b.publishEvict(cacheName, key);
-        // 延迟双删 100ms（M0：raw thread；生产用 scheduled executor）
-        if (redis != null) {
-            new Thread(() -> {
-                try { Thread.sleep(100); redis.delete(fullKey); }
-                catch (Exception e) { log.debug("double-delete skip"); }
-            }).start();
-        }
     }
 
     @SuppressWarnings("unchecked")

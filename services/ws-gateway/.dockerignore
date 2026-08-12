@@ -1,0 +1,12 @@
+# D-115: .dockerignore for ws-gateway
+# Keep the build context lean and avoid copying dev artifacts.
+**/target/
+**/.venv/
+**/node_modules/
+**/.git/
+**/*.md
+**/test/
+**/*_test.go
+.gitignore
+Dockerfile
+.dockerignore

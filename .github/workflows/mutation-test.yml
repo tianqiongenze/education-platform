@@ -1,0 +1,97 @@
+name: Mutation Tests (PITest)
+
+# D-136: Nightly mutation testing with PITest.
+# Mutation testing verifies that the test suite actually catches code defects
+# by injecting mutations (e.g. `>` → `>=`, `+` → `-`) and checking whether any
+# test fails. A low mutation score means tests are passing "by luck" — they
+# exercise the code but don't assert the right invariants.
+#
+# This runs nightly (not on every PR) because mutation testing is slow
+# (typically 5-10x the unit-test runtime). Results are uploaded as artifacts
+# for review. A mutation score below 60% is flagged as a warning.
+
+on:
+  schedule:
+    # Nightly at 3 AM UTC (after the load-test nightly at 2 AM)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  pitest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # D-136: core-business is the pilot module (core domain: course + user).
+        # Expand to other services once the pilot stabilizes.
+        service:
+          - services/core-business
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - name: Install ep-web-common (dependency)
+        working-directory: services/ep-web-common
+        run: mvn install -DskipTests -B -q
+      - name: Run PITest mutation testing
+        working-directory: ${{ matrix.service }}
+        run: mvn test-compile org.pitest:pitest-maven:mutationCoverage -B
+        env:
+          # Java 21 dynamic agent loading for PITest
+          MAVEN_OPTS: "-XX:+EnableDynamicAgentLoading"
+      - name: Parse mutation score
+        id: score
+        working-directory: ${{ matrix.service }}
+        run: |
+          # PITest writes an XML report at target/pit-reports/*/mutations.xml
+          xml=$(find target/pit-reports -name 'mutations.xml' 2>/dev/null | head -1)
+          if [ -z "$xml" ]; then
+            echo "::warning::No PITest XML report found for ${{ matrix.service }}"
+            echo "score=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "Using report: $xml"
+          read killed total < <(python3 -c "
+          import xml.etree.ElementTree as ET
+          r = ET.parse('$xml').getroot()
+          mutations = r.findall('.//mutation')
+          killed = sum(1 for m in mutations if m.attrib.get('status') in ('KILLED', 'TIMED_OUT'))
+          print(killed, len(mutations))
+          ")
+          if [ "$total" = "0" ]; then
+            echo "::warning::No mutations generated for ${{ matrix.service }}"
+            echo "score=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          pct=$(python3 -c "k,t=$killed,$total; print(round(100*k/t,2))")
+          echo "Mutation score: ${pct}% (${killed}/${total} killed)"
+          echo "score=${pct}" >> $GITHUB_OUTPUT
+      - name: Mutation test summary
+        if: always()
+        run: |
+          echo "## Mutation Test Results (PITest) — D-136" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Mutation Score | Threshold |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ matrix.service }} | ${{ steps.score.outputs.score }}% | 60% (advisory) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Mutation testing runs nightly. A score below 60% means the test" >> $GITHUB_STEP_SUMMARY
+          echo "suite is not catching injected defects — review the HTML report artifact." >> $GITHUB_STEP_SUMMARY
+      - name: Upload PITest HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitest-report-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/pit-reports/
+          if-no-files-found: ignore
+      - name: Warn if mutation score is low
+        if: steps.score.outputs.score != '0' && steps.score.outputs.score != ''
+        run: |
+          score=${{ steps.score.outputs.score }}
+          if [ $(python3 -c "print(1 if float('$score') < 60 else 0)") -eq 1 ]; then
+            echo "::warning::Mutation score ${score}% is below 60% threshold for ${{ matrix.service }} — tests may not be catching defects."
+          fi

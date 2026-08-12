@@ -1,0 +1,63 @@
+# D-119: Test profile for OrderServiceTestcontainersIT.
+#
+# Testcontainers starts an isolated MySQL 8.0 container (TiDB is MySQL-protocol
+# compatible) and exposes its JDBC URL via @DynamicPropertySource in the test
+# class. The container is started/stopped per-test-class (self-contained — no
+# shared cluster infrastructure, Iron Law 0).
+#
+# Seata TC stays disabled (dev/CI has no live TC; the Saga state-machine JSON
+# is still on the classpath but the engine stub is injected by the test).
+# Pulsar stays disabled (EP_DEV_ONLY). Dubbo registry address N/A.
+
+server:
+  port: 0
+
+spring:
+  application:
+    name: order-platform-test
+  # datasource URL is injected dynamically by @DynamicPropertySource in
+  # OrderServiceTestcontainersIT — do NOT set it here.
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+dubbo:
+  application:
+    name: order-platform-test
+  protocol:
+    name: dubbo
+    port: -1
+  registry:
+    address: N/A
+
+ep:
+  pulsar:
+    enabled: false
+    topic:
+      domain-events: domain-events-test
+
+# Seata: no live TC in dev/CI (D-077/D-113). Keep the Saga engine beans on the
+# classpath but do not bootstrap a real TC cluster.
+seata:
+  enabled: false
+  tx-service-group: order-service-test-group
+  service:
+    vgroup-mapping:
+      order-service-test-group: default
+  registry:
+    type: file
+  config:
+    type: file
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+cors:
+  allowed-origins: http://localhost:3000

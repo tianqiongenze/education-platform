@@ -92,7 +92,7 @@ IT 后端 MVP 是项目群**第一个端到端打通的事业群**，验证三�
 | C-12 | AI 网关 mock 模式支持压测/CI，不强依赖外部 LLM | D-018 |
 
 ### 2.4 假设与依赖
-- 假设：SP-01 技术中台（网关/路由/读写分离/缓存/EDA/可观测）已交付 v1；SP-03 业务中台（UCM/OPM/CMP/NTF）已交付 v1；SP-04 AI 中台（网关+RAG+批改 Agent）已交付 v1；SP-06 三端前端骨架已交付；TiDB/Redis/Pulsar/Kafka/Milvus/对象存储/K8s 基础设施可用。
+- 假设：SP-01 技术中台（网关/路由/读写分离/缓存/EDA/可观测）已交付 v1；SP-03 业务中台（UCM/OPM/CMP/NTF）已交付 v1；SP-04 AI 中台（网关+RAG+批改 Agent）已交付 v1；SP-06 三端前端骨架已交付；TiDB/Redis/Pulsar(CDC+事件统一)/Milvus/对象存储/K8s 基础设施可用。
 - 依赖：SP-01 CellRouter、SP-02 CDC（学情入湖）、SP-03 课程目录/订单、SP-04 AI 网关、SP-06 前端骨架。
 
 ---

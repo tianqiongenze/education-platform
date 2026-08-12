@@ -1,0 +1,56 @@
+# D-108: Standalone local profile — zero external dependencies.
+# Usage: mvn spring-boot:run -Dspring-boot.run.profiles=dev-local
+# No DB/Redis/Milvus/Nacos/ES needed; service boots standalone.
+spring:
+  aot:
+    enabled: false
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    exclude:
+      # D-108: no Redis locally — exclude Spring Data Redis auto-config.
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      # D-108: redisson-spring-boot-starter targets SB3x classpaths; not needed locally.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      # D-108: no Seata TC server locally — exclude Seata auto-config.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+dubbo:
+  registry:
+    address: N/A
+
+# D-108: Milvus / Elasticsearch unavailable locally. Connectivity will fail at
+# query time, but service boot does not require them.
+milvus:
+  host: 127.0.0.1
+  port: 19530
+  collection: knowledge_vectors
+  dimension: 1536
+
+elasticsearch:
+  host: 127.0.0.1
+  port: 9200
+  scheme: http
+  index: knowledge_docs
+
+ep:
+  cache:
+    enabled: false   # D-108: disable cache warmup (no Redis backend)
+    warmup:
+      enabled: false
+
+seata:
+  enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.ep: DEBUG

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- D-070: Structured JSON logging for production, console for dev -->
+    <!-- D-077: Sensitive data masking converter -->
+    <conversionRule conversionWord="maskedMsg" converterClass="com.ep.business.logging.SensitiveDataConverter" />
+
+    <!-- Dev profile: human-readable console -->
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - traceId:%X{traceId} - %maskedMsg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- Prod profile: JSON for Loki/ELK ingestion -->
+    <springProfile name="prod">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>spanId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>tenantId</includeMdcKeyName>
+                <customFields>{"service":"core-business"}</customFields>
+            </encoder>
+        </appender>
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        <logger name="com.ep" level="INFO"/>
+    </springProfile>
+
+    <!-- Default (no profile): console -->
+    <springProfile name="default">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %maskedMsg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>

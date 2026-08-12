@@ -31,7 +31,7 @@
 
 **In Scope**：
 
-- 网关层(Java Spring Cloud Gateway + Go WS 网关)：鉴权、限流、路由、长连接、广播
+- 网关层(Java 自建 Netty edge + Disruptor + Spring WebMVC + Go WS 网关)：鉴权、限流、路由、长连接、广播  ← D-032/ADR-T07(rev2) 禁 SCG
 - 单元路由器 CellRouter：流量纠正、写挂起、路由表外置
 - 读写分离 SDK(ep-rw-java，已实现 v1.0.0)：4 模式 READ/WRITE/READ+consistent/READ+tiflash
 - 高并发 ingest SDK(ep-disruptor，已实现 v1.0.0)：LMAX Disruptor RingBuffer 65536、drop-on-full、batch flush
@@ -122,7 +122,7 @@
 
 | ID | 需求 | 优先级 | 验证 |
 |----|------|--------|------|
-| FR-GW-01 | 基于 Spring Cloud Gateway 实现统一接入网关，路由配置由 Nacos 动态下发 | P0 | 路由变更不重启生效 |
+| FR-GW-01 | 基于自建 Netty edge + Disruptor ingress + Spring WebMVC 实现统一接入网关(禁 Spring Cloud Gateway — D-032/铁律6)，路由配置由 Nacos 动态下发 | P0 | 路由变更不重启生效 |
 | FR-GW-02 | JWT RS256 签发：BFF 在登录成功后用私钥签发 JWT，header.kid 指向 JWKS 公钥 | P0 | 验签测试 |
 | FR-GW-03 | JWKS 端点 `//.well-known/jwks.json` 暴露公钥，下游缓存 5min，轮换时 kid 变更触发重新拉取 | P0 | 密钥轮换测试 |
 | FR-GW-04 | AuthFilter 强制校验 Authorization 头，禁止任何 `X-User-Id`/`X-Tenant-Id` 伪造头透传到下游 | P0 | 伪造头注入测试 |
@@ -137,7 +137,7 @@
 |----|------|--------|------|
 | FR-WS-01 | 基于 Go 实现长连接网关，单节点支撑 50 万连接，集群百万级 | P0 | 连接压测 |
 | FR-WS-02 | WS 广播按 `fnv1a(session)%N` 分片，避免单连接广播风暴 | P0 | 分片验证 |
-| FR-WS-03 | 跨 pod 通过 Redis Pub/Sub 广播消息，pod 内本地直发 | P0 | 跨 pod 消息送达 |
+| FR-WS-03 | 跨 pod 通过 Pulsar 广播消息（统一消息基础设施，替代 Redis Pub/Sub），pod 内本地直发 | P0 | 跨 pod 消息送达 |
 | FR-WS-04 | 心跳保活：客户端 30s ping，服务端 60s 无响应判定断连 | P0 | 断连清理测试 |
 | FR-WS-05 | 鉴权：WS 握手时校验 JWT(从 query/cookie/subprotocol 提取)，失败拒连 | P0 | 未授权拒连测试 |
 | FR-WS-06 | 房间概念：直播房间消息仅广播给房间订阅者，避免全局广播 | P0 | 房间隔离测试 |
@@ -360,7 +360,7 @@
 | Java 主语言 | Disruptor/Pulsar/TiDB/Redis 重业务用 Java |
 | Go 网关 | WS/实时网关用 Go(连接数优势) |
 | Rust 热点 | 风控/计费热点用 Rust(P95 <1ms) |
-| 复用基础设施 | TiDB/Redis/Pulsar/Kafka/Milvus/K8s/可观测复用，不重建 |
+| 复用基础设施 | TiDB/Redis/Pulsar(CDC+事件统一)/Milvus/K8s/可观测复用，不重建 |
 
 ### 5.3 合规约束
 

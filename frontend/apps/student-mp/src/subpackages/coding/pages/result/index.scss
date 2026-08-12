@@ -1,0 +1,104 @@
+.result {
+  padding: 24px;
+
+  &__hero {
+    text-align: center;
+    padding: 48px 24px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+
+    &--ok {
+      background: linear-gradient(135deg, #52c41a, #95de64);
+    }
+
+    &--fail {
+      background: linear-gradient(135deg, #ff4d4f, #ff7875);
+    }
+  }
+
+  &__status {
+    display: block;
+    font-size: 48px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  &__cases {
+    display: block;
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-top: 16px;
+  }
+
+  &__stats {
+    display: flex;
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 0;
+    margin-bottom: 24px;
+  }
+
+  &__stat {
+    flex: 1;
+    text-align: center;
+
+    &-label {
+      display: block;
+      font-size: 24px;
+      color: #8c8c8c;
+    }
+
+    &-value {
+      display: block;
+      font-size: 36px;
+      font-weight: 600;
+      color: #1890ff;
+      margin-top: 8px;
+    }
+  }
+
+  &__error-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  &__error-title {
+    display: block;
+    font-size: 28px;
+    font-weight: 500;
+    color: #262626;
+    margin-bottom: 12px;
+  }
+
+  &__error-text {
+    display: block;
+    font-size: 24px;
+    color: #ff4d4f;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  &__error {
+    text-align: center;
+    color: #ff4d4f;
+    font-size: 28px;
+    margin: 48px 0;
+  }
+
+  &__footer {
+    margin-top: 24px;
+
+    button {
+      width: 100%;
+      height: 88px;
+      line-height: 88px;
+      font-size: 32px;
+      color: #1890ff;
+      background: #e6f7ff;
+      border-radius: 44px;
+    }
+  }
+}

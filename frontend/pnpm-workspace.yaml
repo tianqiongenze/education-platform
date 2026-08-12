@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@nestjs/core': true
+  '@openapitools/openapi-generator-cli': false
+  '@parcel/watcher': true
+  '@swc/core': true
+  '@tarojs/binding': true
+  core-js: true
+  core-js-pure: false
+  esbuild: true
+verifyDepsBeforeRun: false

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识中台管理控制台</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2029; --panel2:#212a36; --border:#2c3744;
+    --text:#e4e7eb; --muted:#8b97a5; --accent:#4f9eff; --accent2:#36c5a0;
+    --warn:#f5a623; --danger:#f56c6c; --ok:#36c5a0; --purple:#b07cff;
+    --chart1:#4f9eff; --chart2:#36c5a0; --chart3:#b07cff; --chart4:#f5a623;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+  a{color:var(--accent);text-decoration:none;cursor:pointer}
+  /* layout */
+  .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .side{background:var(--panel);border-right:1px solid var(--border);padding:16px 0;position:sticky;top:0;height:100vh;overflow:auto}
+  .side .logo{padding:8px 20px 20px;font-size:16px;font-weight:600;color:var(--accent);letter-spacing:.5px}
+  .nav-item{padding:10px 20px;cursor:pointer;color:var(--muted);border-left:3px solid transparent;transition:.15s;font-size:13px}
+  .nav-item:hover{background:var(--panel2);color:var(--text)}
+  .nav-item.active{background:var(--panel2);color:var(--accent);border-left-color:var(--accent)}
+  .nav-item .ic{display:inline-block;width:18px;margin-right:6px;text-align:center}
+  .main{padding:24px 32px;max-width:1440px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .topbar h1{font-size:20px;font-weight:600}
+  .topbar .meta{color:var(--muted);font-size:12px;margin-top:2px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--panel2);color:var(--muted)}
+  .badge.ok{background:rgba(54,197,160,.15);color:var(--ok)}
+  .badge.warn{background:rgba(245,166,35,.15);color:var(--warn)}
+  .badge.danger{background:rgba(245,108,108,.15);color:var(--danger)}
+  /* cards */
+  .grid{display:grid;gap:16px}
+  .g5{grid-template-columns:repeat(5,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px}
+  .card h3{font-size:14px;color:var(--muted);font-weight:500;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+  .kpi{font-size:26px;font-weight:600}
+  .kpi .unit{font-size:13px;color:var(--muted);margin-left:4px}
+  .delta{font-size:12px;margin-top:6px}
+  .delta.up{color:var(--ok)} .delta.down{color:var(--danger)}
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  tr:hover td{background:var(--panel2)}
+  .tag{padding:2px 8px;border-radius:4px;font-size:11px;background:var(--panel2)}
+  .tag.active{background:rgba(54,197,160,.15);color:var(--ok)}
+  .tag.arch{background:rgba(245,166,35,.15);color:var(--warn)}
+  .tag.run{background:rgba(79,158,255,.15);color:var(--accent)}
+  /* charts */
+  .bar-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .bar-row .lbl{width:110px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar-track{flex:1;height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px;background:var(--chart1)}
+  .bar-row .val{width:50px;text-align:right;font-size:12px;color:var(--muted)}
+  .donut{width:130px;height:130px;border-radius:50%;background:conic-gradient(var(--chart1) 0 42%, var(--chart2) 42% 68%, var(--chart3) 68% 86%, var(--chart4) 86% 100%);
+         display:flex;align-items:center;justify-content:center;margin:0 auto}
+  .donut::after{content:"";width:86px;height:86px;background:var(--panel);border-radius:50%}
+  .donut-wrap{position:relative;display:inline-block}
+  .donut-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  .donut-label .v{font-size:20px;font-weight:600}
+  .donut-label .l{font-size:11px;color:var(--muted)}
+  .legend{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  /* sparkline / latency bars */
+  .spark{display:flex;align-items:flex-end;gap:4px;height:80px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .spark .b{flex:1;border-radius:2px 2px 0 0;background:var(--chart1);min-height:4px;position:relative}
+  .spark .b.warn{background:var(--warn)}
+  .spark .b:hover::after{content:attr(data-v);position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text);background:var(--panel2);padding:1px 4px;border-radius:3px;white-space:nowrap}
+  .spark-x{display:flex;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
+  .spark-x span{flex:1;text-align:center}
+  /* pill status */
+  .pill{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .pill.ok{background:var(--ok)}.pill.warn{background:var(--warn)}.pill.down{background:var(--danger)}
+  /* form */
+  input,select,textarea,button{font-family:inherit;font-size:13px}
+  input[type=text],input[type=search],select,textarea{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+     padding:7px 10px;border-radius:5px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  button{background:var(--accent);color:#0f1419;border:none;padding:7px 14px;border-radius:5px;cursor:pointer;font-weight:500}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+  button:hover{opacity:.9}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .stat-line{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:4px 0}
+  .code{background:#0b0f14;border:1px solid var(--border);border-radius:5px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fe6b3;white-space:pre-wrap;max-height:240px;overflow:auto}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--accent);padding:12px 18px;border-radius:6px;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.4);display:none;z-index:99}
+  .toast.show{display:block}
+  .panel{display:none}.panel.active{display:block}
+  .meter{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:4px}
+  .meter>span{display:block;height:100%;background:var(--accent2)}
+  .scroll{max-height:360px;overflow:auto}
+  /* graph preview */
+  .graph-wrap{position:relative;height:200px;background:#0b0f14;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .graph-svg{width:100%;height:100%}
+  .gnode{cursor:pointer}
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .tab{padding:8px 16px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-size:13px}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .foot{padding:16px 20px;margin-top:20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">◆ 知识中台控制台</div>
+    <div class="nav-item active" data-nav="dashboard"><span class="ic">▦</span>总览看板</div>
+    <div class="nav-item" data-nav="kb"><span class="ic">📚</span>知识库管理</div>
+    <div class="nav-item" data-nav="search"><span class="ic">🔍</span>文档检索</div>
+    <div class="nav-item" data-nav="qa"><span class="ic">💬</span>智能问答</div>
+    <div class="nav-item" data-nav="graph"><span class="ic">🕸</span>知识图谱</div>
+    <div class="nav-item" data-nav="agent"><span class="ic">🤖</span>Agent 管理</div>
+    <div class="nav-item" data-nav="tenant"><span class="ic">🏢</span>租户管理</div>
+    <div class="foot">
+      区域: 国内主cell-A<br>嵌入: bge-large-zh<br>RAG_MODE: <span class="badge ok">hybrid</span><br>版本: v1.0.0
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div><h1 id="title">总览看板</h1><div class="meta" id="meta">数据更新: 2026-08-08 14:32 · 采样窗口 24h</div></div>
+      <div class="row">
+        <select id="win"><option>最近 24 小时</option><option>最近 7 天</option><option>最近 30 天</option></select>
+        <input type="search" id="globalSearch" placeholder="搜索知识库 / 文档 / Agent..." style="width:200px">
+        <button class="ghost" onclick="toast('已刷新')">刷新</button>
+      </div>
+    </div>
+
+    <!-- ===== 总览看板 ===== -->
+    <section class="panel active" id="p-dashboard">
+      <div class="grid g5">
+        <div class="card"><h3>知识库总数</h3><div class="kpi">48<span class="unit">个</span></div><div class="delta up">↑ 3 本周</div></div>
+        <div class="card"><h3>文档总数</h3><div class="kpi">12,580</div><div class="delta up">↑ 624 本周</div></div>
+        <div class="card"><h3>今日问答</h3><div class="kpi">3,420</div><div class="delta up">↑ 8.4%</div></div>
+        <div class="card"><h3>Agent 数</h3><div class="kpi">12<span class="unit">个</span></div><div class="delta up">10 在线</div></div>
+        <div class="card"><h3>平均检索延迟</h3><div class="kpi">87<span class="unit">ms</span></div><div class="delta up">↓ 12ms · 目标 &lt;120ms</div></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>热门检索词 Top 10 <span class="badge ok">今日</span></h3>
+          <div class="bar-row"><div class="lbl">二分查找边界</div><div class="bar-track"><div class="bar-fill" style="width:94%;background:var(--chart1)"></div></div><div class="val">1,884</div></div>
+          <div class="bar-row"><div class="lbl">虚拟线程 Loom</div><div class="bar-track"><div class="bar-fill" style="width:78%;background:var(--chart1)"></div></div><div class="val">1,562</div></div>
+          <div class="bar-row"><div class="lbl">申论写作结构</div><div class="bar-track"><div class="bar-fill" style="width:72%;background:var(--chart2)"></div></div><div class="val">1,440</div></div>
+          <div class="bar-row"><div class="lbl">K8s Operator</div><div class="bar-track"><div class="bar-fill" style="width:65%;background:var(--chart2)"></div></div><div class="val">1,302</div></div>
+          <div class="bar-row"><div class="lbl">考研政治考点</div><div class="bar-track"><div class="bar-fill" style="width:58%;background:var(--chart3)"></div></div><div class="val">1,168</div></div>
+          <div class="bar-row"><div class="lbl">Percolator 事务</div><div class="bar-track"><div class="bar-fill" style="width:48%;background:var(--chart3)"></div></div><div class="val">964</div></div>
+          <div class="bar-row"><div class="lbl">Disruptor 原理</div><div class="bar-track"><div class="bar-fill" style="width:42%;background:var(--chart4)"></div></div><div class="val">842</div></div>
+          <div class="bar-row"><div class="lbl">行测数量关系</div><div class="bar-track"><div class="bar-fill" style="width:36%;background:var(--chart4)"></div></div><div class="val">724</div></div>
+          <div class="bar-row"><div class="lbl">Flink 状态后端</div><div class="bar-track"><div class="bar-fill" style="width:30%;background:#6b7a8f"></div></div><div class="val">608</div></div>
+          <div class="bar-row"><div class="lbl">DDD 战术设计</div><div class="bar-track"><div class="bar-fill" style="width:24%;background:#6b7a8f"></div></div><div class="val">486</div></div>
+        </div>
+        <div class="card">
+          <h3>检索延迟趋势 (24h) <span class="badge ok">达标</span></h3>
+          <div class="spark" id="latencySpark"></div>
+          <div class="spark-x"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span><span>24</span></div>
+          <div class="stat-line" style="margin-top:10px"><span>P50 延迟</span><span style="color:var(--ok)">62ms</span></div>
+          <div class="stat-line"><span>P95 延迟</span><span style="color:var(--ok)">142ms</span></div>
+          <div class="stat-line"><span>P99 延迟</span><span style="color:var(--warn)">218ms</span></div>
+          <div class="stat-line"><span>召回@10</span><span style="color:var(--ok)">0.88 (≥0.85)</span></div>
+          <div class="stat-line"><span>缓存命中率</span><span style="color:var(--ok)">74.2%</span></div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:16px">
+        <div class="card">
+          <h3>租户用量分布</h3>
+          <div class="donut-wrap" style="margin:8px 0">
+            <div class="donut"></div>
+            <div class="donut-label"><div class="v">12.5k</div><div class="l">文档总量</div></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--chart1)"></i>IT后端 42%</span>
+            <span><i style="background:var(--chart2)"></i>考研 26%</span>
+            <span><i style="background:var(--chart3)"></i>考公 18%</span>
+            <span><i style="background:var(--chart4)"></i>其他 14%</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>问答类型分布</h3>
+          <div class="bar-row"><div class="lbl">概念解释</div><div class="bar-track"><div class="bar-fill" style="width:82%;background:var(--chart1)"></div></div><div class="val">38%</div></div>
+          <div class="bar-row"><div class="lbl">作业答疑</div><div class="bar-track"><div class="bar-fill" style="width:64%;background:var(--chart2)"></div></div><div class="val">28%</div></div>
+          <div class="bar-row"><div class="lbl">代码调试</div><div class="bar-track"><div class="bar-fill" style="width:48%;background:var(--chart3)"></div></div><div class="val">20%</div></div>
+          <div class="bar-row"><div class="lbl">考试重点</div><div class="bar-track"><div class="bar-fill" style="width:30%;background:var(--chart4)"></div></div><div class="val">14%</div></div>
+          <div class="stat-line" style="margin-top:8px"><span>平均引用率</span><span style="color:var(--ok)">96.2%</span></div>
+          <div class="stat-line"><span>拒答率</span><span>3.8% (无把握)</span></div>
+        </div>
+        <div class="card">
+          <h3>系统健康</h3>
+          <div class="stat-line"><span>向量库 (Milvus)</span><span><span class="pill ok"></span>健康</span></div>
+          <div class="stat-line"><span>BM25 索引</span><span><span class="pill ok"></span>健康</span></div>
+          <div class="stat-line"><span>Reranker (GPU)</span><span><span class="pill ok"></span>健康</span></div>
+          <div class="stat-line"><span>知识图谱 (Neo4j)</span><span><span class="pill warn"></span>同步中</span></div>
+          <div class="stat-line"><span>MCP 网关</span><span><span class="pill ok"></span>健康</span></div>
+          <div class="stat-line"><span>跨租户泄漏事故</span><span style="color:var(--ok)">0 起</span></div>
+          <div class="stat-line"><span>kb_version</span><span>v20260808</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 知识库管理 ===== -->
+    <section class="panel" id="p-kb">
+      <div class="grid g4">
+        <div class="card"><h3>知识库总数</h3><div class="kpi">48</div><div class="delta up">本周 +3</div></div>
+        <div class="card"><h3>文档总数</h3><div class="kpi">12,580</div><div class="delta up">+624</div></div>
+        <div class="card"><h3>chunk 数</h3><div class="kpi">1.82M</div><div class="delta up">+92k</div></div>
+        <div class="card"><h3>入库速率</h3><div class="kpi">128<span class="unit">doc/s</span></div><div class="delta up">目标 ≥100</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>知识库列表 <span class="badge">共 48 个</span></h3>
+        <div class="row">
+          <input type="search" id="kbSearch" placeholder="搜索知识库名称..." style="flex:1">
+          <select><option>全部租户</option><option>t_103 IT后端</option><option>t_209 考公</option><option>t_312 考研</option></select>
+          <select><option>全部状态</option><option>Active</option><option>Archiving</option></select>
+          <button onclick="toast('打开新建知识库')">+ 新建知识库</button>
+        </div>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>知识库名称</th><th>文档数</th><th>租户</th><th>嵌入模型</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody id="kbTbody">
+            <tr><td>IT后端-数据结构与算法</td><td>1,284</td><td>t_103 IT后端</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-08 11:20</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>IT后端-高并发编程</td><td>892</td><td>t_103 IT后端</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-08 09:42</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>IT后端-云原生K8s</td><td>648</td><td>t_103 IT后端</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-07 16:30</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>IT后端-分布式数据库</td><td>524</td><td>t_103 IT后端</td><td>bge-large-zh</td><td><span class="tag arch">Archiving</span></td><td>2026-08-07 14:18</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>考公-申论范文库</td><td>1,860</td><td>t_209 考公</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-08 13:05</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>考公-行测题库</td><td>2,140</td><td>t_209 考公</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-08 10:24</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>考研-政治考点精要</td><td>1,420</td><td>t_312 考研</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-08 08:50</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>考研-英语真题</td><td>980</td><td>t_312 考研</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-07 19:12</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>IT前端-React生态</td><td>724</td><td>t_502 IT前端</td><td>bge-large-zh</td><td><span class="tag active">Active</span></td><td>2026-08-07 15:40</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+            <tr><td>养生-中医基础</td><td>312</td><td>t_455 养生</td><td>bge-small-zh</td><td><span class="tag arch">Archiving</span></td><td>2026-08-06 20:08</td><td><a onclick="toast('打开知识库详情')">详情</a> · <a onclick="toast('打开文档列表')">文档</a></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>文档入库</h3>
+          <div class="row">
+            <select style="flex:1"><option>选择知识库: IT后端-数据结构</option><option>考公-申论范文库</option><option>考研-政治考点</option></select>
+          </div>
+          <div class="row">
+            <input type="text" placeholder="粘贴文本或拖拽文件 (pdf/docx/md)..." style="flex:1">
+            <button onclick="toast('已提交入库，分块中...')">入库</button>
+          </div>
+          <div class="stat-line"><span>分块策略</span><span>语义分块 512±128</span></div>
+          <div class="stat-line"><span>嵌入模型</span><span>bge-large-zh (1024维)</span></div>
+          <div class="stat-line"><span>当前 kb_version</span><span>v20260808</span></div>
+        </div>
+        <div class="card">
+          <h3>索引状态</h3>
+          <table>
+            <thead><tr><th>文档</th><th>状态</th><th>进度</th></tr></thead>
+            <tbody>
+              <tr><td>链表章节.pdf</td><td><span class="pill ok"></span>ready</td><td><div class="meter"><span style="width:100%"></span></div></td></tr>
+              <tr><td>申论范文.docx</td><td><span class="pill warn"></span>indexing</td><td><div class="meter"><span style="width:64%"></span></div></td></tr>
+              <tr><td>政治考点.pdf</td><td><span class="pill warn"></span>indexing</td><td><div class="meter"><span style="width:22%"></span></div></td></tr>
+              <tr><td>养生基础.docx</td><td><span class="pill down"></span>failed</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 文档检索 ===== -->
+    <section class="panel" id="p-search">
+      <div class="grid g4">
+        <div class="card"><h3>召回@10</h3><div class="kpi">0.88</div><div class="delta up">目标 ≥0.85</div></div>
+        <div class="card"><h3>nDCG@10</h3><div class="kpi">0.79</div><div class="delta up">Reranker +0.09</div></div>
+        <div class="card"><h3>P95 延迟</h3><div class="kpi">142<span class="unit">ms</span></div><div class="delta up">目标 &lt;200ms</div></div>
+        <div class="card"><h3>Reranker</h3><div class="kpi" style="font-size:16px">GPU cross-encoder</div><div class="delta">可降级 API</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>检索测试台 (RAG Pipeline)</h3>
+        <div class="row">
+          <input type="search" id="ragq" placeholder="输入 query，例如：二分查找边界怎么处理" style="flex:1">
+          <select id="ragt"><option>租户 t_103</option><option>租户 t_209</option><option>租户 t_312</option></select>
+          <select id="ragmode"><option>混合检索 (BM25+向量)</option><option>纯向量</option><option>纯关键词</option></select>
+          <button onclick="runRag()">检索</button>
+        </div>
+        <div class="stat-line"><span>检索路径</span><span>BM25 + Milvus 向量 + metadata → RRF 融合 → Reranker top-10 → 引用截断</span></div>
+        <div id="ragResult">
+          <div class="code">点击「检索」查看召回结果（含 chunk_id / 分数 / 来源）</div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>热门检索词</h3>
+          <div class="bar-row"><div class="lbl">二分查找边界</div><div class="bar-track"><div class="bar-fill" style="width:94%"></div></div><div class="val">1,884</div></div>
+          <div class="bar-row"><div class="lbl">虚拟线程 Loom</div><div class="bar-track"><div class="bar-fill" style="width:78%"></div></div><div class="val">1,562</div></div>
+          <div class="bar-row"><div class="lbl">申论写作结构</div><div class="bar-track"><div class="bar-fill" style="width:72%;background:var(--chart2)"></div></div><div class="val">1,440</div></div>
+          <div class="bar-row"><div class="lbl">K8s Operator</div><div class="bar-track"><div class="bar-fill" style="width:65%;background:var(--chart2)"></div></div><div class="val">1,302</div></div>
+          <div class="bar-row"><div class="lbl">考研政治考点</div><div class="bar-track"><div class="bar-fill" style="width:58%;background:var(--chart3)"></div></div><div class="val">1,168</div></div>
+        </div>
+        <div class="card">
+          <h3>检索质量趋势 (7天)</h3>
+          <div class="spark" id="recallSpark"></div>
+          <div class="spark-x"><span>D-6</span><span>D-5</span><span>D-4</span><span>D-3</span><span>D-2</span><span>D-1</span><span>今日</span></div>
+          <div class="stat-line" style="margin-top:8px"><span>平均召回@10</span><span style="color:var(--ok)">0.86</span></div>
+          <div class="stat-line"><span>Reranker 命中率</span><span>92.4%</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 智能问答 ===== -->
+    <section class="panel" id="p-qa">
+      <div class="grid g4">
+        <div class="card"><h3>今日问答数</h3><div class="kpi">3,420</div><div class="delta up">↑ 8.4%</div></div>
+        <div class="card"><h3>引用率</h3><div class="kpi">96.2<span class="unit">%</span></div><div class="delta up">目标 ≥95%</div></div>
+        <div class="card"><h3>拒答准确率</h3><div class="kpi">91<span class="unit">%</span></div><div class="delta up">无把握时拒答</div></div>
+        <div class="card"><h3>满意度</h3><div class="kpi">4.6<span class="unit">/5</span></div><div class="delta up">↑ 0.2</div></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>问答会话样本 <span class="badge ok">含引用</span></h3>
+          <div style="background:#0b0f14;border:1px solid var(--border);border-radius:6px;padding:14px;font-size:13px;line-height:1.7">
+            <div style="margin-bottom:14px"><span style="color:var(--accent);font-weight:600">学员:</span> 二分查找的左右边界有什么区别？</div>
+            <div><span style="color:var(--accent2);font-weight:600">AI:</span> 二分查找的左边界用于找<span style="color:#9fe6b3">第一个 ≥ target</span> 的位置（lower_bound），右边界用于找<span style="color:#9fe6b3">最后一个 ≤ target</span> 的位置（upper_bound - 1）。核心区别在于收缩区间时的方向：
+            <div style="background:var(--panel2);border-radius:4px;padding:8px;margin:8px 0;font-family:ui-monospace,monospace;color:#9fe6b3;font-size:12px">// 左边界: 找到 target 时收缩右边界<br>while(l&lt;=r){ if(a[m]&gt;=target) r=m-1; else l=m+1; }</div>
+            <div style="margin-top:8px">
+              <span class="badge ok">引用 [1]</span> IT后端-数据结构-二分查找.pdf §3.2
+              <span class="badge ok">引用 [2]</span> IT后端-算法基础.docx §5.1
+            </div>
+            </div>
+          </div>
+          <div class="stat-line" style="margin-top:10px"><span>会话 ID</span><span>sess_3f8a92c1</span></div>
+          <div class="stat-line"><span>路由 Agent</span><span>答疑 Agent (ROUTER → DIRECT)</span></div>
+          <div class="stat-line"><span>耗时</span><span>1.24s (检索 62ms + 生成 1.18s)</span></div>
+        </div>
+        <div class="card">
+          <h3>问答类型分布</h3>
+          <div class="bar-row"><div class="lbl">概念解释</div><div class="bar-track"><div class="bar-fill" style="width:82%"></div></div><div class="val">38%</div></div>
+          <div class="bar-row"><div class="lbl">作业答疑</div><div class="bar-track"><div class="bar-fill" style="width:64%;background:var(--chart2)"></div></div><div class="val">28%</div></div>
+          <div class="bar-row"><div class="lbl">代码调试</div><div class="bar-track"><div class="bar-fill" style="width:48%;background:var(--chart3)"></div></div><div class="val">20%</div></div>
+          <div class="bar-row"><div class="lbl">考试重点</div><div class="bar-track"><div class="bar-fill" style="width:30%;background:var(--chart4)"></div></div><div class="val">14%</div></div>
+          <div class="stat-line" style="margin-top:10px"><span>平均上下文长度</span><span>3,840 tokens</span></div>
+          <div class="stat-line"><span>引用文档数/问</span><span>2.4 个</span></div>
+          <div class="stat-line"><span>HITL 复核触发</span><span>0.8% (高风险自动转人工)</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 知识图谱 ===== -->
+    <section class="panel" id="p-graph">
+      <div class="grid g4">
+        <div class="card"><h3>实体总数</h3><div class="kpi">86,420</div><div class="delta up">+2,140</div></div>
+        <div class="card"><h3>关系总数</h3><div class="kpi">142,800</div><div class="delta up">+5,860</div></div>
+        <div class="card"><h3>实体类型</h3><div class="kpi">28<span class="unit">类</span></div><div class="delta">概念/人物/项目</div></div>
+        <div class="card"><h3>同步状态</h3><div class="kpi" style="font-size:18px"><span class="pill warn"></span>增量同步中</div><div class="delta">Neo4j → 64%</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>知识图谱可视化 (IT后端-数据结构子图) <span class="badge ok">演示</span></h3>
+        <div class="graph-wrap">
+          <svg class="graph-svg" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+            <line x1="300" y1="100" x2="150" y2="40" stroke="#2c3744" stroke-width="1.5"/>
+            <line x1="300" y1="100" x2="450" y2="40" stroke="#2c3744" stroke-width="1.5"/>
+            <line x1="300" y1="100" x2="120" y2="160" stroke="#2c3744" stroke-width="1.5"/>
+            <line x1="300" y1="100" x2="480" y2="160" stroke="#2c3744" stroke-width="1.5"/>
+            <line x1="150" y1="40" x2="80" y2="100" stroke="#2c3744" stroke-width="1"/>
+            <line x1="450" y1="40" x2="520" y2="100" stroke="#2c3744" stroke-width="1"/>
+            <line x1="120" y1="160" x2="220" y2="180" stroke="#2c3744" stroke-width="1"/>
+            <line x1="300" y1="100" x2="80" y2="100" stroke="#2c3744" stroke-width="1"/>
+            <line x1="300" y1="100" x2="520" y2="100" stroke="#2c3744" stroke-width="1"/>
+            <g class="gnode"><circle cx="300" cy="100" r="22" fill="#4f9eff"/><text x="300" y="104" text-anchor="middle" fill="#0f1419" font-size="11" font-weight="600">数据结构</text></g>
+            <g class="gnode"><circle cx="150" cy="40" r="16" fill="#36c5a0"/><text x="150" y="44" text-anchor="middle" fill="#0f1419" font-size="10">链表</text></g>
+            <g class="gnode"><circle cx="450" cy="40" r="16" fill="#36c5a0"/><text x="450" y="44" text-anchor="middle" fill="#0f1419" font-size="10">树</text></g>
+            <g class="gnode"><circle cx="120" cy="160" r="16" fill="#b07cff"/><text x="120" y="164" text-anchor="middle" fill="#0f1419" font-size="10">哈希表</text></g>
+            <g class="gnode"><circle cx="480" cy="160" r="16" fill="#b07cff"/><text x="480" y="164" text-anchor="middle" fill="#0f1419" font-size="10">图</text></g>
+            <g class="gnode"><circle cx="80" cy="100" r="13" fill="#f5a623"/><text x="80" y="104" text-anchor="middle" fill="#0f1419" font-size="9">数组</text></g>
+            <g class="gnode"><circle cx="520" cy="100" r="13" fill="#f5a623"/><text x="520" y="104" text-anchor="middle" fill="#0f1419" font-size="9">二叉树</text></g>
+            <g class="gnode"><circle cx="220" cy="180" r="11" fill="#6b7a8f"/><text x="220" y="184" text-anchor="middle" fill="#0f1419" font-size="9">散列函数</text></g>
+          </svg>
+        </div>
+        <div class="legend" style="margin-top:10px">
+          <span><i style="background:#4f9eff"></i>核心概念</span>
+          <span><i style="background:#36c5a0"></i>线性结构</span>
+          <span><i style="background:#b07cff"></i>非线性结构</span>
+          <span><i style="background:#f5a623"></i>具体实现</span>
+          <span><i style="background:#6b7a8f"></i>关联概念</span>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>热门实体 (出度 Top 5)</h3>
+          <table>
+            <thead><tr><th>实体</th><th>类型</th><th>出度</th><th>入度</th></tr></thead>
+            <tbody>
+              <tr><td>数据结构</td><td><span class="tag">概念</span></td><td>428</td><td>126</td></tr>
+              <tr><td>并发编程</td><td><span class="tag">概念</span></td><td>384</td><td>98</td></tr>
+              <tr><td>Kubernetes</td><td><span class="tag">项目</span></td><td>296</td><td>210</td></tr>
+              <tr><td>分布式事务</td><td><span class="tag">概念</span></td><td>248</td><td>142</td></tr>
+              <tr><td>申论写作</td><td><span class="tag">技能</span></td><td>212</td><td>86</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>图谱构建配置</h3>
+          <div class="stat-line"><span>抽取模型</span><span>GLM-5-Z1 (实体+关系)</span></div>
+          <div class="stat-line"><span>存储后端</span><span>Neo4j 5.x</span></div>
+          <div class="stat-line"><span>同步方式</span><span>Kafka CDC → 增量更新</span></div>
+          <div class="stat-line"><span>消歧策略</span><span>嵌入相似度 + 人工审核队列</span></div>
+          <div class="stat-line"><span>待审核实体</span><span style="color:var(--warn)">48 条</span></div>
+          <div class="row" style="margin-top:10px">
+            <button onclick="toast('已触发全量重构建')">全量重建</button>
+            <button class="ghost" onclick="toast('打开实体审核队列')">审核队列</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Agent 管理 ===== -->
+    <section class="panel" id="p-agent">
+      <div class="grid g4">
+        <div class="card"><h3>Agent 总数</h3><div class="kpi">12<span class="unit">个</span></div><div class="delta up">10 在线 / 2 空闲</div></div>
+        <div class="card"><h3>调用/24h</h3><div class="kpi">28.6k</div><div class="delta up">↑ 6.2%</div></div>
+        <div class="card"><h3>平均成功率</h3><div class="kpi">98.4<span class="unit">%</span></div><div class="delta up">目标 ≥97%</div></div>
+        <div class="card"><h3>MCP 工具调用</h3><div class="kpi">14.2k</div><div class="delta up">18 个工具</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>Agent 状态总览</h3>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>Agent 名称</th><th>模式</th><th>挂载工具</th><th>主模型</th><th>调用/24h</th><th>状态</th><th>成功率</th><th>P95</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>答疑 Agent</td><td><span class="tag run">ROUTER</span></td><td>RAG检索·图谱查询·计算器</td><td>GLM-5-Air</td><td>8,420</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">98.8%</td><td>1.6s</td><td><a onclick="toast('打开答疑 Agent 详情')">详情</a></td></tr>
+            <tr><td>出题 Agent</td><td><span class="tag run">DIRECT</span></td><td>RAG检索·难度评估</td><td>GLM-5-Z1</td><td>4,280</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">99.2%</td><td>2.0s</td><td><a onclick="toast('打开出题 Agent 详情')">详情</a></td></tr>
+            <tr><td>批改 Agent</td><td><span class="tag run">DIRECT</span></td><td>RAG检索·代码沙箱·评分</td><td>GLM-5-Z1</td><td>3,840</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">97.6%</td><td>2.4s</td><td><a onclick="toast('打开批改 Agent 详情')">详情</a></td></tr>
+            <tr><td>学习路径 Agent</td><td><span class="tag run">ROUTER</span></td><td>图谱查询·进度查询·推荐</td><td>GLM-5-Air</td><td>2,160</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">98.4%</td><td>2.8s</td><td><a onclick="toast('打开学习路径 Agent 详情')">详情</a></td></tr>
+            <tr><td>知识抽取 Agent</td><td><span class="tag run">DIRECT</span></td><td>文档解析·实体识别·图谱写入</td><td>GLM-5-Z1</td><td>1,920</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">99.0%</td><td>3.2s</td><td><a onclick="toast('打开知识抽取 Agent 详情')">详情</a></td></tr>
+            <tr><td>图谱审核 Agent</td><td><span class="tag run">DIRECT</span></td><td>消歧计算·审核队列·通知</td><td>GLM-5-Air</td><td>860</td><td><span class="pill warn"></span>Idle</td><td style="color:var(--ok)">99.6%</td><td>1.4s</td><td><a onclick="toast('打开图谱审核 Agent 详情')">详情</a></td></tr>
+            <tr><td>导学数字人</td><td><span class="tag run">ROUTER</span></td><td>RAG检索·TTS·表情</td><td>GLM-5-Air</td><td>1,240</td><td><span class="pill warn"></span>Idle</td><td style="color:var(--ok)">96.8%</td><td>1.8s</td><td><a onclick="toast('打开数字人详情')">详情</a></td></tr>
+            <tr><td>拒答守门 Agent</td><td><span class="tag run">DIRECT</span></td><td>意图分类·风险判定</td><td>GLM-5-Air</td><td>5,820</td><td><span class="pill ok"></span>Running</td><td style="color:var(--ok)">99.8%</td><td>0.4s</td><td><a onclick="toast('打开守门 Agent 详情')">详情</a></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>MCP 工具热度</h3>
+          <div class="bar-row"><div class="lbl">rag_search</div><div class="bar-track"><div class="bar-fill" style="width:94%"></div></div><div class="val">8,420</div></div>
+          <div class="bar-row"><div class="lbl">graph_query</div><div class="bar-track"><div class="bar-fill" style="width:62%;background:var(--chart2)"></div></div><div class="val">5,560</div></div>
+          <div class="bar-row"><div class="lbl">code_sandbox</div><div class="bar-track"><div class="bar-fill" style="width:48%;background:var(--chart3)"></div></div><div class="val">4,280</div></div>
+          <div class="bar-row"><div class="lbl">doc_parse</div><div class="bar-track"><div class="bar-fill" style="width:32%;background:var(--chart4)"></div></div><div class="val">2,860</div></div>
+          <div class="bar-row"><div class="lbl">calculator</div><div class="bar-track"><div class="bar-fill" style="width:24%;background:#6b7a8f"></div></div><div class="val">2,140</div></div>
+        </div>
+        <div class="card">
+          <h3>新建 / 编辑 Agent</h3>
+          <div class="row"><input type="text" placeholder="Agent 名称" style="flex:1"></div>
+          <div class="row">
+            <select style="flex:1"><option>路由模式: ROUTER</option><option>直连模式: DIRECT</option></select>
+            <select style="flex:1"><option>主模型: GLM-5-Z1</option><option>GLM-5-Air</option></select>
+          </div>
+          <div class="row"><select style="flex:1"><option>挂载工具: RAG检索</option><option>图谱查询</option><option>代码沙箱</option></select><button class="ghost">+ 添加工具</button></div>
+          <div class="row"><textarea placeholder="系统提示词 (system prompt)..." style="width:100%;min-height:60px"></textarea></div>
+          <div class="row"><button onclick="toast('Agent 已创建并上线')">创建 Agent</button><button class="ghost" onclick="toast('打开 Agent 配置文档')">配置说明</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 租户管理 ===== -->
+    <section class="panel" id="p-tenant">
+      <div class="grid g4">
+        <div class="card"><h3>租户总数</h3><div class="kpi">1,284</div><div class="delta up">+24 本周</div></div>
+        <div class="card"><h3>Milvus namespace</h3><div class="kpi">1,284</div><div class="delta up">全量隔离</div></div>
+        <div class="card"><h3>API Key 数</h3><div class="kpi">2,840</div><div class="delta">含限流</div></div>
+        <div class="card"><h3>跨租户泄漏 <span class="badge ok">0</span></h3><div class="kpi">0<span class="unit">起</span></div><div class="delta up">目标 0</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>租户列表</h3>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>tenant_id</th><th>事业群</th><th>知识库数</th><th>文档数</th><th>API Key</th><th>QPS 限额</th><th>FGAC 拒绝/24h</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>t_103</td><td>IT后端</td><td>14</td><td>4,284</td><td>4</td><td>500</td><td>3</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_209</td><td>考公</td><td>8</td><td>3,860</td><td>3</td><td>300</td><td>1</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_312</td><td>考研</td><td>10</td><td>3,240</td><td>3</td><td>300</td><td>0</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_455</td><td>养生</td><td>4</td><td>612</td><td>1</td><td>100</td><td>0</td><td><span class="pill warn"></span>入库失败</td></tr>
+            <tr><td>t_502</td><td>IT前端</td><td>6</td><td>1,240</td><td>2</td><td>200</td><td>0</td><td><span class="pill ok"></span>正常</td></tr>
+            <tr><td>t_608</td><td>职业资格</td><td>3</td><td>486</td><td>1</td><td>100</td><td>0</td><td><span class="pill ok"></span>正常</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h3>隔离验证 (渗透测试)</h3>
+          <div class="row">
+            <select id="ptA" style="flex:1"><option>持租户 A 的 JWT (t_103)</option></select>
+            <select id="ptB" style="flex:1"><option>查询租户 B namespace (t_209)</option></select>
+            <button onclick="runPen()">执行渗透</button>
+          </div>
+          <div id="penResult"><div class="code">预期：0 返回，FGAC 拒绝并审计</div></div>
+        </div>
+        <div class="card">
+          <h3>FGAC 配置 & 限额</h3>
+          <div class="stat-line"><span>tenant_id 来源</span><span>JWT claim tid (仅网关解析)</span></div>
+          <div class="stat-line"><span>注入位置</span><span>X-Tenant-Id 头 (只读)</span></div>
+          <div class="stat-line"><span>静态扫描规则</span><span style="color:var(--ok)">no-tenant-concat / milvus-expr-required</span></div>
+          <div class="stat-line"><span>最近扫描结果</span><span class="badge ok">0 违规</span></div>
+          <div class="stat-line"><span>全局限流策略</span><span>令牌桶 · 按租户配额</span></div>
+          <div class="row" style="margin-top:10px">
+            <button class="ghost" onclick="toast('已触发静态扫描')">立即扫描</button>
+            <button class="ghost" onclick="toast('已触发全量渗透测试')">全量渗透</button>
+            <button class="ghost" onclick="toast('打开 API Key 管理')">API Key</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+  /* 导航切换 */
+  const titles={
+    dashboard:"总览看板",kb:"知识库管理",search:"文档检索",
+    qa:"智能问答",graph:"知识图谱",agent:"Agent 管理",tenant:"租户管理"
+  };
+  const metas={
+    dashboard:"数据更新: 2026-08-08 14:32 · 采样窗口 24h",
+    kb:"知识库 · 文档 · 分块 · 嵌入",
+    search:"BM25 + 向量 + RRF 融合 + Reranker",
+    qa:"MCP Agent 驱动 · 含引用",
+    graph:"Neo4j 5.x · 增量同步",
+    agent:"12 个 Agent · 18 个 MCP 工具",
+    tenant:"1,284 租户 · FGAC 全量隔离"
+  };
+  document.querySelectorAll('.nav-item').forEach(el=>{
+    el.onclick=()=>{
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      el.classList.add('active');
+      const k=el.dataset.nav;
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('p-'+k).classList.add('active');
+      document.getElementById('title').textContent=titles[k];
+      document.getElementById('meta').textContent=metas[k];
+    };
+  });
+
+  function toast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.classList.add('show');
+    clearTimeout(window.__t);
+    window.__t=setTimeout(()=>t.classList.remove('show'),2200);
+  }
+
+  /* 检索测试台模拟 */
+  function runRag(){
+    const q=document.getElementById('ragq').value||'二分查找边界怎么处理';
+    const t=document.getElementById('ragt').value;
+    const m=document.getElementById('ragmode').value;
+    const data=[
+      {cid:'chk_8821',bm:0.91,vec:0.88,rrf:0.93,rerank:0.97,src:'IT后端-数据结构-二分查找.pdf §3.2'},
+      {cid:'chk_8834',bm:0.84,vec:0.86,rrf:0.89,rerank:0.91,src:'IT后端-算法基础.docx §5.1'},
+      {cid:'chk_8902',bm:0.78,vec:0.83,rrf:0.85,rerank:0.82,src:'IT后端-数组与查找.pdf §2.4'},
+      {cid:'chk_9011',bm:0.71,vec:0.79,rrf:0.80,rerank:0.76,src:'IT后端-边界条件总结.docx §1.3'}
+    ];
+    const rows=data.map(r=>`<tr><td>${r.cid}</td><td>${r.bm}</td><td>${r.vec}</td><td>${r.rrf}</td><td>${r.rerank}</td><td>${r.src}</td></tr>`).join('');
+    document.getElementById('ragResult').innerHTML=
+      `<div class="stat-line"><span>query</span><span>${q}</span></div>
+       <div class="stat-line"><span>租户</span><span>${t}</span></div>
+       <div class="stat-line"><span>检索模式</span><span>${m}</span></div>
+       <div class="stat-line"><span>tenant_id filter</span><span style="color:var(--ok)">已由网关注入</span></div>
+       <table style="margin-top:8px">
+         <thead><tr><th>chunk_id</th><th>BM25</th><th>向量</th><th>RRF</th><th>Rerank</th><th>来源</th></tr></thead>
+         <tbody>${rows}</tbody>
+       </table>`;
+    toast('检索完成，返回 top-4');
+  }
+
+  /* 渗透测试模拟 */
+  function runPen(){
+    const out=`[*] 持租户 A(t_103) JWT 查询 B(t_209) namespace
+[*] 网关注入 X-Tenant-Id: 103
+[*] Milvus expr 强制: tenant_id == 103
+[+] 返回结果数: 0
+[+] FGAC 拒绝记录已写入审计 (event_id=fgac_7723)
+[+] 结论: 隔离有效，零泄漏`;
+    document.getElementById('penResult').innerHTML=`<div class="code">${out}</div>`;
+    toast('渗透测试通过：0 泄漏');
+  }
+
+  /* 检索延迟 sparkline (24h) */
+  (function(){
+    const lat=[78,62,58,54,52,60,82,96,108,118,124,132,138,142,128,116,104,98,92,88,84,82,76,72];
+    const max=240;const host=document.getElementById('latencySpark');
+    host.innerHTML=lat.map(v=>{
+      const h=Math.round(v/max*72);
+      const cls=v>180?' warn':'';
+      return `<div class="b${cls}" style="height:${h}px" data-v="${v}ms"></div>`;
+    }).join('');
+  })();
+
+  /* 召回率 sparkline (7天) */
+  (function(){
+    const rec=[0.82,0.84,0.83,0.85,0.86,0.87,0.88];
+    const max=1;const host=document.getElementById('recallSpark');
+    host.innerHTML=rec.map(v=>{
+      const h=Math.round(v/max*72);
+      return `<div class="b" style="height:${h}px;background:var(--chart2)" data-v="召回@10=${v}"></div>`;
+    }).join('');
+  })();
+
+  /* 知识库表格搜索过滤 */
+  (function(){
+    const input=document.getElementById('kbSearch');
+    if(!input)return;
+    input.addEventListener('input',()=>{
+      const kw=input.value.toLowerCase().trim();
+      document.querySelectorAll('#kbTbody tr').forEach(tr=>{
+        tr.style.display=(!kw||tr.textContent.toLowerCase().indexOf(kw)>=0)?'':'none';
+      });
+    });
+  })();
+
+  /* 全局搜索 */
+  (function(){
+    const g=document.getElementById('globalSearch');
+    if(!g)return;
+    g.addEventListener('input',()=>{
+      const kw=g.value.toLowerCase().trim();
+      if(!kw)return;
+      document.querySelectorAll('#kbTbody tr').forEach(tr=>{
+        tr.style.display=(!kw||tr.textContent.toLowerCase().indexOf(kw)>=0)?'':'none';
+      });
+    });
+  })();
+
+  /* 图谱节点交互 */
+  document.querySelectorAll('.gnode').forEach(n=>{
+    n.addEventListener('click',()=>toast('实体: '+n.querySelector('text').textContent));
+  });
+</script>
+</body>
+</html>

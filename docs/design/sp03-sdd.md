@@ -543,7 +543,7 @@ ES 索引: srh_question_v1 (题库, 类似, 略)
 CMP 全局域主库变更
    │ TiCDC
    ▼
-Kafka(cmp.change, Avro+SchemaRegistry)
+Pulsar(persistent://public/cdc/cmp.change, Avro+内置 Schema Registry)
    │
    ▼
 ES Sink(Flink CDC 3.x YAML pipeline)
@@ -773,7 +773,7 @@ Flink Job: BehaviorAnalysis
 - Dubbo Triple RPC proto 存 `sp03-proto` 仓库, CI 生成 Java/Rust stub
 - 破坏性变更走版本化(v1→v2 并存 ≥2 版本周期)
 - Pact 契约测试: 每个消费方(BU/组件)定义期望, CI 校验提供方
-- Schema Registry: Pulsar(Avro) + Kafka(Avro) 强制 schema 兼容
+- Schema Registry: Pulsar 内置(Avro) 统一管理事件总线 + CDC namespace schema 兼容
 
 ---
 
@@ -782,3 +782,5 @@ Flink Job: BehaviorAnalysis
 | 版本 | 日期 | 变更 | 作者 |
 |------|------|------|------|
 | v1.0 | 2026-08-03 | 初始版本 | 研发组 |
+| v1.1 | 2026-08-08 | D-094: RoleChecker/GlobalExceptionHandler/ErrorResponse 提取至 ep-web-common 共享JAR (Philipp Hauer 基础设施共享最佳实践); D-095: OPM支付域补齐 Payment/Refund 实体 + PaymentChannelSpi 策略工厂(MOCK/ALIPAY/WECHAT/BALANCE/CREDIT) + Order 泛化(productType判别器 + courseId可空); D-100: Order 泛化 — courseId 列改可空, 新增 productType 判别器, 支持非课程类商品下单; D-101: SensitiveDataConverter 增强 EMAIL + BANK_CARD 脱敏(词边界正则防重叠匹配) | 研发组 |
+| v1.2 | 2026-08-08 | D-104: 订单中台独立抽取 — sp03-order 多模块Maven项目(薄API JAR sp03-order-api: OrderService/OrderDto/CreateOrderCmd/OrderStatus + 可运行Service sp03-order-service: OrderEntity JPA@Entity + OrderServiceImpl @DubboService + @DubboReference PaymentService跨服务RPC + refundOrder缺口修复 + port 8084/20884); D-105: 支付中台独立抽取 — sp03-payment 多模块Maven项目(薄API JAR sp03-payment-api: PaymentService/Payment/Refund/PaymentChannelSpi + 可运行Service sp03-payment-service: PaymentServiceImpl @DubboService + MockPaymentChannel + port 8087/20887)。§3 OPM设计从sp03-business单体内拆为两个独立中台, Order→Payment通过Dubbo Triple协议跨服务调用, Seata XID自动传播。 | 研发组 |

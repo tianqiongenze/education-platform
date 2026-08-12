@@ -1,0 +1,75 @@
+# PodDisruptionBudgets for all 5 deployable services (D-035 rule 3)
+# Ensures voluntary disruptions (node drain, cluster autoscaler) respect
+# minimum available replicas. Involuntary disruptions (node failure) are
+# not constrained by PDB; rely on replica counts + anti-affinity for that.
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: portal-bff-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: portal-bff
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: portal-bff
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: core-business-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: core-business
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-business
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: grading-service-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: grading-service
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grading-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-platform-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-platform
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ws-gateway-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ws-gateway
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ws-gateway

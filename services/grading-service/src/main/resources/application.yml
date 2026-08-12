@@ -1,0 +1,130 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: grading-service
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # D-069: default to dev
+  config:
+    import: "optional:file:./config/application-${spring.profiles.active}.yml"  # D-069: external override
+  jackson:
+    serialization:
+      # D-076: Jackson 3 (SB4) removed WRITE_DATES_AS_TIMESTAMPS — ISO-8601 is the default now
+      FAIL_ON_EMPTY_BEANS: false
+  threads:
+    virtual:
+      enabled: true  # D-039: 虚拟线程铁律
+  aot:
+    enabled: false  # D-069: common base — overridden to true in prod
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect  # D-076: Hibernate 7.2 dropped TiDBDialect; TiDB is MySQL-compatible
+        jdbc:
+          time_zone: Asia/Shanghai
+
+dubbo:
+  application:
+    name: grading-service
+  protocol:
+    name: dubbo
+    port: 20885
+    threads: 500        # P0: 默认200不够1000并发, 扩到500
+    threadpool: cached  # P0: cached弹性线程池, 适配突发流量(配合D-039虚拟线程)
+  scan:
+    base-packages: com.ep.grading
+  consumer:
+    timeout: 10000      # P4: 5000→10000, 1000并发下DB池竞争需更长等待
+    retries: 0          # P2: 写操作不重试, 避免幂等被打破
+    check: false
+  provider:
+    timeout: 10000      # P4: 5000→10000, 匹配consumer超时
+
+# D-048/P0-7: Sentinel dashboard (common keys; env-specific in profile files)
+csp:
+  sentinel:
+    app:
+      name: grading-service
+
+# D-048/P1-3: Seata configuration (common keys; env-specific in profile files)
+seata:
+  enabled: true
+  application-id: grading-service
+  tx-service-group: ep_tx_group
+  service:
+    vgroup-mapping:
+      ep_tx_group: default
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    circuitbreakers:
+      enabled: true
+
+# P1: Resilience4j circuit breakers for downstream service calls (wired for future use)
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 100
+        minimum-number-of-calls: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+    instances:
+      assignmentService:
+        base-config: default
+      gradingService:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+    instances:
+      assignmentService:
+        base-config: default
+      gradingService:
+        base-config: default
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default
+
+# D-070: springdoc-openapi
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# ai-platform integration: subjective-question AI grading via Dubbo.
+# Disabled by default so dev/test never depends on sp04 being up.
+ep:
+  ai-grading:
+    enabled: ${AI_GRADING_ENABLED:false}
+    timeout-ms: 30000
+    fallback: pending  # pending | fail

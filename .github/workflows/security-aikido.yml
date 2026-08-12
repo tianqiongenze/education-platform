@@ -1,0 +1,45 @@
+name: Security Scan (Aikido)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**/*.java'
+      - 'services/**/*.py'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'  # Nightly at 3 AM UTC
+  workflow_dispatch:
+
+jobs:
+  aikido-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Aikido Security Scan
+        # NOTE: This uses the Aikido MCP plugin for local scanning.
+        # In CI, we use the Aikido GitHub Action.
+        # The MCP `aikido_full_scan` tool is for local/agent use;
+        # CI uses the official Aikido action which posts findings as PR comments.
+        uses: aikido-security/github-action@v1
+        with:
+          api-key: ${{ secrets.AIKIDO_API_KEY }}
+          # Scan all source files
+          file-patterns: 'services/**/*.java,services/**/*.py,frontend/**/*.ts,frontend/**/*.tsx'
+        continue-on-error: true  # Don't block PR on Aikido; findings are advisory
+      - name: Aikido Findings Summary
+        if: always()
+        run: |
+          echo "## Aikido Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "Aikido scan completed. Check Aikido dashboard for detailed findings." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CRITICAL/HIGH findings should be reviewed before merge." >> $GITHUB_STEP_SUMMARY

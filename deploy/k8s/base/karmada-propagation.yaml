@@ -1,0 +1,167 @@
+# D-041: Karmada 多集群调度策略
+# 将 education-platform 工作负载按权重分布到多个 cell (异地多活)
+#
+# 国内三 cell (hz/sz/bj) 全量部署 + 对等多活
+# 海外 cell (sg) 隔离部署, 仅同步元数据
+#
+# 参考: Karmada PropagationPolicy API
+# https://karmada.io/docs/userguide/scheduling/resource-propagating
+
+---
+# PropagationPolicy: 将所有 education-platform 资源传播到成员集群
+apiVersion: policy.karmada.io/v1alpha1
+kind: PropagationPolicy
+metadata:
+  name: ep-multi-active-propagation
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: D-041
+spec:
+  resourceSelectors:
+    - apiVersion: apps/v1
+      kind: Deployment
+    - apiVersion: v1
+      kind: Service
+    - apiVersion: v1
+      kind: ConfigMap
+    - apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+    - apiVersion: policy/v1
+      kind: PodDisruptionBudget
+    - apiVersion: monitoring.coreos.com/v1
+      kind: ServiceMonitor
+  placement:
+    # 集群亲和性: 国内三 cell 优先, 海外 cell 可选
+    clusterAffinity:
+      clusterNames:
+        - cell-hz
+        - cell-sz
+        - cell-bj
+        - cell-sg
+    # 副本调度策略: 按权重分配副本
+    replicaScheduling:
+      replicaSchedulingType: Divided
+      replicaDivisionPreference: Weighted
+      weightPreference:
+        staticWeightList:
+          - targetCluster:
+              clusterNames:
+                - cell-hz
+            weight: 40          # 杭州 40% 流量
+          - targetCluster:
+              clusterNames:
+                - cell-sz
+            weight: 30          # 深圳 30% 流量
+          - targetCluster:
+              clusterNames:
+                - cell-bj
+            weight: 20          # 北京 20% 流量
+          - targetCluster:
+              clusterNames:
+                - cell-sg
+            weight: 10          # 新加坡 10% 流量 (海外)
+    # 域分布: 确保跨域容灾
+    spreadConstraints:
+      - spreadByLabel: topology.kubernetes.io/region
+        maxGroups: 4
+        minGroups: 3            # 至少分布在 3 个 region
+      - spreadByLabel: ep.io/cell
+        maxGroups: 4
+        minGroups: 3            # 至少分布在 3 个 cell
+
+---
+# OverridePolicy: 按 cell 差异化覆盖配置
+# 不同 cell 的 CELL_NAME / CELL_REGION 等环境变量自动注入
+apiVersion: policy.karmada.io/v1alpha1
+kind: OverridePolicy
+metadata:
+  name: ep-cell-override
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: D-041
+spec:
+  resourceSelectors:
+    - apiVersion: v1
+      kind: ConfigMap
+      name: common-config
+  overrideRules:
+    # cell-hz 覆盖
+    - targetCluster:
+        clusterNames:
+          - cell-hz
+      overriders:
+        plaintext:
+          - path: /data/CELL_NAME
+            operator: replace
+            value: cell-hz
+          - path: /data/CELL_REGION
+            operator: replace
+            value: cn-east-1
+          - path: /data/CELL_ZONE
+            operator: replace
+            value: hz-a
+          - path: /data/REDIS_CLUSTER_LOCAL_CELL
+            operator: replace
+            value: cell-hz
+    # cell-sz 覆盖
+    - targetCluster:
+        clusterNames:
+          - cell-sz
+      overriders:
+        plaintext:
+          - path: /data/CELL_NAME
+            operator: replace
+            value: cell-sz
+          - path: /data/CELL_REGION
+            operator: replace
+            value: cn-south-1
+          - path: /data/CELL_ZONE
+            operator: replace
+            value: sz-a
+          - path: /data/REDIS_CLUSTER_LOCAL_CELL
+            operator: replace
+            value: cell-sz
+    # cell-bj 覆盖
+    - targetCluster:
+        clusterNames:
+          - cell-bj
+      overriders:
+        plaintext:
+          - path: /data/CELL_NAME
+            operator: replace
+            value: cell-bj
+          - path: /data/CELL_REGION
+            operator: replace
+            value: cn-north-1
+          - path: /data/CELL_ZONE
+            operator: replace
+            value: bj-a
+          - path: /data/REDIS_CLUSTER_LOCAL_CELL
+            operator: replace
+            value: cell-bj
+    # cell-sg 覆盖 (海外隔离)
+    - targetCluster:
+        clusterNames:
+          - cell-sg
+      overriders:
+        plaintext:
+          - path: /data/CELL_NAME
+            operator: replace
+            value: cell-sg
+          - path: /data/CELL_REGION
+            operator: replace
+            value: ap-southeast-1
+          - path: /data/CELL_ZONE
+            operator: replace
+            value: sg-a
+          - path: /data/REDIS_CLUSTER_LOCAL_CELL
+            operator: replace
+            value: cell-sg
+          - path: /data/PULSAR_REPLICATION_CLUSTERS
+            operator: replace
+            value: sg
+          - path: /data/DATA_RESIDENCY
+            operator: replace
+            value: overseas

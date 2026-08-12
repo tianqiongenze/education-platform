@@ -1,0 +1,110 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: boardgame-service
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  threads:
+    virtual:
+      enabled: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.dialect: org.hibernate.dialect.TiDBDialect
+      hibernate.jdbc.batch_size: 50
+
+# Dubbo
+dubbo:
+  application:
+    name: boardgame-service
+  protocol:
+    name: tri
+    port: 20889
+  registry:
+    address: nacos://nacos-headless:8848
+    register-mode: instance
+  consumer:
+    timeout: 3000
+    retries: 2
+
+# Sentinel
+csp:
+  sentinel:
+    transport:
+      dashboard: sentinel-dashboard:8080
+    datasource:
+      flow:
+        nacos:
+          server-addr: nacos-headless:8848
+          data-id: boardgame-service-flow-rules
+          group-id: SENTINEL_GROUP
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      default:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 20
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 1s
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default
+
+# Seata
+seata:
+  enabled: false
+  tx-service-group: boardgame-service-group
+
+# Springdoc OpenAPI
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  health:
+    livenessstate:
+      health-indicator:
+        enabled: true
+    readinessstate:
+      health-indicator:
+        enabled: true
+
+# EP platform config
+ep:
+  pulsar:
+    enabled: false
+    service-url: pulsar://pulsar-broker:6650
+    topic:
+      domain-events: persistent://public/default/boardgame-service-events

@@ -1,0 +1,50 @@
+# D-147: Dev profile — local H2 for zero-infra standalone boot.
+spring:
+  aot:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:ep_elder;DB_CLOSE_DELAY=-1;MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+dubbo:
+  registry:
+    address: nacos://127.0.0.1:8848
+
+csp:
+  sentinel:
+    transport:
+      dashboard: 127.0.0.1:8858
+
+seata:
+  enabled: false
+  tx-service-group: ep_tx_group
+  service:
+    vgroup-mapping:
+      ep_tx_group: default
+  registry:
+    type: file
+
+logging:
+  level:
+    root: INFO
+    com.ep: DEBUG
+
+ep:
+  pulsar:
+    enabled: false
+    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}

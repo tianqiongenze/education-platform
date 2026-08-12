@@ -718,5 +718,75 @@ function saveRule(){toast("规则已保存, Nacos 广播, 5s 全节点热更新,
 /* 初始化 */
 renderUsers();
 </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  /* 5 秒自动刷新：订单状态动态变化 */
+  setInterval(function(){
+    /* 随机切换订单状态标签 */
+    document.querySelectorAll('.tag').forEach(function(t){
+      if(Math.random()<0.1){
+        var cls=t.className;
+        if(cls.indexOf('green')>=0){t.className=cls.replace('green','amber');t.textContent='处理中';}
+        else if(cls.indexOf('amber')>=0){t.className=cls.replace('amber','green');t.textContent='已完成';}
+        else if(cls.indexOf('red')>=0){t.className=cls.replace('red','green');t.textContent='已恢复';}
+      }
+    });
+    /* KPI 数值波动 */
+    document.querySelectorAll('.kpi .num, .kpi strong').forEach(function(el){
+      var txt=el.textContent.replace(/[^\d.]/g,'');
+      var n=parseFloat(txt);
+      if(!isNaN(n)){
+        var delta=Math.round((Math.random()-0.5)*n*0.05);
+        var prefix=el.textContent.replace(/[\d.,]+/,'').trim();
+        el.textContent=prefix+(n+delta).toLocaleString();
+      }
+    });
+  },5000);
+
+  /* 搜索框增强：全局过滤表格行 */
+  var globalSearch=document.createElement('div');
+  globalSearch.style.cssText='padding:8px 0;display:flex;gap:8px;align-items:center';
+  globalSearch.innerHTML='<input id="globalSearch" placeholder="全局搜索(用户/订单/课程/工单)..." style="flex:1;padding:8px 12px;border:1px solid #30363d;border-radius:6px;font-size:13px;background:#fff"><button id="globalSearchBtn" style="padding:8px 16px;background:#4f8cff;border:none;border-radius:6px;color:#fff;cursor:pointer">搜索</button>';
+  var layout=document.querySelector('.layout')||document.body;
+  layout.insertBefore(globalSearch,layout.firstChild);
+  function doGlobalSearch(){
+    var kw=(document.getElementById('globalSearch').value||'').toLowerCase().trim();
+    document.querySelectorAll('table tbody tr').forEach(function(r){
+      r.style.display=(!kw||r.textContent.toLowerCase().indexOf(kw)>=0)?'':'none';
+    });
+  }
+  document.getElementById('globalSearch').addEventListener('input',doGlobalSearch);
+  document.getElementById('globalSearchBtn').addEventListener('click',doGlobalSearch);
+
+  /* CSS 柱状图：仪表盘订单趋势 */
+  var dash=document.querySelector('#page-dashboard');
+  if(dash){
+    var chartBox=document.createElement('div');
+    chartBox.style.cssText='margin:16px 0;padding:16px;background:#fff;border:1px solid #e4e7ed;border-radius:8px';
+    chartBox.innerHTML='<h4 style="margin-bottom:12px">近7日订单趋势</h4><div id="orderTrend" style="display:flex;align-items:flex-end;gap:12px;height:120px"></div>';
+    dash.querySelector('.card')||dash.appendChild(chartBox);
+    var trend=[320,410,380,520,610,580,720];
+    var mx=Math.max.apply(null,trend);
+    var colors=['#4f8cff','#36c5a0','#f5a623','#4f8cff','#36c5a0','#f5a623','#4f8cff'];
+    document.getElementById('orderTrend').innerHTML=trend.map(function(v,i){
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<div style="font-size:11px;color:#909399">'+v+'</div>'+
+        '<div style="width:60%;height:'+(v/mx*100)+'px;background:'+colors[i]+';border-radius:3px 3px 0 0"></div>'+
+        '<div style="font-size:11px;color:#909399">D'+(i+1)+'</div></div>';
+    }).join('');
+  }
+
+  /* 行点击高亮 */
+  document.querySelectorAll('table').forEach(function(tbl){
+    tbl.addEventListener('click',function(e){
+      var tr=e.target.closest('tr');
+      if(!tr||tr.parentNode.tagName!=='TBODY')return;
+      tr.parentNode.querySelectorAll('tr').forEach(function(r){r.style.background='';});
+      tr.style.background='#ecf5ff';
+    });
+  });
+});
+</script>
 </body>
 </html>

@@ -1,0 +1,83 @@
+# =============================================================================
+# SP-02 Data Middle-Platform — Flink CDC 3.x YAML pipeline
+# Learning Event CDC: Pulsar (Avro) -> Iceberg ods.ods_learning_event
+# High-volume stream: parallelism 64, partition days+hours
+# D-028 / C-02 / C-03 / C-07
+# =============================================================================
+source:
+  type: pulsar
+  name: learning-event-cdc-source
+  topic: persistent://public/cdc/learning_event_group
+  subscription: flink-cdc-learning-ods
+  subscriptionType: Shared
+  value:
+    format: avro
+    avro-schema-file: avro/learning-event-cdc.avsc
+  startCursor: Earliest
+  properties:
+    schema.registry.url: "http://pulsar-broker:8080"
+    schema.registry.namespace: "cdc://"
+
+route:
+  - source-table: learning_event_0000
+    sink-table: ods.ods_learning_event
+  - source-table: learning_event_0001
+    sink-table: ods.ods_learning_event
+  - source-table: learning_event_0002
+    sink-table: ods.ods_learning_event
+  - source-table: learning_event_0003
+    sink-table: ods.ods_learning_event
+  # (shards learning_event_0004..learning_event_1023 generated at deploy time)
+  - source-table: learning_event_1023
+    sink-table: ods.ods_learning_event
+
+sink:
+  type: iceberg
+  name: iceberg-learning-event-ods
+  catalog:
+    name: iceberg_jdbc
+    type: jdbc
+    uri: jdbc:postgresql://catalog-pg:5432/iceberg
+    warehouse: s3://edu-iceberg/warehouse
+    driver: org.postgresql.Driver
+  database: ods
+  table: ods_learning_event
+  # C-03: checkpoint commit
+  commit:
+    mode: checkpoint
+  target-file-size: 256MB
+  compression: zstd
+  # Partition by days + hours for high-volume time-series access
+  partition:
+    - days(ts)
+    - hours(ts)
+  properties:
+    format-version: "2"
+    write.format.default: parquet
+    write.parquet.compression-codec: zstd
+
+maintenance:
+  rewrite_data_files:
+    enabled: true
+    target-file-size: 256MB
+  expire_snapshots:
+    enabled: true
+    retain_last: 5
+  remove_orphan_files:
+    enabled: true
+
+flink:
+  parallelism: 64
+  checkpoint:
+    interval: 5min
+    mode: EXACTLY_ONCE
+    state-backend: rocksdb
+    min-pause: 1min
+    timeout: 10min
+    max-concurrent: 1
+    externalized-checkpoint: RETAIN_ON_CANCELLATION
+  restart-strategy:
+    type: exponential-delay
+    initial-backoff: 10s
+    max-backoff: 5min
+    backoff-multiplier: 2.0

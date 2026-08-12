@@ -1,0 +1,188 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ep</groupId>
+    <artifactId>knowledge-platform</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>retrieval-service</artifactId>
+  <name>SP-07 Retrieval Service</name>
+
+  <properties>
+    <!-- D-115: JIB build port (retrieval-service listens on 8070; the
+         application.yml default is 8072 in this module, but the K8s Deployment
+         spec and the BFF routing table both target 8070, so the image exposes
+         8070 and the runtime overrides server.port via env). -->
+    <jib.container.port>8070</jib.container.port>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>knowledge-api</artifactId>
+    </dependency>
+
+    <!-- ep-web-common: shared RoleChecker / ForbiddenException / ErrorResponse /
+         GlobalExceptionHandler (version from parent dependencyManagement). -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-web-common</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-cache</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jetty</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- P1-4: Actuator endpoint security (HTTP Basic for /actuator/** non-health/info). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <!-- P2-9: Bean Validation (@Valid + @Validated on request DTOs). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <!-- P2-10: Resilience4j RateLimiter (opt-in via @RateLimiter annotation). -->
+    <dependency>
+      <groupId>io.github.resilience4j</groupId>
+      <artifactId>resilience4j-spring-boot3</artifactId>
+      <version>2.2.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+
+    <!-- Dubbo -->
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo-spring-boot-starter</artifactId>
+      <version>${dubbo.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo</artifactId>
+      <version>${dubbo.version}</version>
+    </dependency>
+
+    <!-- Milvus -->
+    <dependency>
+      <groupId>io.milvus</groupId>
+      <artifactId>milvus-sdk-java</artifactId>
+      <version>2.5.4</version>
+    </dependency>
+
+    <!-- Elasticsearch -->
+    <dependency>
+      <groupId>co.elastic.clients</groupId>
+      <artifactId>elasticsearch-java</artifactId>
+      <version>8.14.3</version>
+    </dependency>
+
+    <!-- Redis -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- D-070: springdoc OpenAPI 3.0 auto-generation -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>2.6.0</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!-- D-115: JIB container image build profile.
+       Activated with: mvn compile jib:build -Pjib-build
+       Shared profile snippet: deploy/build/jib-pom-profile.xml
+       Image: harbor.edu.internal/education-platform/retrieval-service:1.0.0 -->
+  <profiles>
+    <profile>
+      <id>jib-build</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.google.cloud.tools</groupId>
+            <artifactId>jib-maven-plugin</artifactId>
+            <version>3.4.4</version>
+            <configuration>
+              <to>
+                <image>harbor.edu.internal/education-platform/${project.artifactId}:${project.version}</image>
+              </to>
+              <from>
+                <image>eclipse-temurin:21-jre-alpine</image>
+              </from>
+              <container>
+                <ports>
+                  <port>${jib.container.port}</port>
+                </ports>
+                <jvmFlags>
+                  <jvmFlag>-XX:+UseZGC</jvmFlag>
+                  <jvmFlag>-XX:+ZGenerational</jvmFlag>
+                  <jvmFlag>-XX:MaxRAMPercentage=75.0</jvmFlag>
+                  <jvmFlag>-XX:+ExitOnOutOfMemoryError</jvmFlag>
+                </jvmFlags>
+                <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+                <labels>
+                  <org.opencontainers.image.source>${env.GIT_URL}</org.opencontainers.image.source>
+                  <org.opencontainers.image.revision>${env.GIT_COMMIT}</org.opencontainers.image.revision>
+                  <maintained-by>gitops</maintained-by>
+                </labels>
+              </container>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

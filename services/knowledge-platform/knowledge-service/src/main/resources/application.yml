@@ -1,0 +1,83 @@
+server:
+  port: 8071
+
+spring:
+  application:
+    name: knowledge-service
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  threads:
+    virtual:
+      enabled: true   # D-039: virtual threads
+  aot:
+    enabled: true     # D-040: GraalVM AOT
+  datasource:
+    url: jdbc:postgresql://pg-primary:5432/knowledge
+    username: ${PG_USER}
+    password: ${PG_PASS}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+  data:
+    redis:
+      cluster:
+        nodes: redis-1:6379,redis-2:6379,redis-3:6379
+        max-redirects: 3
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+dubbo:
+  application:
+    name: knowledge-service
+  protocol:
+    name: dubbo
+    port: 20871
+  registry:
+    address: nacos://nacos:8848
+  scan:
+    base-packages: com.ep.knowledge.service
+
+minio:
+  endpoint: http://minio:9000
+  access-key: ${MINIO_AK}
+  secret-key: ${MINIO_SK}
+  bucket: knowledge-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:5173
+
+# P2-10: Resilience4j RateLimiter (opt-in via @RateLimiter annotation)
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

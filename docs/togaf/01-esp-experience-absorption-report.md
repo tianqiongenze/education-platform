@@ -10,7 +10,7 @@
 
 ## 0. 一句话结论
 
-EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Kafka 做事件总线、TiDB HTAP、读写分离 SDK、多级缓存 SDK、Disruptor、JWT RS256+JWKS、探针三分离、DefaultTyping 禁令、LangGraph Agent、OTel 双层 Collector)，并在**11 个维度做了升级**(单元化、Flink+Iceberg 湖仓、AI 网关、RAG FGAC、Spark 离线层、ES 全文检索、Redis 真集群、数字人、RouteLLM、语义缓存、Chaos Mesh)。
+EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 统一事件总线+CDC、TiDB HTAP、读写分离 SDK、多级缓存 SDK、Disruptor、JWT RS256+JWKS、探针三分离、DefaultTyping 禁令、LangGraph Agent、OTel 双层 Collector)，并在**11 个维度做了升级**(单元化、Flink+Iceberg 湖仓、AI 网关、RAG FGAC、Spark 离线层、ES 全文检索、Redis 真集群、数字人、RouteLLM、语义缓存、Chaos Mesh)。
 
 **本轮修复完成情况**（2026-08-03）：
 - ✅ P0 行动项 5/5 全部完成（A-01 TiDB 8.5、A-04 LangGraph ≥1.0、A-07 user_id 必传、A-10 ADR-T06 不用 Seata、A-14 Litestar+Granian）
@@ -32,7 +32,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | # | 组件 | ESP 选择(版本) | EP 选择(版本) | 吸收状态 | 差距/行动 |
 |---|------|--------------|--------------|---------|----------|
 | 1 | 事件总线 | Pulsar 3.3.x(ADR-02) | Pulsar 3.3.x | ✅ 完全吸收 | — |
-| 2 | CDC 总线 | 不用(无 Flink/Spark) | Kafka 3.x(仅 CDC) | ✅ 合理引入 | EP 用 Kafka 仅做 CDC 缓冲(TiCDC→Kafka→Flink)，不替代 Pulsar 事件总线，ADR-D01 已论证 |
+| 2 | CDC 总线 | 不用(无 Flink/Spark) | Pulsar 3.3.x(统一 CDC+事件, ns=cdc://) | ✅ 合理引入 | EP 将 CDC 总线统一到 Pulsar(TiCDC→Pulsar→Flink)，不再引入 Kafka，技术栈单一化便于多活+geo-rep，ADR-D01 已论证 |
 | 3 | 数据库 | TiDB v8.5.7(3 region Raft) | TiDB 7.x | ⚠️ **版本需对齐** | **行动 A-01**：EP 应将 TiDB 版本从 7.x 升到 8.5+，对齐 ESP 验证版本(v8.5.7 Raft 强一致已验证) |
 | 4 | 分析引擎 | TiFlash HTAP(ADR-03, 无 Spark/Flink) | Flink 1.18 + Iceberg + Spark 3.5 | ✅ 合理升级 | EP 天花板 30 亿用户需独立湖仓，ESP 仅 5000 CCU 用 TiFlash 足够。Flink+Iceberg 是升级而非遗漏 |
 | 5 | Redis | 单实例(非真集群) | Redis Cluster 7.x(3主3从→30节点) | ✅ 升级 | EP 从 ESP 的"伪集群"升级到真 Redis Cluster，支持单元化每单元独立集群 |
@@ -41,7 +41,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | 8 | 搜索 | 不用 ES(用 Loki+TiDB app_logs) | Elasticsearch 8.14.x | ✅ 合理引入 | EP 有课程/题库全文检索+BM25 混合检索需求。ES 8.14 ECK Operator 部署方案已完整 |
 | 9 | 对象存储 | 仅 Milvus 后端的 MinIO | S3/MinIO(应用级) | ✅ 升级 | EP 需要存储直播录像/作业附件/代码提交快照 |
 | 10 | 湖仓 | 无(纯 TiFlash) | Flink+Iceberg+Spark | ✅ 合理升级 | EP 30 亿用户需独立湖仓，ESP 5000 CCU 不需要 |
-| 11 | Schema Registry | 不用 | Apicurio + Avro | ✅ 新增 | EP CDC 链路需要 schema 治理 |
+| 11 | Schema Registry | 不用 | Pulsar 内置 Schema Registry + Avro | ✅ 新增 | EP CDC 链路需要 schema 治理；采用 Pulsar 内置 Schema Registry，不单独引入 Apicurio(ADR-D01) |
 
 ---
 
@@ -75,12 +75,12 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | 5 | 缓存 Key 格式 | **坑**: Java 明文 vs Python/Go sha256[:24] → 跨语言 MISS | 明文 `{bu}:{svc}:{entity}:{id}`(ADR-T04 禁 sha256) | ✅ 吸收 ESP 血泪 | ADR-T04 直接引用 ESP 事故 |
 | 6 | Jackson DefaultTyping | **坑**: @class 跨语言不可反序列化 | 纯 JSON snake_case, 禁 DefaultTyping(ADR-T04) | ✅ 吸收 ESP 血泪 | ADR-T04 直接引用 ESP "定时跨语言炸弹" |
 | 7 | 事件驱动 | Pulsar topics(但 writing.graded 无 user_id) | Pulsar 事件总线 + 事件 schema + user_id 强制 | ✅ 吸收+修复 | **行动 A-07**：EP 需在事件 schema 规范中显式写明"user_id 必传, 禁止默认 0"作为 ESP 教训 |
-| 8 | 网关 | 自建 Netty edge + Spring MVC(ADR-08 移除 SCG) | Spring Cloud Gateway(BFF) | ⚠️ **决策不一致** | **行动 A-08**：EP 用 SCG 而 ESP 移除了 SCG。需补充 ADR 说明为何 EP 选择 SCG(而非 ESP 的 Netty 自建)。可能理由：EP 有 Kong AI 网关做 AI 层，BFF 层用 SCG 更标准化 |
+| 8 | 网关 | 自建 Netty edge + Spring MVC(ADR-08 移除 SCG) | ~~Spring Cloud Gateway(BFF)~~ → Netty edge+Disruptor+WebMVC(D-032/ADR-T07 rev2) | ✅ **已对齐** | **行动 A-08(已闭环 rev2)**：EP 原用 SCG，2026-08-04 D-032/铁律6 要求全项目群禁用 Spring Cloud 原生组件，EP 反转为 Netty edge+Disruptor+WebMVC，与 ESP Netty edge 路线完全对齐 |
 | 9 | 限流 | Sentinel 1.8.8 本地内存(非分布式) | Sentinel 1.8+ 网关+服务双层 | ⚠️ 需补坑 | **行动 A-09**：EP 需显式说明 Sentinel 规则用 Nacos 下发(分布式), 避免 ESP 的"本地内存规则"问题 |
 | 10 | 分布式事务 | Seata 2.2.0 AT 模式(**坑**: SCA→webclient 冲突) | 不用 Seata(幂等键+乐观锁+Pulsar at-least-once) | ✅ 有意排除 | EP 选择不用 Seata，用幂等键+乐观锁替代。**行动 A-10**：需补充 ADR 说明"为何不用 Seata"(引用 ESP 的 SCA bean 冲突 + 升级受阻坑) |
 | 11 | DDD | 弱 DDD(anemic repository+service) | 强 DDD(限界上下文=单元边界, 聚合根) | ✅ 升级 | EP 将 DDD 限界上下文作为单元化边界判断准则 |
 | 12 | 服务发现/RPC | Dubbo Triple + Nacos v2.4.3 | Dubbo Triple + Nacos 2.x | ✅ 吸收 | **行动 A-11**：EP 需 pin Dubbo 3.3.6 + Nacos 2.4.3(ESP 验证版本, v3.x 升级受阻) |
-| 13 | BFF | Netty edge + Spring MVC(Jetty) | Spring Cloud Gateway | ⚠️ 见 #8 | 需补充决策说明 |
+| 13 | BFF | Netty edge + Spring MVC(Jetty) | ~~Spring Cloud Gateway~~ → Netty edge+Disruptor+WebMVC(D-032) | ✅ **已对齐** | EP 反转决策, 与 ESP 完全对齐 |
 
 ---
 
@@ -204,7 +204,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 | A-03 | 图库选型明确为 Neo4j 5.25+ | TOGAF, sp04-sad | ✅ 已修复(TOGAF §6.1) |
 | A-05 | 数字人渲染底层技术栈明确 | sp04-sdd, sp04-srs | ✅ 已修复(sp04-sdd §2.5) |
 | A-06 | Python pulsar-client arm64 降级开关 | sp04-sdd, sp04-deploy | ✅ 已修复(2026-08-03) |
-| A-08 | 补 ADR "为何用 SCG 而非 Netty 自建" | sp01-sad | ✅ 已修复(ADR-T07) |
+| A-08 | 补 ADR "为何用 SCG 而非 Netty 自建" | sp01-sad | ✅ 已闭环 rev2(2026-08-04, D-032 反转: EP 改用 Netty edge+Disruptor+WebMVC, 与 ESP 对齐, ADR-T07 rev2) |
 | A-09 | Sentinel 规则 Nacos 下发(非本地内存) | sp01-sad, sp01-sdd | ✅ 已修复(ADR-T08 + sp01-sdd §5.1) |
 | A-11 | pin Dubbo 3.3.6 + Nacos 2.4.3(注明不升 v3) | TOGAF, sp01-sad | ✅ 已修复(TOGAF §6.1 + sp01-sad) |
 | A-12 | pin Spring Cloud 2025.1.2 + SCA 2025.1.0.0 | sp01-sad | ✅ 已修复(sp01-sad infra 表) |
@@ -241,7 +241,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 ## 10. 总结
 
 ### 已完全吸收的 ESP 核心实践(15 项)
-1. Pulsar 替代 Kafka 做事件总线(ADR-02)
+1. Pulsar 统一事件总线+CDC(ADR-02 承接 + ADR-D01 CDC 亦走 Pulsar，彻底不引入 Kafka)
 2. 读写分离 SDK(AbstractRoutingDataSource + AOP, Feature flag 降级)
 3. 多级缓存 L1+L2(Caffeine + Redis + Pulsar 广播失效)
 4. Disruptor 高吞吐削峰(tryNext 背压 + 批量刷新)
@@ -281,7 +281,7 @@ EP 设计文档**已系统性吸收 ESP 的核心架构决策**(Pulsar 替代 Ka
 
 ### EP 有意排除的 ESP 组件(4 项)
 1. **Seata**(EP 用幂等键+乐观锁替代 — 需补 ADR)
-2. **Spring Cloud Gateway 移除**(EP 反而用 SCG — 需补 ADR)
+2. **Spring Cloud Gateway 移除**(~~EP 反而用 SCG — 需补 ADR~~ → 2026-08-04 D-032/铁律6 反转: EP 改用 Netty edge+Disruptor+WebMVC, 与 ESP 完全对齐, ADR-T07 rev2)
 3. **Litestar+Granian**(EP 未指定 Python 框架 — 需决策)
 4. **单节点部署**(EP 从 Day 1 多节点)
 

@@ -1,0 +1,30 @@
+# Industry configuration template — copy this file, rename to {industry}.yaml, and customize.
+# This is the single source of truth for industry-specific AI agent behavior.
+# The AI middleware infrastructure (memory, harness, MCP, A2A, plugin, hermes, gateway)
+# is industry-agnostic and does NOT need modification when migrating to a new industry.
+
+domain_name: generic  # e.g., healthcare, finance, retail, logistics
+system_prompt: "You are an AI assistant."
+
+# Agent subgraphs specific to this industry.
+# Each entry references a Python module and builder function that returns a compiled LangGraph subgraph.
+agent_graphs: []
+  # - name: my_agent
+  #   module: my_package.my_module
+  #   builder: build_my_subgraph
+
+# MCP tools exposed by this industry's agents.
+tool_catalog: []
+  # - name: my_tool
+  #   server: my-server
+  #   description: What this tool does
+
+# Intent classification keywords for the supervisor router.
+# Maps agent names to keyword lists; the supervisor matches user messages against these.
+intent_keywords: {}
+  # my_agent: [keyword1, keyword2]
+
+# Event routing rules for the Hermes event bus.
+# Maps event types to target agent names.
+event_routes: {}
+  # MY_EVENT: [my-agent]

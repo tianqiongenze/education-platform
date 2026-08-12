@@ -1,0 +1,62 @@
+# D-108: Standalone local profile — zero external dependencies.
+# Usage: mvn spring-boot:run -Dspring-boot.run.profiles=dev-local
+# Boots entirely against H2 in-memory; no TiDB/Redis/Nacos/Pulsar/Seata needed.
+spring:
+  aot:
+    enabled: false
+  autoconfigure:
+    exclude:
+      # D-076/D-108: redisson-spring-boot-starter targets SB3x classpaths; not needed locally.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      # D-078/D-108: no Seata TC server locally — exclude Seata auto-config.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+      # D-108: no Redis locally — exclude Spring Data Redis auto-config.
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:ep_itbackend;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+# D-077/D-108: dev Redis cluster mode off — no Redis in local profile.
+ep:
+  dev:
+    redis-cluster:
+      enabled: false
+  pulsar:
+    enabled: false
+
+dubbo:
+  registry:
+    address: N/A
+
+csp:
+  sentinel:
+    enabled: false
+
+seata:
+  enabled: false
+  tx-service-group: ep_tx_group
+  service:
+    vgroup-mapping:
+      ep_tx_group: default
+  registry:
+    type: file
+
+# D-048 P1-3/D-108: Redisson distributed lock disabled locally.
+redisson:
+  config: ""
+
+logging:
+  level:
+    root: INFO
+    com.ep.grading: DEBUG
+    org.apache.dubbo: WARN

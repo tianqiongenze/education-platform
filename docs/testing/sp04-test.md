@@ -205,3 +205,121 @@ eval/
 ---
 
 （全文完，约 230 行有效内容）
+
+---
+
+## D-046: 智能体架构测试矩阵
+
+### 1. 测试用例
+
+| 用例 ID | 模块 | 场景 | 预期结果 | 类型 |
+|---------|------|------|---------|------|
+| TC-AGT-01 | MCP | 注册新 MCP Server（stdio 传输） | Registry 写入 `mcp:servers:{tenant}`，YAML 双写 | 单元 |
+| TC-AGT-02 | MCP | 注销已注册 Server | Redis 与 YAML 均移除/标记 disabled | 单元 |
+| TC-AGT-03 | MCP | list 查询租户全部 Server | 返回完整列表；Redis 故障时回退 YAML | 单元 |
+| TC-AGT-04 | MCP | 传输选择：stdio vs Streamable HTTP | MCPClient 按 ServerInfo.transport 正确建立连接 | 集成 |
+| TC-AGT-05 | MCP | 工具 inputSchema 校验失败 | SandboxedToolNode 拒绝调用并审计 | 单元 |
+| TC-AGT-06 | A2A | Task submitted→working→completed 正常流转 | 状态机正确转换，Redis `a2a:task:{id}` 持久化 | 单元 |
+| TC-AGT-07 | A2A | Task 进入 input-required（HITL） | 暂停并发布事件；resume 后继续 | 集成 |
+| TC-AGT-08 | A2A | Task canceled/failed/rejected 终态 | 终态不可回退，TTL 7d | 单元 |
+| TC-AGT-09 | A2A | AgentCard 序列化 `/.well-known/agent.json` | JSON 字段完整，可被 AgentRegistry 拉取 | 集成 |
+| TC-AGT-10 | A2A | SSE 订阅 Task 进度 | 客户端收到 working/completed 事件 | 集成 |
+| TC-AGT-11 | Graph | Supervisor 路由到正确子图 | 意图→子图映射准确率 ≥90% | 集成 |
+| TC-AGT-12 | Graph | `_round_done` 终止保护 | 选择子图后不再回 Supervisor，直接 FINISH | 单元 |
+| TC-AGT-13 | Graph | RedisSaver checkpointer 持久化 | 重启后可从 thread_id 恢复状态 | 集成 |
+| TC-AGT-14 | Graph | MemorySaver 降级 | Redis 故障时自动降级并告警 | 故障注入 |
+| TC-AGT-15 | Reflexion | evaluate 通过（score ≥0.7） | 直接进入 respond，不触发 reflect | 单元 |
+| TC-AGT-16 | Reflexion | evaluate 失败→reflect→retry | trial_count 递增，反思写入 reflections | 单元 |
+| TC-AGT-17 | Reflexion | 达 max_trials=3 强制终止 | 返回 grounded answer，不再重试 | 单元 |
+| TC-AGT-18 | Reflexion | episodic memory 注入 | 历史 reflection 从 Redis 读取并注入 prompt | 集成 |
+| TC-AGT-19 | Harness | 超时 120s 触发 | AgentExecutionError，网关返回 408 | 集成 |
+| TC-AGT-20 | Harness | 深度超 50 触发 | AgentExecutionError | 单元 |
+| TC-AGT-21 | Harness | 沙箱权限不足拒绝 | 调用被拒，审计记录 PERMISSION_DENIED | 单元 |
+| TC-AGT-22 | Harness | prompt 注入输入被清洗 | 含 `ignore previous` 的输入被拒/清洗 | 单元 |
+| TC-AGT-23 | Harness | 路径遍历输入被拒 | `../` 与绝对路径被拒 | 单元 |
+| TC-AGT-24 | Harness | Token 预算超额拒绝 | budget ZSET 求和超限，拒绝执行 | 单元 |
+| TC-AGT-25 | Harness | 输出截断 + 审计落账 | 超长输出截断并标记，AuditLogger 写 Stream | 集成 |
+| TC-AGT-26 | Harness | AuditLogger Redis 故障→JSONL 兜底 | 事件写入 `/tmp/ep_audit_fallback.jsonl` | 故障注入 |
+| TC-AGT-27 | Hermes | publish/subscribe 端到端 | InMemoryBus 模式下事件正确投递 | 单元 |
+| TC-AGT-28 | Hermes | Pulsar 模式 3 重试 + DLQ | 消费失败 3 次后入 DLQ | 集成 |
+| TC-AGT-29 | Hermes | PULSAR_ENABLED=false 降级 | 自动切换 InMemoryBus，不丢事件 | 故障注入 |
+| TC-AGT-30 | Hermes | EventRouter 规则路由 | 事件按 `hermes:routes` 规则投递下游 | 单元 |
+| TC-AGT-31 | Hermes | 路由规则 Redis 热更新 | 不重启即可更新路由 | 集成 |
+| TC-AGT-32 | Plugin | manifest 校验通过 | 注册成功，写入 `plugin:registry:{tenant}` | 单元 |
+| TC-AGT-33 | Plugin | manifest 校验失败（缺字段） | 拒绝注册并返回错误 | 单元 |
+| TC-AGT-34 | Plugin | tenant_whitelist 过滤 | 非白名单租户调用被拒 | 单元 |
+| TC-AGT-35 | Plugin | 权限不足拒绝 | PluginSandbox 拒绝并审计 | 单元 |
+| TC-AGT-36 | Plugin | 向量检索 Discovery | top-k 返回相关插件 | 集成 |
+| TC-AGT-37 | HITL | interrupt_before 暂停于 teacher_review | 图暂停，A2A Task 进入 input-required | 集成 |
+| TC-AGT-38 | HITL | 教师审核 resume | 提交审核结果后图继续执行 | 集成 |
+| TC-AGT-39 | HITL | 审核超时自动 reject | 24h 未审核，Task 转 rejected | 集成 |
+| TC-AGT-40 | 多租户 | 跨租户隔离渗透 | 租户 A 无法访问租户 B 的 Agent/Plugin/Task/Memory | 安全 |
+
+### 2. 门禁指标
+
+| 指标 | 阈值 |
+|------|------|
+| D-046 用例通过率 | 100% |
+| Supervisor 路由准确率 | ≥90% |
+| Reflexion 收敛率 | 100%（max_trials 内必终止） |
+| 审计落账延迟 P95 | < 5s |
+| 降级路径事件零丢失 | 100% |
+| 插件沙箱逃逸 | 0 |
+
+---
+
+（D-046 章节完）
+
+---
+
+## §ep-memory 记忆系统测试矩阵 (D-045)
+
+> 关联：ADR-A05；ADR-A06；FR-MEM-01..08。
+
+### 1. 测试用例
+
+| 编号 | 模块 | 场景 | 预期 | 类型 |
+|------|------|------|------|------|
+| TC-MEM-01 | L0 | 10 轮窗口管理 | 第 11 轮写入后 L0 仅保留最近 10 轮 | 单元 |
+| TC-MEM-02 | L0 | TTL 24h 淘汰 | 24h 无更新后 key 自动过期 | 集成 |
+| TC-MEM-03 | L0 | 摘要压缩触发 | L0 长度达 8 轮触发 L1 摘要生成 | 集成 |
+| TC-MEM-04 | L1 | 会话恢复 | 新会话 recall 含 L1 摘要，上下文连续 | 集成 |
+| TC-MEM-05 | L1 | 跨设备续聊 | 设备 A 写入 L1 后，设备 B recall 命中 | 集成 |
+| TC-MEM-06 | L1 | TTL 7d 降级 L2 | 7d 到期后摘要被提取写入 L2，L1 key 删除 | 集成 |
+| TC-MEM-07 | L2 | Mem0 提取 | 对话写入后 Mem0 client.add 成功抽取事实写入 Milvus/TiDB/Neo4j | 集成 |
+| TC-MEM-08 | L2 | 向量检索 | recall 返回 top-k 相似情景记忆，RRF 融合三路 | 集成 |
+| TC-MEM-09 | L2 | 语义冲突消解 | 新旧事实矛盾时旧值标记 superseded，新值 active | 单元 |
+| TC-MEM-10 | L2 | 程序图谱召回 | Cypher 遍历返回关联实体（User-Course-Skill） | 集成 |
+| TC-MEM-11 | L2 | 去重 | 向量相似度 > 0.95 时合并而非新增 | 单元 |
+| TC-MEM-12 | L3 | 组织记忆共享 | 授权用户 recall 含 L3；未授权用户 L3 不可见 | 安全 |
+| TC-MEM-13 | L3 | 权限隔离 | 无 `mem:org:read` 权限调用 L3 被拒并审计 | 安全 |
+| TC-MEM-14 | L3 | 双人审核晋升 | promote_to_org 需 2 名 reviewer 通过才生效 | 集成 |
+| TC-MEM-15 | 遗忘 | L0 TTL 淘汰 | 24h 后 L0 key 不存在 | 集成 |
+| TC-MEM-16 | 遗忘 | L1 7d 降级 | CronJob 扫描到期 L1，提取摘要写 L2 后 DEL | 集成 |
+| TC-MEM-17 | 遗忘 | L2 30d 降权 | 30d 后召回分数 ×0.5 | 集成 |
+| TC-MEM-18 | 遗忘 | L2 90d 归档 | 90d 后 status=archived，召回 filter 排除 | 集成 |
+| TC-MEM-19 | 遗忘 | L3 不自动过期 | L3 项 90d+ 仍可召回，仅手动 forget 删除 | 集成 |
+| TC-MEM-20 | MemoryManager | 分级召回编排 | recall 顺序 L0→L1→L2→L3，各级命中后仍合并返回 | 集成 |
+| TC-MEM-21 | MemoryManager | remember 写入编排 | 同步 L0 + 异步 L1 摘要 + 异步 L2 Mem0 提取 | 集成 |
+| TC-MEM-22 | MemoryManager | 显式 forget | forget 删除对应级记忆，L3 需治理员权限 | 集成 |
+| TC-MEM-23 | API | Python SDK 调用 | MemoryManager 直接调用成功 | 单元 |
+| TC-MEM-24 | API | Java SDK gRPC | ep-memory-java 经 gRPC 调通 Python 侧 RPC | 集成 |
+| TC-MEM-25 | API | REST 端点 | POST /v1/memory/recall 鉴权 + 租户隔离 | 集成 |
+| TC-MEM-26 | 多租户 | 跨租户隔离 | 租户 A 无法 recall 租户 B 的任何级记忆 | 安全 |
+| TC-MEM-27 | 降级 | Redis 故障 | L0/L1 降级 MemorySaver，L2 直接兜底召回 | 故障注入 |
+
+### 2. 门禁指标
+
+| 指标 | 阈值 |
+|------|------|
+| D-045 用例通过率 | 100% |
+| recall P95（L0/L1 命中） | < 200ms |
+| recall P95（L2 三路 RRF） | < 500ms |
+| Mem0 提取成功率 | ≥ 98% |
+| 遗忘 CronJob 执行成功率 | 100% |
+| L3 跨租户泄漏 | 0 |
+| 归档项误召回 | 0 |
+
+---
+
+（D-045 章节完）

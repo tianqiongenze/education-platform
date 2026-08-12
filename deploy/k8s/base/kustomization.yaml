@@ -1,0 +1,106 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: education-platform
+
+# D-035 rule 6: ConfigMaps are managed via GitOps (ArgoCD/Flux).
+# All configuration lives in Git; no out-of-band kubectl edits.
+#
+# D-114: This kustomization is rendered and applied by ArgoCD, NOT by hand.
+# GitOps flow:
+#   1. A change is pushed to deploy/k8s/** on the main branch.
+#   2. ArgoCD (root App: deploy/gitops/argocd/app-of-apps.yaml) detects the
+#      diff, re-renders this kustomization, and auto-syncs with self-heal.
+#   3. The `commonLabels` `managed-by: argocd` below is now factual — every
+#      rendered resource carries it and ArgoCD enforces the declared state.
+#   4. To deploy a new image tag, update the `images:` block below and push;
+#      ArgoCD syncs the affected Application automatically.
+# Never run `kubectl apply -k deploy/k8s/base` against production — push to
+# Git and let ArgoCD reconcile. Local k3s verification may still use
+# `kubectl apply -k deploy/k8s/overlays/local-verify` for smoke tests.
+
+# Namespace must be created first
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - portal-bff.yaml
+  - core-business.yaml
+  - order-platform.yaml
+  - payment-platform.yaml
+  - grading-service.yaml
+  - ai-platform.yaml
+  # D-140: 剩余 6 个服务的 Deployment+Service (原仅有镜像条目, 缺 K8s 描述)
+  - data-platform.yaml
+  - knowledge-service.yaml
+  - knowledge-bff.yaml
+  - retrieval-service.yaml
+  - agent-service.yaml
+  - tenant-service.yaml
+  - ws-gateway.yaml
+  # D-149: 康养养老 + 棋牌教育+对弈 事业群
+  - senior-care.yaml
+  - boardgame-service.yaml
+  - networkpolicy.yaml
+  # D-133: per-service ingress isolation. Denies direct pod-to-pod access to
+  # internal services (core-business / ai-platform / grading-service), forcing all
+  # external traffic through portal-bff (RBAC) and ws-gateway (WebSocket).
+  # Complements the namespace default-deny in networkpolicy.yaml.
+  - networkpolicy-internal.yaml
+  - ingress.yaml
+  - frontend-portal.yaml
+  - hpa-all.yaml
+  - pdb-all.yaml
+  - otel-collector.yaml
+  # D-041: Karmada 多集群调度策略 (异地多活)
+  - karmada-propagation.yaml
+  # D-079/D-080: TiDB 分布式集群 (突破单 TiKV 587 RPS 瓶颈)
+  # 依赖 TiDB Operator CRD (pingcap.com/v1alpha1) 已在集群安装
+  - tidb-cluster.yaml
+  - tidb-monitor.yaml
+  - tidb-backup-schedule.yaml
+  # D-120 / ADR-INF-02 v2.0: NebulaGraph 分布式图数据库 (重图负载)
+  # 依赖 nebula-operator CRD (apps.nebula-graph.io/v1alpha1) 已在集群安装
+  - nebulagraph.yaml
+
+# NamePrefix applied to all resources for namespace collision avoidance
+namePrefix: edu-
+
+# Common labels applied to all resources (D-035 rule 6: GitOps traceability)
+commonLabels:
+  app.kubernetes.io/part-of: education-platform
+  app.kubernetes.io/managed-by: argocd
+
+# Image tag transformation: override tags for environment promotion
+# In GitOps, the tag is updated here via CI/CD on each promotion.
+images:
+  - name: harbor.edu.internal/education-platform/portal-bff
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/core-business
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/order-platform
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/payment-platform
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/grading-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/ai-platform
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/ws-gateway
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/frontend-portal
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/otel-collector-contrib
+    newTag: 0.110.0
+  # D-140: 6 个新增服务镜像条目
+  - name: harbor.edu.internal/education-platform/data-platform
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/knowledge-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/knowledge-bff
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/retrieval-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/agent-service
+    newTag: 1.0.0
+  - name: harbor.edu.internal/education-platform/tenant-service
+    newTag: 1.0.0

@@ -1,0 +1,77 @@
+[tool.poetry]
+name = "sp04-ai"
+version = "1.0.0"
+description = "EP AI Middle-Platform"
+authors = ["EP Team"]
+packages = [
+    {include = "ai_gateway"},
+    {include = "ai_rag"},
+    {include = "ai_agent"},
+    {include = "ai_mcp"},
+    {include = "ai_a2a"},
+    {include = "ai_harness"},
+    {include = "ai_hermes"},
+    {include = "ai_plugin"},
+    {include = "ep_memory"},
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+# D-110: shared Python utilities (config, health, response, logging).
+ep-common = { path = "../ep-python-common", develop = true }
+litestar = "^2.14"
+granian = "^1.7"
+pydantic = "^2.10"
+httpx = "^0.28"
+pulsar-client = "^3.5"
+pymilvus = "^2.6"
+pgvector = "^0.3"
+psycopg = {version = "^3.2", extras = ["binary"]}
+langgraph = "^1.0"
+langchain-core = "^1.4"
+redis = "^5.2"
+structlog = "^24.4"
+mcp = "^1.0"
+langchain-mcp-adapters = "^0.1"
+langgraph-sdk = "^0.4"
+mem0ai = "^0.1"
+a2a-sdk = ">=0.1.0"
+starlette = ">=0.37"
+sse-starlette = ">=2.1"
+# D-118: OpenTelemetry instrumentation for distributed tracing.
+opentelemetry-sdk = "^1.30"
+opentelemetry-exporter-otlp = "^1.30"
+opentelemetry-instrumentation-asgi = "^0.55b0"
+opentelemetry-instrumentation-httpx = "^0.55b0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-asyncio = "^0.24"
+pytest-cov = "^6.0"
+ruff = "^0.8"
+# Live integration test clients (D-052/D-053). Optional: tests skip cleanly
+# when the client library is absent, so these do not block the core suite.
+pymilvus = "^2.5"
+nebula-python = "^1.1"
+# D-119: Testcontainers for isolated Redis integration tests. The
+# test_redis_integration.py test starts its own Redis container (no shared
+# cluster) to exercise the ep_memory L0-L3 system with real Redis.
+testcontainers = "^4.8"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "live: live integration tests against real K8s infra (skipped unless EP_LIVE=1)",
+    # D-119: Testcontainers IT — starts isolated Docker containers. Skips
+    # cleanly when Docker is unavailable.
+    "integration: testcontainers integration tests (isolated Docker containers)",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

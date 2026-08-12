@@ -1,0 +1,56 @@
+name: Iron Law 8 Static Scan
+
+# 铁律8 (D-048) 静态扫描 — PR/push 阶段拦截反模式
+# 关联: ADR-INF-06 §6, D-048, D-051
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iron-law-8-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iron-law-8-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema
+
+      - name: Run Iron Law 8 static scan
+        id: scan
+        run: |
+          # 决策文件路径在 runner 上没有 ~/.zcode, 通过环境变量指向仓库内的副本/快照
+          # 优先用仓库内 decisions.jsonl (若存在), 否则用 home 兜底
+          if [ -f ".zcode/sessions/education-platform/decisions.jsonl" ]; then
+            export DECISIONS_PATH="$GITHUB_WORKSPACE/.zcode/sessions/education-platform/decisions.jsonl"
+          fi
+          export REPO_ROOT="$GITHUB_WORKSPACE"
+          python scripts/check-iron-law-8.py | tee iron-law-8-report.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload scan report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iron-law-8-scan-report
+          path: iron-law-8-report.txt
+          retention-days: 30

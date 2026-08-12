@@ -1,0 +1,115 @@
+name: Load Test Smoke (k6)
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  k6-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt update
+          sudo apt install k6
+      - name: Run bff-smoke (10 VU, 30s)
+        run: |
+          # D-138: Run k6 against a local mock server that stubs the BFF
+          # endpoints exercised by bff-smoke.js (login, user, courses,
+          # orders, pay). This validates the k6 script executes end-to-end
+          # and thresholds are structurally sound. In production CI with
+          # real backends (or a deployed staging env), set K6_BASE_URL to
+          # the live BFF and remove the mock server step.
+          cat > /tmp/mock-server.js << 'MOCK_EOF'
+          const http = require('http');
+          const server = http.createServer((req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.url === '/api/v1/auth/login') {
+              res.writeHead(200); res.end(JSON.stringify({ token: 'mock-jwt-token', data: { token: 'mock-jwt-token' } }));
+            } else if (req.url.match(/^\/api\/v1\/users\/\d+$/)) {
+              res.writeHead(200); res.end(JSON.stringify({ id: 1, name: 'mock-user' }));
+            } else if (req.url === '/api/v1/courses') {
+              res.writeHead(200); res.end(JSON.stringify([{ id: 1, title: 'mock-course' }]));
+            } else if (req.url === '/api/v1/orders' && req.method === 'POST') {
+              res.writeHead(201); res.end(JSON.stringify({ id: 1001, data: { id: 1001 } }));
+            } else if (req.url.match(/^\/api\/v1\/orders\/\d+\/pay$/) && req.method === 'POST') {
+              res.writeHead(200); res.end(JSON.stringify({ status: 'paid' }));
+            } else {
+              res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+            }
+          });
+          server.listen(8080, () => console.log('Mock BFF on :8080'));
+          MOCK_EOF
+          node /tmp/mock-server.js &
+          MOCK_PID=$!
+          sleep 2
+          curl -s -o /dev/null -w "Mock health: %{http_code}\n" http://localhost:8080/api/v1/auth/login -X POST -d '{}' -H 'Content-Type: application/json'
+          K6_BASE_URL=http://localhost:8080 k6 run deploy/load-tests/k6/bff-smoke.js
+          K6_EXIT=$?
+          kill $MOCK_PID 2>/dev/null || true
+          exit $K6_EXIT
+        continue-on-error: false
+
+  k6-nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt update
+          sudo apt install k6
+      - name: Inspect all k6 scripts
+        run: |
+          for script in deploy/load-tests/k6/*.js; do
+            echo "=== Inspecting $script ==="
+            k6 inspect "$script" || exit 1
+          done
+      - name: Run bff-ramp against mock server
+        run: |
+          # D-138: Nightly ramp test against mock server.
+          cat > /tmp/mock-server.js << 'MOCK_EOF'
+          const http = require('http');
+          const server = http.createServer((req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.url === '/api/v1/auth/login') {
+              res.writeHead(200); res.end(JSON.stringify({ token: 'mock-jwt-token', data: { token: 'mock-jwt-token' } }));
+            } else if (req.url.match(/^\/api\/v1\/users\/\d+$/)) {
+              res.writeHead(200); res.end(JSON.stringify({ id: 1, name: 'mock-user' }));
+            } else if (req.url === '/api/v1/courses') {
+              res.writeHead(200); res.end(JSON.stringify([{ id: 1, title: 'mock-course' }]));
+            } else if (req.url === '/api/v1/orders' && req.method === 'POST') {
+              res.writeHead(201); res.end(JSON.stringify({ id: 1001, data: { id: 1001 } }));
+            } else if (req.url.match(/^\/api\/v1\/orders\/\d+\/pay$/) && req.method === 'POST') {
+              res.writeHead(200); res.end(JSON.stringify({ status: 'paid' }));
+            } else {
+              res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+            }
+          });
+          server.listen(8080, () => console.log('Mock BFF on :8080'));
+          MOCK_EOF
+          node /tmp/mock-server.js &
+          MOCK_PID=$!
+          sleep 2
+          K6_BASE_URL=http://localhost:8080 k6 run deploy/load-tests/k6/bff-ramp.js || true
+          kill $MOCK_PID 2>/dev/null || true
+        continue-on-error: true

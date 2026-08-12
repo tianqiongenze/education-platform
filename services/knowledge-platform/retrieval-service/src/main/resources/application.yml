@@ -1,0 +1,61 @@
+server:
+  port: 8072
+
+spring:
+  application:
+    name: retrieval-service
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # D-069: default to dev
+  config:
+    import: "optional:file:./config/application-${spring.profiles.active}.yml"  # D-069: external override
+  threads:
+    virtual:
+      enabled: true   # D-039: virtual threads
+  aot:
+    enabled: false   # D-069: common base — overridden to true in prod
+
+dubbo:
+  application:
+    name: retrieval-service
+  protocol:
+    name: dubbo
+    port: 20872
+  scan:
+    base-packages: com.ep.knowledge.retrieval
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+ep:
+  cache:
+    enabled: true
+    warmup:
+      enabled: true
+      hot-query: true
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:5173
+
+# P2-10: Resilience4j RateLimiter (opt-in via @RateLimiter annotation)
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

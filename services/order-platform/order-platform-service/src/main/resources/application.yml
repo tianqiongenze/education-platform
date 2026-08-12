@@ -1,0 +1,60 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: order-platform
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  datasource:
+    url: jdbc:h2:mem:orderdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+dubbo:
+  application:
+    name: order-platform
+  protocol:
+    name: dubbo
+    port: 20884
+  registry:
+    address: N/A
+
+ep:
+  pulsar:
+    enabled: false
+    topic:
+      domain-events: domain-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:5173
+
+# D-154 P2-10: Resilience4j rate limiter.
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

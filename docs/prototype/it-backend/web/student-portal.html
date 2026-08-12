@@ -483,12 +483,32 @@ button{cursor:pointer;font-family:inherit;border:none;border-radius:var(--radius
   </main>
 </div>
 <script>
+'use strict';
+/* ===== 侧边栏导航(SPA切换,事件委托) ===== */
+document.querySelector('.sidebar').addEventListener('click',e=>{
+  const it=e.target.closest('.nav-item');if(!it)return;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  it.classList.add('active');
+  const p=it.getAttribute('onclick').match(/'([^']+)'/);
+  if(!p)return;
+  const name=p[1];
+  document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
+  const tgt=document.getElementById('page-'+name);
+  if(tgt)tgt.classList.add('active');
+  document.querySelector('.main').scrollTop=0;
+});
+/* 兼容原 showPage 调用 */
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  const tgt=document.getElementById('page-'+name);
+  if(tgt)tgt.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    const m=n.getAttribute('onclick')&&n.getAttribute('onclick').match(/'([^']+)'/);
+    n.classList.toggle('active',m&&m[1]===name);
+  });
+  document.querySelector('.main').scrollTop=0;
 }
+/* ===== 弹幕发送 ===== */
 function sendDanmaku(){
   const input=document.getElementById('danmaku-input');
   if(input.value.trim()){
@@ -499,11 +519,165 @@ function sendDanmaku(){
     list.appendChild(div);
     list.scrollTop=list.scrollHeight;
     input.value='';
+    // 模拟其他学员回复
+    setTimeout(()=>{
+      const names=['学员A','学员B','学员C','学员D'];
+      const msgs=['+1','同问','明白了','这个点很重要','感谢'];
+      const r=document.createElement('div');
+      r.className='danmaku-msg';
+      r.innerHTML='<span class="u">'+names[Math.floor(Math.random()*names.length)]+':</span><span class="m">'+msgs[Math.floor(Math.random()*msgs.length)]+'</span>';
+      list.appendChild(r);
+      list.scrollTop=list.scrollHeight;
+    },1000+Math.random()*1500);
   }
 }
+/* ===== 单选题选择(事件委托) ===== */
 document.querySelectorAll('.exam-opt').forEach(o=>o.onclick=()=>{
   document.querySelectorAll('.exam-opt').forEach(x=>x.classList.remove('sel'));
   o.classList.add('sel');
+});
+/* ===== 课程搜索实时过滤 ===== */
+(function(){
+  const input=document.querySelector('#page-courses .search');
+  if(!input)return;
+  input.addEventListener('input',()=>{
+    const kw=input.value.toLowerCase().trim();
+    document.querySelectorAll('#page-courses .course-card').forEach(card=>{
+      const t=card.querySelector('.title')?card.querySelector('.title').textContent.toLowerCase():'';
+      const m=card.querySelector('.meta')?card.querySelector('.meta').textContent.toLowerCase():'';
+      card.style.display=(!kw||t.indexOf(kw)>=0||m.indexOf(kw)>=0)?'':'none';
+    });
+  });
+})();
+/* ===== 课程分类标签筛选 ===== */
+(function(){
+  const tags=document.querySelectorAll('#page-courses .topbar + div .tag');
+  if(!tags.length)return;
+  tags.forEach(t=>{
+    t.addEventListener('click',()=>{
+      tags.forEach(x=>x.classList.remove('hot'));
+      t.classList.add('hot');
+      const kw=t.textContent.trim().toLowerCase();
+      document.querySelectorAll('#page-courses .course-card').forEach(card=>{
+        const meta=card.querySelector('.meta')?card.querySelector('.meta').textContent.toLowerCase():'';
+        const tags2=card.innerText.toLowerCase();
+        card.style.display=(kw==='全部'||tags2.indexOf(kw)>=0)?'':'none';
+      });
+    });
+  });
+})();
+/* ===== 视频播放器进度模拟 ===== */
+(function(){
+  let playing=false,cur=755,total=2180,timer=null;
+  const btn=document.querySelector('#page-video .play-btn');
+  const bar=document.querySelector('#page-video .progress .bar');
+  const timeEl=document.querySelector('#page-video .controls span:nth-child(2)');
+  function fmt(s){const m=Math.floor(s/60),x=s%60;return m+':'+(x<10?'0':'')+x+' / 36:20';}
+  function tick(){
+    cur=Math.min(total,cur+1);
+    if(bar)bar.style.width=(cur/total*100)+'%';
+    if(timeEl)timeEl.textContent=fmt(cur);
+    if(cur>=total){clearInterval(timer);playing=false;if(btn)btn.textContent='▶';}
+  }
+  if(btn){
+    btn.addEventListener('click',()=>{
+      playing=!playing;
+      btn.textContent=playing?'⏸':'▶';
+      if(playing)timer=setInterval(tick,1000);else clearInterval(timer);
+    });
+  }
+  /* 章节列表切换 */
+  document.querySelectorAll('#page-video .chapter-item').forEach(ci=>{
+    ci.addEventListener('click',()=>{
+      document.querySelectorAll('#page-video .chapter-item').forEach(x=>x.classList.remove('active'));
+      ci.classList.add('active');
+    });
+  });
+})();
+/* ===== IDE 文件树切换 ===== */
+document.querySelectorAll('.ide-sidebar .file').forEach(f=>{
+  f.addEventListener('click',()=>{
+    document.querySelectorAll('.ide-sidebar .file').forEach(x=>x.classList.remove('active'));
+    f.classList.add('active');
+  });
+});
+/* ===== IDE Tab 切换 ===== */
+document.querySelectorAll('.ide-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.ide-tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+  });
+});
+/* ===== IDE 运行按钮模拟(重新跑测试) ===== */
+(function(){
+  const tb=document.querySelector('.ide-toolbar');
+  if(!tb)return;
+  const run=document.createElement('button');
+  run.className='btn-primary';run.textContent='运行';
+  run.style.marginLeft='8px';
+  tb.appendChild(run);
+  const out=document.querySelector('.ide-output');
+  run.addEventListener('click',()=>{
+    if(!out)return;
+    const lines=out.querySelectorAll('div');
+    lines.forEach(l=>{l.style.opacity='0.4';});
+    setTimeout(()=>{
+      lines.forEach(l=>l.style.opacity='1');
+      toast('重新运行完成:3/4 通过');
+    },1200);
+  });
+})();
+/* ===== 考试倒计时 ===== */
+(function(){
+  const tEl=document.querySelector('#page-exam .actions .tag:nth-child(2)');
+  if(!tEl||!tEl.textContent.match(/\d+:\d+/))return;
+  let [mm,ss]=tEl.textContent.match(/(\d+):(\d+)/).slice(1).map(Number);
+  setInterval(()=>{
+    if(ss===0){if(mm===0)return;mm--;ss=59;}
+    else ss--;
+    tEl.textContent='⏱ 剩余 '+(mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+  },1000);
+})();
+/* ===== 数字动画(个人中心统计卡片) ===== */
+function animateNum(el,target,duration){
+  const t=/^[\d.]+$/.test(target)?parseFloat(target):null;
+  if(t===null)return;
+  const startT=Date.now();
+  const step=()=>{
+    const p=Math.min(1,(Date.now()-startT)/duration);
+    const v=t*p;
+    el.textContent=(t%1===0)?Math.round(v):v.toFixed(1);
+    if(p<1)requestAnimationFrame(step);else el.textContent=target;
+  };
+  step();
+}
+window.addEventListener('load',()=>{
+  document.querySelectorAll('#page-profile .stat .v').forEach(v=>animateNum(v,v.textContent,1200));
+});
+/* ===== Toast 提示 ===== */
+function toast(msg){
+  let t=document.getElementById('__toast');
+  if(!t){
+    t=document.createElement('div');
+    t.id='__toast';
+    t.style.cssText='position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(window.__tt);
+  window.__tt=setTimeout(()=>t.style.opacity='0',2000);
+}
+/* ===== 作业"去提交"按钮反馈 ===== */
+document.querySelectorAll('#page-assignment .btn-primary').forEach(b=>{
+  if(b.textContent.indexOf('去提交')>=0){
+    b.addEventListener('click',()=>toast('跳转到在线编程 IDE...'));
+  }
+});
+/* ===== 直播间"申请连麦"反馈 ===== */
+document.querySelectorAll('#page-live .btn-ghost').forEach(b=>{
+  if(b.textContent.indexOf('连麦')>=0){
+    b.addEventListener('click',()=>toast('已发起连麦申请,等待教师同意'));
+  }
 });
 </script>
 </body>

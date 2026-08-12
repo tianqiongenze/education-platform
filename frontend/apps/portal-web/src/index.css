@@ -1,0 +1,112 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #ffffff;
+  color: #1f2937;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* ---------- Hero section ---------- */
+.portal-hero {
+  position: relative;
+  padding: 96px 24px 80px;
+  text-align: center;
+  background: linear-gradient(135deg, #1677ff 0%, #69b1ff 100%);
+  color: #ffffff;
+}
+
+.portal-hero h1 {
+  font-size: 44px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+}
+
+.portal-hero p {
+  font-size: 18px;
+  opacity: 0.92;
+  margin-bottom: 32px;
+}
+
+.portal-hero .ant-btn {
+  margin: 0 8px;
+}
+
+/* ---------- Section ---------- */
+.portal-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+.portal-section-title {
+  font-size: 30px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.portal-section-subtitle {
+  font-size: 15px;
+  color: #6b7280;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+/* ---------- Stats ---------- */
+.portal-stats {
+  background: #f9fafb;
+}
+
+.portal-stats .ant-statistic {
+  text-align: center;
+}
+
+/* ---------- Course card ---------- */
+.portal-course-card {
+  height: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.portal-course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Footer ---------- */
+.portal-footer {
+  background: #14142b;
+  color: #d1d5db;
+  padding: 48px 24px 24px;
+}
+
+.portal-footer .ant-typography {
+  color: #d1d5db;
+}
+
+.portal-footer a:hover {
+  color: #ffffff;
+}

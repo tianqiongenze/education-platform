@@ -1,0 +1,232 @@
+# NetworkPolicy definitions for education-platform namespace
+#
+# D-035 rule 4: NetworkPolicy enforcement requires a CNI plugin that supports
+# the NetworkPolicy API. Standard kube-proxy/kubenet does NOT enforce
+# NetworkPolicy. Use one of:
+#   - Calico (Project Calico): https://docs.projectcalico.org/
+#   - Cilium (eBPF-based):     https://docs.cilium.io/
+#
+# Verify enforcement before relying on these policies:
+#   kubectl -n education-platform exec <pod> -- nc -zv <blocked-host> <port>
+#
+# Without Calico/Cilium, these policies are accepted by the API server but
+# NOT enforced at the data plane, giving a false sense of isolation.
+
+---
+# Default deny all ingress in the namespace (baseline isolation)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress: []
+
+---
+# Allow portal-bff -> core-business (HTTP 8083 + Dubbo 20883)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-bff-to-business
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: core-business
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 20883
+
+---
+# Allow core-business -> TiDB (4000), Pulsar (6650), Redis (6379)
+# Egress policies require the infra pods to live in the same namespace or
+# the namespaceSelector to match the infra namespace. Here we use an
+# egress NetworkPolicy on core-business pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-business-to-data
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: core-business
+  policyTypes:
+    - Egress
+  egress:
+    # TiDB
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4000
+    # Pulsar
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6650
+        - protocol: TCP
+          port: 8080
+    # Redis Cluster
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Nacos (service discovery / config)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8848
+    # DNS (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# Allow ai-platform -> Milvus (19530)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-to-milvus
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ai-platform
+  policyTypes:
+    - Egress
+  egress:
+    # Milvus
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 19530
+    # Pulsar (AI may also consume events)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6650
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# Allow grading-service -> core-business Dubbo (20883)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-itbackend-to-business
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: core-business
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grading-service
+      ports:
+        - protocol: TCP
+          port: 20883
+        - protocol: TCP
+          port: 8083
+
+---
+# Allow ws-gateway -> Pulsar (6650)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-pulsar
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ws-gateway
+  policyTypes:
+    - Egress
+  egress:
+    # Pulsar
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6650
+        - protocol: TCP
+          port: 8080
+    # Internal services (portal-bff etc.)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: education-platform
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8085
+        - protocol: TCP
+          port: 8086
+    # Nacos
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8848
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

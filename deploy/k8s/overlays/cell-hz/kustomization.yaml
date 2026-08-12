@@ -1,0 +1,65 @@
+# Kustomize overlay for cell-hz (杭州, cn-east-1)
+# D-041: 多区域多活 — 杭州 cell 基线配置
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 引用 base k8s 资源 (base kustomization 位于 deploy/k8s/base/)
+resources:
+  - ../../base
+
+# 注意: base 资源默认 cell-hz, 这里只需补充 cell 特有的 patches
+# 如需调整副本数或镜像 tag, 可在此处 patches
+patches:
+  # 杭州 cell 标准副本数
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 4
+  - target:
+      kind: Deployment
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+# cell-hz 环境标签 (通过 configmap 已注入 CELL_NAME=cell-hz)
+# 此处无需额外 label patch, base 部署已含 topology labels
+configMapGenerator:
+  # merge into base common-config, override cell-specific values (D-041)
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - CELL_NAME=cell-hz
+      - CELL_REGION=cn-east-1
+      - CELL_ZONE=hz-a
+      - TIDB_FOLLOWER_READ=true
+      - TIDB_FOLLOWER_READ_STRATEGY=follower-read
+      - PULSAR_REPLICATION_CLUSTERS=hz,sz,bj
+      - REDIS_CLUSTER_LOCAL_CELL=cell-hz
+      - REDIS_CLUSTER_CRDT_ENABLED=true

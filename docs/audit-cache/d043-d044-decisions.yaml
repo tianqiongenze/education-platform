@@ -1,0 +1,49 @@
+# D-043/D-044 决策缓存文件
+# Iron Law 7 (D-033): 审计/调研结果缓存Redis+本地兜底
+# 本文件为本地兜底缓存, 当 Redis Cluster 不可用时从此恢复
+# 生成时间: 2026-08-05T14:00:00+08:00
+# 模块: education-platform / SP-07知识中台 + 全中台SaaS改造
+---
+decision_id: D-043
+title: SP-07知识中台新建决策
+date: 2026-08-05
+status: PROPOSED
+summary: >
+  基于SP-04 AI中台构建企业级知识中台SP-07,服务5类用户群体(技术开发团队/其他员工/客服/授课教师/学员).
+  6大功能域: 知识库管理(多格式解析/分块/向量化/版本/知识图谱),
+  智能检索(混合检索RRF/RAG问答/推荐/联合检索),
+  Agent管理(创建/编排/会话/工具扩展),
+  知识共创(社区/评审/积分),
+  多租户SaaS(三级隔离/配额/开放API),
+  学习路径(AI推荐/进度/评估).
+  原生多租户SaaS设计作为全中台SaaS化改造标杆.
+  25条FR-KB需求, 12条NFR, 15个用户故事.
+impact_files:
+  - docs/requirements/sp07-srs.md
+  - docs/architecture/sp07-sad.md
+  - docs/design/sp07-sdd.md
+  - docs/testing/sp07-test.md
+  - docs/deployment/sp07-deploy.md
+  - docs/progress.md
+adrs:
+  - ADR-D09
+---
+decision_id: D-044
+title: 全中台多租户SaaS可抽离改造规划
+date: 2026-08-05
+status: PROPOSED
+summary: >
+  所有中台(SP-01~SP-07)必须具备可抽离SaaS能力,能随时从教育行业剥离服务其他企业.
+  三级隔离模型: Level1行级隔离(tenant_id+MyBatis拦截器,中小租户),
+  Level2 Schema隔离(动态数据源路由,中大租户),
+  Level3独立DB(物理隔离,旗舰租户).
+  租户上下文用Java21 ScopedValue(D-039虚拟线程兼容).
+  SaaS控制平面: 租户管理/配额管理/计量计费/API网关.
+  各中台改造优先级: SP-07标杆(已原生支持)→SP-04 AI中台→SP-01基础设施→SP-02数据中台→SP-05 IT后台→SP-03业务中台(插件化,最高难度).
+impact_files:
+  - docs/architecture/saas-multi-tenant-transformation.md
+  - docs/progress.md
+redis_sync:
+  key: audit:decisions:count
+  value: 45
+  timestamp: "2026-08-05T14:00:00+08:00"

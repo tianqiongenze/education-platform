@@ -1,0 +1,32 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ep</groupId>
+    <artifactId>order-platform</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>order-platform-api</artifactId>
+  <packaging>jar</packaging>
+  <name>SP-03 Order API (Dubbo Interfaces &amp; DTOs)</name>
+
+  <dependencies>
+    <!-- Dubbo is required for the @DubboService / @DubboReference annotations
+         referenced by the RPC contract. Kept as a thin, direct dependency so
+         this JAR is self-contained and consumable by any consumer (BFF, other
+         middle platforms). Version comes from the parent dubbo-bom. -->
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo</artifactId>
+      <version>${dubbo.version}</version>
+    </dependency>
+    <!-- P2-9: Bean Validation annotations on DTOs (@NotBlank, @NotNull, @Positive). -->
+    <dependency>
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
+    </dependency>
+  </dependencies>
+</project>

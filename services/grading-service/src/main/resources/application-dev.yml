@@ -1,0 +1,77 @@
+# D-069: Dev profile — local port-forward to K8s. NOT for production.
+spring:
+  aot:
+    enabled: false
+  autoconfigure:
+    exclude:
+      # D-076: redisson-spring-boot-starter 3.51.0 targets Spring Boot 3.x and references
+      # the removed org.springframework.boot.autoconfigure.data.redis.RedisProperties class.
+      # ep-cache provides its own RedisTemplate/ConnectionFactory; redisson auto-config not needed in dev.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      # D-078: Seata TC server unavailable in dev (no Seata pods in K8s). GradingService uses
+      # @GlobalLock which fails without TC. Exclude Seata auto-config to prevent failures.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+  # D-048 P0-4: TiDB (MySQL-compatible) datasource
+  datasource:
+    url: jdbc:mysql://127.0.0.1:4000/ep_itbackend?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # D-132: aligned with prod (50) — dev was 200 causing false load-test confidence
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 20
+      connection-timeout: 10000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+  # D-048 P0-6: Redis for idempotency keys (TTL 24h)
+  # D-077: Dev uses port-forwarded K8s Redis CLUSTER (3 masters on :6379/:6380/:6381).
+  # When ep.dev.redis-cluster.enabled=true, DevRedisClusterConfig takes over and
+  # provides a LettuceConnectionFactory with MappingSocketAddressResolver that
+  # remaps K8s internal DNS names to localhost ports (fixes MOVED redirect failures).
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+      timeout: 2000ms
+
+# D-077: Enable dev Redis cluster mode (port-forwarded K8s 3-master cluster)
+ep:
+  dev:
+    redis-cluster:
+      enabled: true
+
+dubbo:
+  registry:
+    address: nacos://127.0.0.1:8848
+
+csp:
+  sentinel:
+    transport:
+      dashboard: 127.0.0.1:8858
+      port: 8719
+
+seata:
+  enabled: false
+  tx-service-group: ep_tx_group
+  service:
+    vgroup-mapping:
+      ep_tx_group: default
+  registry:
+    type: file
+
+# D-048 P1-3: Redisson distributed lock
+redisson:
+  config: |
+    singleServerConfig:
+      address: "redis://127.0.0.1:6379"
+      database: 0
+
+logging:
+  level:
+    root: INFO
+    com.ep.grading: DEBUG
+    org.apache.dubbo: WARN

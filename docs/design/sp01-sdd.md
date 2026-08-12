@@ -585,18 +585,19 @@ public class CacheBroadcast {
 
 ## 4. CellRouter 单元路由器
 
-> 新增组件(M0 实现)，本节为设计基线。
+> **实现状态 (D-083, 2026-08-08)**: 已实现 — `com.ep.bff.cellrouter` 包落地 CellRouter(hash路由+misroute纠正≤3 redirect/>3 reject+WriteHoldRegistry failover 503) + CellRouterFilter(OncePerRequestFilter, D-032 HandlerInterceptor非SCG) + RouteTable(volatile+ConcurrentHashMap, D-039) + 19测试 + chaos/failover演练脚本(D-084)。EP_DEV_ONLY guard, dev/CI内存态。
 
 ### 4.1 类设计
 
 ```
-com.ep.cellrouter
+com.ep.bff.cellrouter                      // 已实现 (D-083)
 ├── CellRouter.java              // 路由核心
-├── RouteTable.java              // 路由表(Nacos 监听)
-├── RouteContext.java            // 请求路由 context(纠正计数器)
-├── CellInfo.java                // cell 元数据
-├── WriteHoldRegistry.java       // 写挂起名单(Redis)
-└── CellRouterFilter.java        // Spring Cloud Gateway Filter
+├── RouteTable.java              // 路由表(Nacos 监听, dev/CI 静态 fallback)
+├── RouteContext.java            // 请求路由 context(纠正计数器, ConcurrentHashMap)
+├── CellInfo.java                // cell 元数据 (record)
+├── RouteResult.java             // sealed interface: Pass/Redirect/Reject/Hold
+├── WriteHoldRegistry.java       // 写挂起名单(Redis/ConcurrentHashMap + TTL)
+└── CellRouterFilter.java        // OncePerRequestFilter (D-032/ADR-T07 rev2 禁 SCG)
 ```
 
 #### 4.1.1 CellRouter
@@ -696,39 +697,66 @@ SRE 触发 failover           CellRouter         WriteHoldRegistry(Redis)     �
 
 ### 5.1 类设计
 
+> **D-032/ADR-T07(rev2) 变更**：BFF 网关从 Spring Cloud Gateway 迁移到自建 Netty edge + Disruptor ingress + Spring WebMVC。Filter 链从 SCG `GlobalFilter` 迁移为 WebMVC `HandlerInterceptor`，路由从 SCG `RouteLocator` 迁移为自建 `RouteTable`(Nacos 下发)。禁用 SCG 等 Spring Cloud 原生组件(铁律6)。
+
 ```
 com.ep.gateway
-├── AuthFilter.java             // JWT 验签 + 头覆盖
-├── TraceFilter.java            // W3C traceparent
-├── GrayFilter.java             // 灰度分流
-├── SentinelGatewayFilter.java // 限流(Nacos 分布式数据源, 禁本地内存 — ADR-T08/ESP 踩坑)
+├── NettyEdgeServer.java        // Netty edge 接入层(SSL终止/连接管理/协议升级) — 替代 SCG
+├── GatewayRingBuffer.java      // Disruptor RingBuffer(65536) ingress, drop-on-full + batch dispatch
+├── AuthInterceptor.java        // JWT 验签 + 头覆盖(WebMVC HandlerInterceptor, 替代 SCG GlobalFilter)
+├── TraceInterceptor.java       // W3C traceparent(WebMVC HandlerInterceptor)
+├── GrayInterceptor.java        // 灰度分流(WebMVC HandlerInterceptor)
+├── SentinelGatewayFilter.java  // 限流(Nacos 分布式数据源, 禁本地内存 — ADR-T08/ESP 踩坑; sentinel-spring-webmvc-v6x-adapter)
 ├── JwksVerifier.java           // JWKS 验签 + 缓存
 ├── JwtIssuer.java              // JWT 签发(登录后)
 ├── IdempotentInterceptor.java  // 幂等键拦截器(UUID SETNX 去重 — ADR-T06 替代 Seata)
-└── GatewayConfig.java          // 路由配置(Nacos 监听)
+├── RouteTable.java             // 自建路由表(Nacos 监听, 替代 SCG RouteLocator)
+└── GatewayConfig.java          // WebMVC 配置(InterceptorRegistry 注册拦截器链)
 ```
 
 ### 5.2 关键时序：请求鉴权
 
 ```
-客户端          AuthFilter        JwksVerifier(Redis缓存)     下游服务
-  │                │                    │                        │
-  │──请求+JWT────►│                    │                        │
-  │                │──verify(jwt)────►│                        │
-  │                │                    │──kid 查 JWKS           │
-  │                │                    │  命中缓存?              │
-  │                │                    │  是→用缓存公钥验签      │
-  │                │                    │  否→拉 /.well-known/   │
-  │                │                    │      jwks.json,缓存5min│
-  │                │◄──Claims─────────│                        │
-  │                │                    │                        │
-  │                │──覆盖 X-User-Id    │                        │
-  │                │   X-Tenant-Id      │                        │
-  │                │   X-Roles          │                        │
-  │                │──转发(带可信头)────────────────────────────►│
-  │                │                    │                        │
-  │◄───────────────┴────────────────────────────────────────────│
+客户端        NettyEdgeServer     AuthInterceptor      JwksVerifier(Redis)     下游服务
+  │                │                    │                       │                 │
+  │──请求+JWT────►│                    │                       │                 │
+  │                │──Disruptor publish→│(batch dispatch)       │                 │
+  │                │                    │──verify(jwt)────────►│                 │
+  │                │                    │                       │──kid 查 JWKS    │
+  │                │                    │                       │  命中缓存?       │
+  │                │                    │                       │  是→缓存公钥验签 │
+  │                │                    │                       │  否→拉 JWKS,5min│
+  │                │                    │◄──Claims─────────────│                 │
+  │                │                    │──覆盖 X-User-Id/X-Tenant-Id/X-Roles    │
+  │                │                    │──转发(带可信头)───────────────────────►│
+  │◄───────────────┴────────────────────────────────────────────────────────────│
 ```
+
+#### 5.2.1 Netty edge + Disruptor ingress 数据流(D-032/ADR-T07 rev2)
+
+```
+HTTP 请求 → NettyEdgeServer(ChannelHandler)
+               │
+               ▼
+         GatewayRingBuffer(Disruptor 65536)
+               │  event = { ctx, req, timestamp }
+               │  drop-on-full → 429 Too Many Requests
+               │  batch dispatch(每批 64 事件)
+               ▼
+         WebMVC HandlerInterceptorChain
+               │
+               ├─ AuthInterceptor: JWT 验签 + 头覆盖
+               ├─ TraceInterceptor: W3C traceparent
+               ├─ GrayInterceptor: 灰度分流
+               ├─ SentinelGatewayFilter: QPS/并发限流(sentinel-spring-webmvc-v6x-adapter)
+               ├─ CellRouterFilter: hash(user_id)%N 路由纠正(用户域)
+               └─ IdempotentInterceptor: 幂等键(UUID SETNX)
+               │
+               ▼
+         RouteTable(Nacos 动态路由) → Dubbo Triple RPC → 下游服务
+```
+
+> **为何不用 SCG**：① SCG 属 Spring Cloud 原生组件，与铁律6(D-032)"禁用 Spring Cloud 原生、统一 SCA+Dubbo"冲突；② SCG 基于 Reactor Netty 响应式栈，Dubbo Triple 是阻塞式 RPC，WebFlux 下 `.block()` 易触发 `IllegalStateException`(ESP 踩坑)；③ Disruptor ingress 的批量处理能力远超 SCG 逐请求 Filter 链。
 
 ---
 
@@ -740,7 +768,7 @@ com.ep.gateway
 - **RS256 非对称签名**：BFF 持私钥签发，下游服务仅持公钥验签（JWKS endpoint）。密钥泄露面最小化。
 - **私钥长度强制**：CI 校验 RSA 私钥 ≥2048bit（推荐 3072bit），`JWT_SECRET` 环境变量仅用于 HMAC 降级场景（必须 ≥256bit，CI 闸门 `jwt-secret-length-check`）。
 - **JWKS 轮转**：kid 标识密钥版本，Redis 缓存 JWKS（`ep:jwks:current`），轮转周期 90d，旧 kid 保留 7d 宽限期。
-- **禁止头注入**：AuthFilter 覆盖客户端所有 `X-User-*` 头，仅信任 JWT claims（ADR-T07 防伪造头）。
+- **禁止头注入**：AuthInterceptor 覆盖客户端所有 `X-User-*` 头，仅信任 JWT claims（ADR-T07 rev2 防伪造头）。
 
 ```java
 // JwtIssuer.java — RS256 签发, 私钥 ≥2048bit
@@ -822,7 +850,7 @@ gateway-go/
 │   ├── hub.go                   // 连接 hub(房间管理)
 │   ├── session.go               // 单连接 session
 │   ├── broadcast.go             // 分片广播(fnv1a)
-│   ├── redis_pubsub.go          // 跨 pod Redis Pub/Sub
+│   ├── pulsar_broadcast.go      // 跨 pod Pulsar 广播(替代 Redis Pub/Sub)
 │   ├── auth.go                  // JWT 握手鉴权
 │   └── heartbeat.go             // 心跳保活
 └── pkg/
@@ -850,14 +878,23 @@ func (h *Hub) Broadcast(roomID string, msg []byte) {
 
 ### 6.3 跨 pod 广播时序
 
+> 跨 pod WS 广播从 Redis Pub/Sub 迁移到 Pulsar（统一消息基础设施，理由同 CDC 总线替代 Kafka：技术栈单一化、异地多活、geo-replication 原生支持）。使用 Pulsar `Shared` 订阅模式 + partitioned topic `persistent://public/ws/broadcast`，每个 pod 作为独立 consumer group。
+
 ```
-Pod-A                  Redis Pub/Sub              Pod-B
-  │                        │                         │
-  │──PUBLISH room:123 msg─►│                         │
-  │                        │──SUBSCRIBE room:123────►│
-  │                        │──推送 msg──────────────►│
-  │                        │                         │──广播给本 pod room:123 订阅者
+Pod-A                  Pulsar(topic=ws/broadcast)     Pod-B
+  │                        │                             │
+  │──produce room:123 msg─►│                             │
+  │                        │──consumer(pod-B shard)─────►│
+  │                        │──推送 msg──────────────────►│
+  │                        │                             │──广播给本 pod room:123 订阅者
 ```
+
+**关键设计点**：
+- topic 按 `roomID` 做 key 分区，保证同一房间消息有序
+- `Shared` 订阅：同一 pod 多实例可负载均衡消费；跨 pod 各自独立 consumer group
+- 消息体复用 WS protocol 格式，零额外序列化开销
+- 背压：Pulsar 消费端 rate-limit + WS write deadline 双层保护
+- 降级：Pulsar 不可用时，单 pod 内广播不受影响（本地 hub 直发）
 
 ---
 

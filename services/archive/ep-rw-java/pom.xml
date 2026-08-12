@@ -1,0 +1,51 @@
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.ep</groupId>
+  <artifactId>ep-rw-java</artifactId>
+  <version>1.0.0</version>
+  <!--
+    ============================================================
+    D-094 DEPRECATED (2026-08-08) — 0 consumers across the monorepo
+    ============================================================
+    Status: DEPRECATED (forRemoval=false, since=D-094)
+    Reason: D-094 code scan found zero consumers — no service
+            imports com.ep.rw.*, no pom.xml declares a dependency
+            on ep-rw-java, and the artifact is NOT installed to
+            the local .m2 cache. The source is retained for BU
+            expansion / read-write-splitting + TiDB follower-read
+            reuse; see DEPRECATED.md in this module.
+    Reactivate: add
+      <dependency><groupId>com.ep</groupId>
+      <artifactId>ep-rw-java</artifactId><version>1.0.0</version></dependency>
+    to the target service's pom.xml, then enable ep.rw.enabled=true.
+    ============================================================
+  -->
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <spring.version>7.0.8</spring.version>
+    <spring.boot.version>4.0.7</spring.boot.version>
+    <!-- D-094: deprecation marker — consumed by tooling / build reports -->
+    <ep.deprecated>true</ep.deprecated>
+    <ep.deprecated.since>D-094</ep.deprecated.since>
+    <ep.deprecated.date>2026-08-08</ep.deprecated.date>
+    <ep.deprecated.reason>0 consumers as of D-094 scan; retained for read-write-splitting reuse</ep.deprecated.reason>
+  </properties>
+  <dependencies>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-jdbc</artifactId><version>${spring.version}</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-context</artifactId><version>${spring.version}</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-autoconfigure</artifactId><version>${spring.boot.version}</version><scope>provided</scope></dependency>
+    <dependency><groupId>com.zaxxer</groupId><artifactId>HikariCP</artifactId><version>6.3.3</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.aspectj</groupId><artifactId>aspectjweaver</artifactId><version>1.9.25.1</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.14.4</version><scope>test</scope></dependency>
+    <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><version>5.18.0</version><scope>test</scope></dependency>
+    <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><version>2.3.232</version><scope>test</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-test</artifactId><version>${spring.boot.version}</version><scope>test</scope></dependency>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-test</artifactId><version>${spring.version}</version><scope>test</scope></dependency>
+    <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><version>3.27.6</version><scope>test</scope></dependency>
+  </dependencies>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.2.5</version></plugin>
+    <plugin><groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId><version>0.8.12</version>
+      <executions><execution><goals><goal>prepare-agent</goal></goals></execution></executions></plugin>
+  </plugins></build>
+</project>

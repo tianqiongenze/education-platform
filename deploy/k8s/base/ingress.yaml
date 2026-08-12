@@ -1,0 +1,129 @@
+# D-106: Unified single-domain API gateway.
+#
+# All traffic enters through one host (api.edu.com). The nginx ingress
+# controller splits it by path:
+#   /ws/**          → ws-gateway   (WebSocket, long-lived, needs upgrade)
+#   /**             → portal-bff     (HTTP; D-106 proxy fans out to all services)
+#
+# Two Ingress objects are used because WebSocket needs a different
+# configuration-snippet (HTTP/1.1 upgrade + very long timeouts) than the
+# regular HTTP traffic. Both share the host and TLS secret; nginx matches
+# the longer /ws prefix first.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unified-ws-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ws-gateway
+    app.kubernetes.io/part-of: education-platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # WebSocket support: HTTP/1.1 upgrade headers + long-lived connection.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.edu.com
+      secretName: unified-tls-secret
+  rules:
+    - host: api.edu.com
+      http:
+        paths:
+          # WebSocket traffic (ws-gateway streaming).
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: ws-gateway
+                port:
+                  number: 8081
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unified-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: portal-bff
+    app.kubernetes.io/part-of: education-platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Security headers applied to all HTTP responses.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.edu.com
+      secretName: unified-tls-secret
+  rules:
+    - host: api.edu.com
+      http:
+        paths:
+          # All other traffic through the BFF gateway (D-106 proxy +
+          # existing Dubbo routes + D-107 aggregated Swagger UI).
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portal-bff
+                port:
+                  number: 80
+---
+# Public-facing portal-web (www.edu.com).
+# Serves the company homepage, public course catalog, business-unit
+# navigation, and unified login entry. Static SPA + nginx, no WebSocket.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portal-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: frontend-portal
+    app.kubernetes.io/part-of: education-platform
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Security headers applied to all HTTP responses.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - www.edu.com
+      secretName: portal-tls-secret
+  rules:
+    - host: www.edu.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-portal
+                port:
+                  number: 80

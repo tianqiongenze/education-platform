@@ -1,0 +1,15 @@
+logging:
+  level:
+    com.ep: INFO
+    org.springframework.test: DEBUG
+    org.apache.dubbo: WARN
+
+spring:
+  main:
+    banner-mode: off
+  autoconfigure:
+    exclude:
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+  threads:
+    virtual:
+      enabled: true  # D-039: 测试环境启用虚拟线程验证兼容性

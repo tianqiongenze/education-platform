@@ -1,0 +1,53 @@
+{
+  "name": "@ep/student-h5",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "taro build --type h5 --watch",
+    "build": "taro build --type h5",
+    "dev:mp": "taro build --type weapp --watch",
+    "build:mp": "taro build --type weapp",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report"
+  },
+  "dependencies": {
+    "@ep/api-client": "workspace:*",
+    "@ep/query": "workspace:*",
+    "@ep/shared": "workspace:*",
+    "@ep/ui-kit": "workspace:*",
+    "@tarojs/components": "4.0.9",
+    "@tarojs/helper": "4.0.9",
+    "@tarojs/plugin-framework-react": "4.0.9",
+    "@tarojs/plugin-platform-h5": "4.0.9",
+    "@tarojs/react": "4.0.9",
+    "@tarojs/router": "4.0.9",
+    "@tarojs/runtime": "4.0.9",
+    "@tarojs/shared": "4.0.9",
+    "@tarojs/taro": "4.0.9",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "@tanstack/react-query": "5.62.10"
+  },
+  "devDependencies": {
+    "@ep/lint-config": "workspace:*",
+    "eslint": "9.18.0",
+    "@tarojs/cli": "4.0.9",
+    "@tarojs/taro-loader": "4.0.9",
+    "@tarojs/webpack5-runner": "4.0.9",
+    "@types/react": "19.0.7",
+    "babel-preset-taro": "4.0.9",
+    "react-refresh": "0.16.0",
+    "typescript": "5.8.3",
+    "vitest": "2.1.9",
+    "jsdom": "25.0.1",
+    "@testing-library/react": "16.1.0",
+    "sass": "1.83.4",
+    "@vitejs/plugin-react": "4.3.4",
+    "@playwright/test": "^1.49.0"
+  }
+}

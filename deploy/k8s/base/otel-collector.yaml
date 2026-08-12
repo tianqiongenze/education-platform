@@ -1,0 +1,282 @@
+# OpenTelemetry Collector for education-platform
+#
+# D-035 rule 5: Tail-sampling processor configuration
+#   - 100% of error traces are kept (for incident triage)
+#   - 10% of normal/success traces are kept (for baseline performance analysis)
+# Tail-sampling MUST run as a standalone collector layer (not as agent sidecar)
+# to correlate spans across services before sampling decision.
+#
+# Receivers:  OTLP gRPC :4317, OTLP HTTP :4318
+# Processors: memory_limiter, batch, tail_sampling
+# Exporters:  prometheus (metrics), jaeger (traces), loki (logs)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: observability
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 16
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      memory_limiter:
+        check_interval: 2s
+        limit_percentage: 75
+        spike_limit_percentage: 20
+
+      # D-035 rule 5: tail-sampling processor
+      # Decision is made after collecting all spans for a trace within
+      # the decision_wait window. This requires the collector to buffer
+      # spans, so it must be a standalone deployment (not an agent).
+      tail_sampling:
+        decision_wait: 30s
+        num_traces: 50000
+        expected_new_traces_per_sec: 1000
+        policies:
+          # Keep 100% of error traces
+          - name: errors
+            type: status_code
+            status_code:
+              status_codes:
+                - ERROR
+          # Keep 10% of normal traces
+          - name: normal-sampled
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 10
+
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+
+      # Add Kubernetes metadata to all telemetry
+      resource:
+        attributes:
+          - key: deployment.environment
+            value: production
+            action: upsert
+
+    exporters:
+      # Metrics -> Prometheus (scrape /metrics on :8889)
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        namespace: education_platform
+        send_timestamps: true
+        metric_expiration: 5m
+        enable_open_metrics: true
+
+      # Traces -> Jaeger (OTLP gRPC)
+      otlp/jaeger:
+        endpoint: jaeger-collector.observability.svc:4317
+        tls:
+          insecure: true
+
+      # Logs -> Loki (OTLP HTTP)
+      otlphttp/loki:
+        endpoint: http://loki.observability.svc:3100/otlp
+        tls:
+          insecure: true
+
+      # Debug fallback (disabled in prod)
+      debug:
+        verbosity: basic
+        sampling_initial: 2
+        sampling_thereafter: 1000
+
+    service:
+      telemetry:
+        logs:
+          level: info
+        metrics:
+          address: 0.0.0.0:8888
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, tail_sampling, batch, resource]
+          exporters: [otlp/jaeger]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch, resource]
+          exporters: [prometheus]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch, resource]
+          exporters: [otlphttp/loki]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: observability
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector
+        app.kubernetes.io/part-of: education-platform
+        app.kubernetes.io/component: observability
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8889"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: otel-collector
+          image: harbor.edu.internal/education-platform/otel-collector-contrib:0.110.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /otelcol-contrib
+          args:
+            - --config=/etc/otelcol/config.yaml
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: metrics-prom
+              containerPort: 8889
+              protocol: TCP
+            - name: metrics-internal
+              containerPort: 8888
+              protocol: TCP
+          env:
+            - name: GOMEMLIMIT
+              value: "1500MiB"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otelcol
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "sleep 10"
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-collector-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: observability
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+      protocol: TCP
+    - name: metrics-prom
+      port: 8889
+      targetPort: metrics-prom
+      protocol: TCP
+    - name: metrics-internal
+      port: 8888
+      targetPort: metrics-internal
+      protocol: TCP
+---
+# ServiceMonitor for the OTel Collector itself (self-observability)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: education-platform
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  endpoints:
+    - port: metrics-prom
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# PDB for OTel Collector (D-035 rule 3)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: otel-collector-pdb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: education-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector

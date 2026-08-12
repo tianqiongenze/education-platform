@@ -1,0 +1,1474 @@
+<!-- SP-06 student-mp 微信小程序交互原型 | education-platform | 2026-08-04 | 技术栈: Taro4编译微信小程序(目标实现), 此为HTML原型 | 隐私协议FR-MP-08/C-11 | 小程序登录FR-MP-03 | 微信支付FR-MP-05 | 分包FR-MP-07 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线学习中心 - 微信小程序原型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #e9e9ef;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px 0;
+    color: #1a1a1a;
+  }
+
+  /* ===== Phone mockup ===== */
+  .phone-frame {
+    width: 375px;
+    height: 667px;
+    background: #f7f7f7;
+    border-radius: 28px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 10px #1c1c1c, 0 0 0 12px #2c2c2c;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* WeChat top status bar */
+  .wx-statusbar {
+    height: 20px;
+    background: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a1a;
+    flex-shrink: 0;
+  }
+  .wx-statusbar .time { font-variant-numeric: tabular-nums; }
+  .wx-statusbar .indicators { display: flex; gap: 4px; align-items: center; font-size: 10px; }
+
+  /* WeChat mini program top bar */
+  .wx-topbar {
+    height: 44px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .wx-topbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 180px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wx-topbar-back {
+    width: 32px;
+    height: 32px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #1a1a1a;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .wx-topbar-back:active { background: #f0f0f0; }
+  .wx-topbar-back.show { display: flex; }
+  .wx-capsule {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 16px;
+    padding: 4px 8px;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    font-size: 14px;
+    color: #1a1a1a;
+    margin-left: auto;
+  }
+  .wx-capsule .dot { font-size: 13px; line-height: 1; }
+  .wx-capsule .divider { width: 0.5px; height: 14px; background: rgba(0,0,0,0.15); }
+  .wx-capsule .close { font-size: 13px; line-height: 1; }
+
+  /* ===== Page container ===== */
+  .page-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+  }
+  .page-container::-webkit-scrollbar { width: 0; }
+
+  .page {
+    display: none;
+    min-height: 100%;
+    background: #f7f7f7;
+    padding-bottom: 56px;
+    animation: fadeIn 0.25s ease;
+  }
+  .page.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ===== TabBar ===== */
+  .tabbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 50px;
+    background: #fff;
+    border-top: 0.5px solid #e8e8e8;
+    display: flex;
+    z-index: 50;
+  }
+  .tabbar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: #7a7a7a;
+    font-size: 10px;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .tabbar-item .tab-icon { font-size: 20px; line-height: 1; }
+  .tabbar-item.active { color: #07C160; }
+
+  /* ===== Home page ===== */
+  .home-search {
+    background: #fff;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .home-search-input {
+    flex: 1;
+    height: 32px;
+    background: #f5f5f5;
+    border-radius: 16px;
+    border: none;
+    padding: 0 14px;
+    font-size: 13px;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .home-search-input .icon { color: #b2b2b2; font-size: 14px; }
+
+  /* Carousel */
+  .carousel {
+    position: relative;
+    margin: 8px 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    height: 140px;
+  }
+  .carousel-slides {
+    display: flex;
+    height: 100%;
+    transition: transform 0.4s ease;
+  }
+  .carousel-slide {
+    min-width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 14px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .carousel-slide .sub { font-size: 11px; font-weight: 400; opacity: 0.9; margin-top: 4px; }
+  .carousel-dots {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+  }
+  .carousel-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    transition: all 0.2s;
+  }
+  .carousel-dot.active { background: #fff; width: 14px; border-radius: 3px; }
+
+  /* Section title */
+  .section {
+    margin-top: 12px;
+    background: transparent;
+    padding: 0 12px;
+  }
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .section-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+  .section-more { font-size: 12px; color: #999; }
+
+  /* Course grid */
+  .course-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .course-card {
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .course-card:active { transform: scale(0.98); }
+  .course-cover {
+    width: 100%;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 28px;
+    font-weight: 600;
+  }
+  .course-body { padding: 8px 10px 10px; }
+  .course-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a1a1a;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    height: 36px;
+  }
+  .course-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+  }
+  .course-price { color: #fa5151; font-size: 15px; font-weight: 600; }
+  .course-price.free { color: #07C160; }
+  .course-price .unit { font-size: 11px; }
+  .enroll-btn {
+    background: #07C160;
+    color: #fff;
+    border: none;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    height: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  /* Horizontal scroll */
+  .h-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px 12px 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .h-scroll::-webkit-scrollbar { display: none; }
+  .h-card {
+    min-width: 130px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    overflow: hidden;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .h-card:active { opacity: 0.85; }
+  .h-card .course-cover { height: 70px; font-size: 24px; }
+  .h-card .course-body { padding: 6px 8px 8px; }
+  .h-card .course-name { font-size: 12px; height: 32px; }
+  .discount-tag {
+    display: inline-block;
+    background: #fff4e6;
+    color: #fa8c16;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-top: 4px;
+  }
+
+  /* ===== Course list page ===== */
+  .category-tabs {
+    display: flex;
+    gap: 18px;
+    background: #fff;
+    padding: 0 12px;
+    height: 42px;
+    align-items: center;
+    overflow-x: auto;
+    border-bottom: 0.5px solid #f0f0f0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .category-tabs::-webkit-scrollbar { display: none; }
+  .cat-tab {
+    font-size: 14px;
+    color: #5a5a5a;
+    white-space: nowrap;
+    position: relative;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .cat-tab.active { color: #07C160; font-weight: 600; }
+  .cat-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 50%;
+    transform: translateX(-50%);
+    width: 18px; height: 2px;
+    background: #07C160;
+    border-radius: 1px;
+  }
+
+  .course-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .course-list-card {
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .course-list-card:active { background: #fafafa; }
+  .clc-cover {
+    width: 90px; height: 68px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .clc-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+  .clc-name { font-size: 14px; font-weight: 500; color: #1a1a1a; line-height: 1.3; }
+  .clc-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .clc-tag { font-size: 10px; color: #1677ff; background: #e6f0ff; padding: 1px 5px; border-radius: 3px; }
+  .clc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  .clc-meta { font-size: 11px; color: #999; }
+  .learn-btn {
+    background: #fff;
+    color: #07C160;
+    border: 1px solid #07C160;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    height: 24px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  /* ===== Course detail ===== */
+  .detail-cover {
+    width: 100%;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px;
+    color: #fff;
+  }
+  .detail-cover .dc-title { font-size: 18px; font-weight: 700; }
+  .detail-cover .dc-sub { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+
+  .detail-info { background: #fff; padding: 14px 12px; }
+  .detail-title { font-size: 17px; font-weight: 600; line-height: 1.4; }
+  .detail-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .detail-tag { font-size: 11px; color: #fa8c16; background: #fff4e6; padding: 2px 6px; border-radius: 3px; }
+  .detail-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+  }
+  .detail-stats .stat-num { color: #fa5151; font-weight: 600; }
+  .detail-instructor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .instructor-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #07C160, #1677ff);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px; font-weight: 600;
+  }
+  .instructor-info .name { font-size: 13px; font-weight: 500; }
+  .instructor-info .desc { font-size: 11px; color: #999; margin-top: 2px; }
+
+  .detail-section-tabs {
+    display: flex;
+    background: #fff;
+    margin-top: 10px;
+    border-bottom: 0.5px solid #f0f0f0;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .dst-tab {
+    flex: 1;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 14px;
+    color: #5a5a5a;
+    cursor: pointer;
+    position: relative;
+  }
+  .dst-tab.active { color: #07C160; font-weight: 600; }
+  .dst-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 24px; height: 2px;
+    background: #07C160;
+    border-radius: 1px;
+  }
+
+  .detail-pane { display: none; padding: 12px; }
+  .detail-pane.active { display: block; }
+  .detail-intro { background: #fff; border-radius: 8px; padding: 14px; font-size: 13px; color: #444; line-height: 1.7; }
+  .detail-intro h4 { font-size: 14px; margin: 10px 0 6px; color: #1a1a1a; }
+  .detail-intro ul { padding-left: 18px; }
+
+  .chapter-list { display: flex; flex-direction: column; gap: 8px; }
+  .chapter {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .chapter-head {
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #fafafa;
+    border-bottom: 0.5px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .chapter-head .ch-count { font-size: 11px; color: #999; font-weight: 400; }
+  .lesson {
+    padding: 11px 12px 11px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: #333;
+    border-bottom: 0.5px solid #f7f7f7;
+  }
+  .lesson:last-child { border-bottom: none; }
+  .lesson-name { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .lesson-icon { font-size: 14px; }
+  .lesson-icon.locked { color: #c8c8c8; }
+  .lesson-icon.unlocked { color: #07C160; }
+  .lesson-duration { font-size: 11px; color: #999; }
+
+  /* Bottom action bar */
+  .detail-actionbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: #fff;
+    border-top: 0.5px solid #e8e8e8;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    z-index: 60;
+  }
+  .ab-service {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    font-size: 10px;
+    color: #5a5a5a;
+    cursor: pointer;
+  }
+  .ab-service .icon { font-size: 18px; margin-bottom: 2px; }
+  .buy-btn {
+    flex: 1;
+    height: 40px;
+    background: linear-gradient(90deg, #07C160, #06ad56);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .buy-btn:active { opacity: 0.9; }
+  .buy-btn.owned { background: #f0f0f0; color: #999; }
+
+  /* ===== Profile page ===== */
+  .profile-header {
+    background: linear-gradient(135deg, #07C160, #06ad56);
+    padding: 20px 16px 24px;
+    color: #fff;
+  }
+  .profile-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .profile-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    border: 2px solid rgba(255,255,255,0.4);
+    overflow: hidden;
+  }
+  .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .profile-name { font-size: 17px; font-weight: 600; }
+  .profile-tip { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+  .vip-badge {
+    display: inline-block;
+    background: linear-gradient(90deg, #ffd700, #ffa500);
+    color: #6b3a00;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-top: 6px;
+    font-weight: 600;
+  }
+
+  .login-btn {
+    width: 100%;
+    margin-top: 16px;
+    height: 40px;
+    background: #fff;
+    color: #07C160;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .stats-row {
+    display: flex;
+    background: #fff;
+    margin: -12px 12px 0;
+    border-radius: 8px;
+    padding: 14px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    position: relative;
+    z-index: 2;
+  }
+  .stat-item {
+    flex: 1;
+    text-align: center;
+    border-right: 0.5px solid #f0f0f0;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+  .stat-label { font-size: 11px; color: #999; margin-top: 2px; }
+
+  .menu-group {
+    background: #fff;
+    margin: 12px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 14px;
+    border-bottom: 0.5px solid #f5f5f5;
+    cursor: pointer;
+  }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item:active { background: #fafafa; }
+  .menu-icon {
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
+    margin-right: 12px;
+  }
+  .menu-label { flex: 1; font-size: 14px; color: #1a1a1a; }
+  .menu-extra { font-size: 12px; color: #c8c8c8; margin-right: 4px; }
+  .menu-arrow { color: #c8c8c8; font-size: 14px; }
+
+  .subpackage-note {
+    margin: 12px;
+    padding: 10px 12px;
+    background: #e6f7ee;
+    border: 1px solid #b7ebcd;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #06ad56;
+    line-height: 1.6;
+  }
+  .subpackage-note .check { color: #07C160; font-weight: 600; }
+  .enter-live-btn {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 0 12px 12px;
+    height: 42px;
+    background: #1677ff;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .enter-live-btn:active { opacity: 0.9; }
+
+  /* ===== Privacy popup ===== */
+  .mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .mask.show { display: flex; }
+  .privacy-modal {
+    width: 300px;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+  .privacy-head {
+    padding: 18px 18px 10px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .privacy-body {
+    padding: 6px 18px 16px;
+    font-size: 13px;
+    color: #5a5a5a;
+    line-height: 1.7;
+  }
+  .privacy-body .link { color: #1677ff; }
+  .privacy-actions { display: flex; border-top: 0.5px solid #ebebeb; }
+  .pa-btn {
+    flex: 1;
+    height: 48px;
+    border: none;
+    background: #fff;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .pa-btn.reject { color: #5a5a5a; border-right: 0.5px solid #ebebeb; }
+  .pa-btn.accept { color: #07C160; font-weight: 600; }
+  .pa-btn:active { background: #f5f5f5; }
+
+  /* ===== WeChat Pay modal ===== */
+  .pay-modal {
+    width: 300px;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    animation: modalIn 0.2s ease;
+  }
+  .pay-head {
+    padding: 18px;
+    text-align: center;
+    border-bottom: 0.5px solid #f0f0f0;
+  }
+  .pay-head .title { font-size: 15px; color: #1a1a1a; }
+  .pay-amount {
+    padding: 24px 18px;
+    text-align: center;
+  }
+  .pay-amount .symbol { font-size: 18px; color: #1a1a1a; }
+  .pay-amount .num { font-size: 36px; font-weight: 700; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+  .pay-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 18px;
+    font-size: 13px;
+    border-top: 0.5px solid #f5f5f5;
+  }
+  .pay-row .label { color: #999; }
+  .pay-row .val { color: #1a1a1a; }
+  .pay-confirm {
+    margin: 16px 18px;
+    height: 42px;
+    background: #07C160;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    width: calc(100% - 36px);
+  }
+  .pay-confirm:active { opacity: 0.9; }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999;
+    max-width: 220px;
+    text-align: center;
+    line-height: 1.5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast.show { opacity: 1; }
+  .toast .toast-icon { font-size: 36px; }
+
+  /* ===== Spinner ===== */
+  .spinner-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 30px;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #07C160;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-text { font-size: 13px; color: #666; }
+
+  /* Live placeholder */
+  .live-placeholder {
+    margin: 20px 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    padding: 30px 20px;
+    text-align: center;
+  }
+  .live-placeholder .live-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fa5151, #ff8a5b);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 30px;
+  }
+  .live-placeholder .lp-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+  .live-placeholder .lp-sub { font-size: 13px; color: #999; margin-top: 6px; }
+  .live-placeholder .lp-time { font-size: 12px; color: #fa5151; margin-top: 12px; }
+  .live-back-btn {
+    margin-top: 18px;
+    height: 38px;
+    padding: 0 28px;
+    background: #07C160;
+    color: #fff;
+    border: none;
+    border-radius: 19px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .page-title-bar {
+    background: #fff;
+    padding: 12px 14px;
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 0.5px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .page-title-bar .back { font-size: 18px; color: #1a1a1a; cursor: pointer; }
+
+  .empty-tip { text-align: center; color: #999; font-size: 13px; padding: 40px 20px; }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+
+  <!-- Status bar -->
+  <div class="wx-statusbar">
+    <span class="time" id="statusTime">9:41</span>
+    <span class="indicators">信号 WiFi <span style="font-size:11px;">100%</span></span>
+  </div>
+
+  <!-- Top bar -->
+  <div class="wx-topbar">
+    <div class="wx-topbar-back" id="topbarBack" onclick="goBack()">‹</div>
+    <div class="wx-topbar-title" id="topbarTitle">在线学习中心</div>
+    <div class="wx-capsule">
+      <span class="dot">⊙</span>
+      <span class="divider"></span>
+      <span class="close">✕</span>
+    </div>
+  </div>
+
+  <!-- Page container -->
+  <div class="page-container">
+
+    <!-- ============ HOME PAGE ============ -->
+    <div class="page active" id="page-home">
+      <div class="home-search">
+        <div class="home-search-input"><span class="icon">🔍</span><span>搜索课程</span></div>
+      </div>
+
+      <div class="carousel" id="carousel">
+        <div class="carousel-slides" id="carouselSlides">
+          <div class="carousel-slide" style="background:linear-gradient(135deg,#07C160,#0fa3a3);">
+            <div>新课程上线 · 7折特惠</div>
+            <div class="sub">IT编程 / 公务员 / 考研 全场促销</div>
+          </div>
+          <div class="carousel-slide" style="background:linear-gradient(135deg,#1677ff,#0e5fd8);">
+            <div>会员日 · 8月限时</div>
+            <div class="sub">开通VIP畅学2000+课程</div>
+          </div>
+          <div class="carousel-slide" style="background:linear-gradient(135deg,#fa8c16,#fa5151);">
+            <div>考研冲刺班开课</div>
+            <div class="sub">名师直播 + 1对1答疑</div>
+          </div>
+        </div>
+        <div class="carousel-dots" id="carouselDots">
+          <div class="carousel-dot active"></div>
+          <div class="carousel-dot"></div>
+          <div class="carousel-dot"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">热门课程</div>
+          <div class="section-more">查看全部 ›</div>
+        </div>
+        <div class="course-grid" id="homeGrid"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">限时特惠</div>
+          <div class="section-more">更多 ›</div>
+        </div>
+        <div class="h-scroll" id="homeHScroll"></div>
+      </div>
+    </div>
+
+    <!-- ============ COURSE LIST PAGE ============ -->
+    <div class="page" id="page-courses">
+      <div class="category-tabs" id="catTabs">
+        <div class="cat-tab active" data-cat="全部">全部</div>
+        <div class="cat-tab" data-cat="IT编程">IT编程</div>
+        <div class="cat-tab" data-cat="公务员">公务员</div>
+        <div class="cat-tab" data-cat="考研">考研</div>
+        <div class="cat-tab" data-cat="健康养生">健康养生</div>
+      </div>
+      <div class="course-list" id="courseList"></div>
+    </div>
+
+    <!-- ============ COURSE DETAIL PAGE ============ -->
+    <div class="page" id="page-detail">
+      <div class="detail-cover" id="detailCover">
+        <div class="dc-title" id="dcTitle"></div>
+        <div class="dc-sub" id="dcSub"></div>
+      </div>
+      <div class="detail-info">
+        <div class="detail-title" id="detailTitle"></div>
+        <div class="detail-tags" id="detailTags"></div>
+        <div class="detail-stats">
+          <div>价格 <span class="stat-num" id="detailPrice"></span></div>
+          <div><span id="detailStudents"></span> 人报名</div>
+          <div>评分 <span class="stat-num" id="detailRating"></span></div>
+        </div>
+        <div class="detail-instructor">
+          <div class="instructor-avatar" id="instructorAvatar"></div>
+          <div class="instructor-info">
+            <div class="name" id="instructorName"></div>
+            <div class="desc" id="instructorDesc"></div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-section-tabs">
+        <div class="dst-tab active" data-pane="intro">详情</div>
+        <div class="dst-tab" data-pane="catalog">目录</div>
+      </div>
+      <div class="detail-pane active" id="pane-intro">
+        <div class="detail-intro" id="detailIntro"></div>
+      </div>
+      <div class="detail-pane" id="pane-catalog">
+        <div class="chapter-list" id="chapterList"></div>
+      </div>
+      <div class="detail-actionbar">
+        <div class="ab-service" onclick="showToast('已为您接通客服')">
+          <span class="icon">🎧</span>
+          <span>客服</span>
+        </div>
+        <button class="buy-btn" id="buyBtn" onclick="openPay()">购买课程</button>
+      </div>
+    </div>
+
+    <!-- ============ PROFILE PAGE ============ -->
+    <div class="page" id="page-profile">
+      <div class="profile-header">
+        <div class="profile-user">
+          <div class="profile-avatar" id="profileAvatar">👤</div>
+          <div>
+            <div class="profile-name" id="profileName">点击登录</div>
+            <div class="profile-tip" id="profileTip">登录后享受更多学习服务</div>
+            <div id="profileVip"></div>
+          </div>
+        </div>
+        <button class="login-btn" id="loginBtn" onclick="wxLogin()">微信授权登录</button>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-item"><div class="stat-num" id="statTime">0</div><div class="stat-label">学习时长(h)</div></div>
+        <div class="stat-item"><div class="stat-num" id="statCourses">0</div><div class="stat-label">课程数</div></div>
+        <div class="stat-item"><div class="stat-num" id="statCert">0</div><div class="stat-label">证书</div></div>
+      </div>
+
+      <div class="menu-group">
+        <div class="menu-item" onclick="showToast('我的订单')">
+          <span class="menu-icon">📋</span><span class="menu-label">我的订单</span><span class="menu-extra">2</span><span class="menu-arrow">›</span>
+        </div>
+        <div class="menu-item" onclick="showToast('学习记录')">
+          <span class="menu-icon">📖</span><span class="menu-label">学习记录</span><span class="menu-arrow">›</span>
+        </div>
+        <div class="menu-item" onclick="showToast('我的证书')">
+          <span class="menu-icon">🎓</span><span class="menu-label">我的证书</span><span class="menu-arrow">›</span>
+        </div>
+        <div class="menu-item" onclick="showToast('设置')">
+          <span class="menu-icon">⚙️</span><span class="menu-label">设置</span><span class="menu-arrow">›</span>
+        </div>
+      </div>
+
+      <div class="subpackage-note">
+        <div><b>📦 分包加载信息</b></div>
+        <div style="margin-top:6px;">主包 1.8MB &lt; 2MB <span class="check">✓</span></div>
+        <div>分包加载: 直播模块(独立分包) · 320KB</div>
+      </div>
+      <button class="enter-live-btn" onclick="enterLive()">🎬 进入直播</button>
+
+      <div class="menu-group">
+        <div class="menu-item" onclick="showToast('关于我们')">
+          <span class="menu-icon">ℹ️</span><span class="menu-label">关于我们</span><span class="menu-arrow">›</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ LIVE PAGE (subpackage) ============ -->
+    <div class="page" id="page-live">
+      <div id="liveContent"></div>
+    </div>
+
+  </div>
+
+  <!-- TabBar -->
+  <div class="tabbar" id="tabbar">
+    <div class="tabbar-item active" data-page="home" onclick="switchTab('home')">
+      <span class="tab-icon">🏠</span><span>首页</span>
+    </div>
+    <div class="tabbar-item" data-page="courses" onclick="switchTab('courses')">
+      <span class="tab-icon">📚</span><span>课程</span>
+    </div>
+    <div class="tabbar-item" data-page="profile" onclick="switchTab('profile')">
+      <span class="tab-icon">👤</span><span>我的</span>
+    </div>
+  </div>
+
+  <!-- Privacy popup -->
+  <div class="mask" id="privacyMask">
+    <div class="privacy-modal">
+      <div class="privacy-head">隐私保护提示</div>
+      <div class="privacy-body">
+        在使用本小程序前，请仔细阅读<span class="link">《用户隐私保护指引》</span>。我们将收集你的以下信息：<br><br>
+        • 微信昵称和头像（用于用户身份）<br>
+        • 设备信息（用于安全保障）<br><br>
+        我们承诺仅用于提供学习服务，不会向第三方共享。
+      </div>
+      <div class="privacy-actions">
+        <button class="pa-btn reject" onclick="rejectPrivacy()">拒绝</button>
+        <button class="pa-btn accept" onclick="acceptPrivacy()">同意并继续</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pay modal -->
+  <div class="mask" id="payMask">
+    <div class="pay-modal">
+      <div class="pay-head"><div class="title">微信支付</div></div>
+      <div class="pay-amount">
+        <span class="symbol">¥</span><span class="num" id="payAmount">99.00</span>
+      </div>
+      <div class="pay-row"><span class="label">商品</span><span class="val" id="payGoods">课程购买</span></div>
+      <div class="pay-row"><span class="label">商户</span><span class="val">在线学习中心</span></div>
+      <div class="pay-row"><span class="label">支付方式</span><span class="val">零钱</span></div>
+      <button class="pay-confirm" onclick="confirmPay()">确认支付</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+/* ================== Mock data ================== */
+const COURSES = [
+  { id:1, name:'React 18 进阶实战', cat:'IT编程', price:99, free:false, color:'#1677ff',
+    instructor:'李明', instDesc:'前阿里前端架构师', students:12380, rating:4.9,
+    cover:'R', desc:'从Hooks到Concurrent模式，全面掌握React 18新特性与性能优化。',
+    tags:['热门','实战'] },
+  { id:2, name:'2026国考申论精讲', cat:'公务员', price:199, free:false, color:'#fa8c16',
+    instructor:'王芳', instDesc:'8年公考培训经验', students:8650, rating:4.8,
+    cover:'公', desc:'系统讲解申论五大题型，配套真题精讲与批改服务。',
+    tags:['冲刺','批改'] },
+  { id:3, name:'考研政治高频考点', cat:'考研', price:0, free:true, color:'#07C160',
+    instructor:'张教授', instDesc:'北大政治学博士', students:25600, rating:4.9,
+    cover:'考', desc:'高频考点梳理，配套思维导图与历年真题。',
+    tags:['免费'] },
+  { id:4, name:'Python数据分析', cat:'IT编程', price:149, free:false, color:'#0fa3a3',
+    instructor:'陈浩', instDesc:'数据科学领域专家', students:9870, rating:4.7,
+    cover:'Py', desc:'Pandas、NumPy、Matplotlib实战，从入门到项目落地。',
+    tags:['实战','项目'] },
+  { id:5, name:'中医养生入门', cat:'健康养生', price:0, free:true, color:'#52c41a',
+    instructor:'刘医生', instDesc:'三甲医院中医科主任', students:15320, rating:4.8,
+    cover:'中', desc:'日常养生方法、节气调理、常见小病食疗方案。',
+    tags:['免费'] },
+  { id:6, name:'行测数量关系', cat:'公务员', price:79, free:false, color:'#eb2f96',
+    instructor:'赵强', instDesc:'数量关系金牌讲师', students:6420, rating:4.6,
+    cover:'行', desc:'秒杀技巧+真题演练，30天突破数量关系瓶颈。',
+    tags:['技巧'] },
+  { id:7, name:'考研英语长难句', cat:'考研', price:129, free:false, color:'#722ed1',
+    instructor:'Linda', instDesc:'英语教育硕士', students:11200, rating:4.8,
+    cover:'En', desc:'攻克长难句，提升阅读理解与翻译能力。',
+    tags:['热门'] },
+  { id:8, name:'Node.js后端开发', cat:'IT编程', price:189, free:false, color:'#13c2c2',
+    instructor:'孙伟', instDesc:'后端资深工程师', students:5300, rating:4.7,
+    cover:'N', desc:'Express+Koa+MongoDB全栈实战，构建生产级API。',
+    tags:['实战','全栈'] }
+];
+
+const CHAPTERS_TPL = [
+  { name:'第一章 基础入门', lessons:[
+    { n:'1-1 课程介绍与学习路线', d:'08:24', free:true },
+    { n:'1-2 环境搭建', d:'15:30', free:true },
+    { n:'1-3 第一个小程序', d:'22:10', free:false }
+  ]},
+  { name:'第二章 核心概念', lessons:[
+    { n:'2-1 数据绑定', d:'18:45', free:false },
+    { n:'2-2 事件处理', d:'20:12', free:false },
+    { n:'2-3 条件与列表渲染', d:'25:30', free:false }
+  ]},
+  { name:'第三章 进阶实战', lessons:[
+    { n:'3-1 组件化开发', d:'28:15', free:false },
+    { n:'3-2 网络请求', d:'19:50', free:false },
+    { n:'3-3 项目部署', d:'16:40', free:false }
+  ]}
+];
+
+/* ================== State ================== */
+let pageStack = ['home'];
+let currentCourse = null;
+let carouselTimer = null;
+let carouselIdx = 0;
+let ownedCourses = new Set();
+
+/* ================== Privacy (FR-MP-08 / C-11) ================== */
+function checkPrivacy() {
+  if (localStorage.getItem('mp_privacy_agreed') === '1') return;
+  document.getElementById('privacyMask').classList.add('show');
+}
+function acceptPrivacy() {
+  localStorage.setItem('mp_privacy_agreed', '1');
+  document.getElementById('privacyMask').classList.remove('show');
+  showToast('已同意隐私协议');
+}
+function rejectPrivacy() {
+  showToast('需同意才能使用');
+}
+
+/* ================== Toast ================== */
+let toastTimer = null;
+function showToast(msg, icon) {
+  const t = document.getElementById('toast');
+  t.innerHTML = icon ? `<div class="toast-icon">${icon}</div><div>${msg}</div>` : msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ================== TabBar ================== */
+function switchTab(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.tabbar-item').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+  pageStack = [page];
+  updateTopbar(page === 'home' ? '在线学习中心' : (page === 'courses' ? '课程中心' : '个人中心'), false);
+  document.getElementById('tabbar').style.display = 'flex';
+  scrollToTop();
+}
+
+function updateTopbar(title, showBack) {
+  document.getElementById('topbarTitle').textContent = title;
+  document.getElementById('topbarBack').classList.toggle('show', showBack);
+}
+
+function scrollToTop() {
+  document.querySelector('.page-container').scrollTop = 0;
+}
+
+/* ================== Navigation (page stack) ================== */
+function navigateTo(pageId, title) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  pageStack.push(pageId);
+  updateTopbar(title, true);
+  document.getElementById('tabbar').style.display = (pageId === 'page-detail' || pageId === 'page-live') ? 'none' : 'flex';
+  scrollToTop();
+}
+
+function goBack() {
+  if (pageStack.length <= 1) return;
+  pageStack.pop();
+  const cur = pageStack[pageStack.length - 1];
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(cur).classList.add('active');
+  const isTab = ['home','courses','profile'].includes(cur.replace('page-',''));
+  if (isTab) {
+    const tabName = cur.replace('page-','');
+    document.querySelectorAll('.tabbar-item').forEach(t => t.classList.toggle('active', t.dataset.page === tabName));
+    document.getElementById('tabbar').style.display = 'flex';
+    updateTopbar(tabName === 'home' ? '在线学习中心' : (tabName === 'courses' ? '课程中心' : '个人中心'), false);
+  } else {
+    updateTopbar(cur === 'page-detail' ? (currentCourse ? currentCourse.name : '课程详情') : '直播', true);
+    document.getElementById('tabbar').style.display = 'none';
+  }
+  scrollToTop();
+}
+
+/* ================== Home render ================== */
+function renderHome() {
+  // grid
+  const grid = document.getElementById('homeGrid');
+  grid.innerHTML = COURSES.slice(0,4).map(c => courseCardHTML(c)).join('');
+  // horizontal scroll (discounted)
+  const hs = document.getElementById('homeHScroll');
+  hs.innerHTML = COURSES.slice(4,8).map(c => `
+    <div class="h-card" onclick="openCourse(${c.id})">
+      <div class="course-cover" style="background:${c.color}">${c.cover}</div>
+      <div class="course-body">
+        <div class="course-name">${c.name}</div>
+        <div class="course-meta">
+          <span class="course-price ${c.free?'free':''}">${c.free?'免费':`<span class="unit">¥</span>${Math.round(c.price*0.7)}`}</span>
+        </div>
+        <span class="discount-tag">7折</span>
+      </div>
+    </div>`).join('');
+}
+
+function courseCardHTML(c) {
+  return `<div class="course-card" onclick="openCourse(${c.id})">
+    <div class="course-cover" style="background:${c.color}">${c.cover}</div>
+    <div class="course-body">
+      <div class="course-name">${c.name}</div>
+      <div class="course-meta">
+        <span class="course-price ${c.free?'free':''}">${c.free?'免费':`<span class="unit">¥</span>${c.price}`}</span>
+        <button class="enroll-btn" onclick="enrollFromCard(event,${c.id})">报名</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function enrollFromCard(e, id) {
+  e.stopPropagation();
+  const c = COURSES.find(x => x.id === id);
+  if (c.free) { showToast('已加入学习计划', '✅'); return; }
+  openCourse(id);
+  setTimeout(openPay, 200);
+}
+
+/* ================== Carousel ================== */
+function startCarousel() {
+  const slides = document.getElementById('carouselSlides');
+  const dots = document.getElementById('carouselDots').children;
+  carouselTimer = setInterval(() => {
+    carouselIdx = (carouselIdx + 1) % 3;
+    slides.style.transform = `translateX(-${carouselIdx*100}%)`;
+    for (let i=0;i<dots.length;i++) dots[i].classList.toggle('active', i===carouselIdx);
+  }, 3000);
+}
+
+/* ================== Course list ================== */
+function renderCourseList(cat) {
+  const list = document.getElementById('courseList');
+  const data = cat && cat !== '全部' ? COURSES.filter(c => c.cat === cat) : COURSES;
+  if (!data.length) { list.innerHTML = '<div class="empty-tip">暂无该分类课程</div>'; return; }
+  list.innerHTML = data.map(c => `
+    <div class="course-list-card" onclick="openCourse(${c.id})">
+      <div class="clc-cover" style="background:${c.color}">${c.cover}</div>
+      <div class="clc-info">
+        <div>
+          <div class="clc-name">${c.name}</div>
+          <div class="clc-tags">${c.tags.map(t=>`<span class="clc-tag">${t}</span>`).join('')}</div>
+        </div>
+        <div class="clc-bottom">
+          <div class="clc-meta">${c.students.toLocaleString()}人 · ${c.instructor}</div>
+          <button class="learn-btn" onclick="event.stopPropagation();openCourse(${c.id})">马上学习</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+/* ================== Course detail ================== */
+function openCourse(id) {
+  const c = COURSES.find(x => x.id === id);
+  if (!c) return;
+  currentCourse = c;
+  document.getElementById('detailCover').style.background = `linear-gradient(135deg, ${c.color}, rgba(0,0,0,0.4))`;
+  document.getElementById('dcTitle').textContent = c.name;
+  document.getElementById('dcSub').textContent = c.cat + ' · ' + c.instructor;
+  document.getElementById('detailTitle').textContent = c.name;
+  document.getElementById('detailTags').innerHTML = c.tags.map(t=>`<span class="detail-tag">${t}</span>`).join('') +
+    `<span class="detail-tag" style="color:#1677ff;background:#e6f0ff">${c.cat}</span>`;
+  document.getElementById('detailPrice').textContent = c.free ? '免费' : `¥${c.price}`;
+  document.getElementById('detailStudents').textContent = c.students.toLocaleString();
+  document.getElementById('detailRating').textContent = c.rating;
+  document.getElementById('instructorAvatar').textContent = c.instructor.charAt(0);
+  document.getElementById('instructorName').textContent = c.instructor;
+  document.getElementById('instructorDesc').textContent = c.instDesc;
+  document.getElementById('detailIntro').innerHTML = `
+    <h4>课程简介</h4>
+    <p>${c.desc}</p>
+    <h4>你将学到</h4>
+    <ul>
+      <li>掌握${c.cat}领域核心知识体系</li>
+      <li>通过项目实战提升动手能力</li>
+      <li>具备独立完成相关工作的能力</li>
+      <li>获得结业证书与就业指导</li>
+    </ul>
+    <h4>适合人群</h4>
+    <ul>
+      <li>对${c.cat}方向感兴趣的学习者</li>
+      <li>希望系统提升专业技能的从业者</li>
+      <li>准备相关考试或求职的人员</li>
+    </ul>`;
+  renderChapters();
+  // reset tabs
+  document.querySelectorAll('.dst-tab').forEach(t=>t.classList.toggle('active', t.dataset.pane==='intro'));
+  document.querySelectorAll('.detail-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-intro').classList.add('active');
+  // buy button
+  const buyBtn = document.getElementById('buyBtn');
+  if (c.free || ownedCourses.has(c.id)) {
+    buyBtn.textContent = ownedCourses.has(c.id) ? '开始学习' : '免费报名';
+    buyBtn.classList.toggle('owned', false);
+  } else {
+    buyBtn.textContent = '购买课程';
+  }
+  navigateTo('page-detail', c.name);
+}
+
+function renderChapters() {
+  const list = document.getElementById('chapterList');
+  list.innerHTML = CHAPTERS_TPL.map(ch => `
+    <div class="chapter">
+      <div class="chapter-head"><span>${ch.name}</span><span class="ch-count">${ch.lessons.length}课时</span></div>
+      ${ch.lessons.map((l,i) => {
+        const unlocked = l.free || ownedCourses.has(currentCourse.id);
+        return `<div class="lesson">
+          <div class="lesson-name">
+            <span class="lesson-icon ${unlocked?'unlocked':'locked'}">${unlocked?'▶':'🔒'}</span>
+            <span>${l.n}</span>
+            ${l.free?'<span style="color:#07C160;font-size:10px;border:1px solid #07C160;padding:0 4px;border-radius:2px;margin-left:4px;">试看</span>':''}
+          </div>
+          <div class="lesson-duration">${l.d}</div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+/* detail section tabs */
+document.querySelectorAll('.dst-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.dst-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.detail-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById('pane-' + tab.dataset.pane).classList.add('active');
+  });
+});
+
+/* category tabs */
+document.querySelectorAll('.cat-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.cat-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    renderCourseList(tab.dataset.cat);
+  });
+});
+
+/* ================== WeChat Pay (FR-MP-05) ================== */
+function openPay() {
+  if (!currentCourse) return;
+  if (currentCourse.free) { showToast('免费课程，已加入学习', '✅'); ownedCourses.add(currentCourse.id); return; }
+  if (ownedCourses.has(currentCourse.id)) { showToast('已购买，直接学习', '✅'); return; }
+  document.getElementById('payAmount').textContent = currentCourse.price.toFixed(2);
+  document.getElementById('payGoods').textContent = '《' + currentCourse.name + '》';
+  document.getElementById('payMask').classList.add('show');
+}
+function confirmPay() {
+  document.getElementById('payMask').classList.remove('show');
+  setTimeout(() => {
+    showToast('支付成功', '✅');
+    ownedCourses.add(currentCourse.id);
+    document.getElementById('buyBtn').textContent = '开始学习';
+    renderChapters();
+  }, 300);
+}
+
+/* ================== WeChat Login (FR-MP-03) ================== */
+function wxLogin() {
+  if (localStorage.getItem('mp_user')) { showToast('已登录'); return; }
+  showToast('正在调用 wx.login...', '⏳');
+  // mock wx.login + getUserProfile
+  setTimeout(() => {
+    const user = {
+      nickname: '微信用户' + Math.floor(1000 + Math.random()*9000),
+      avatar: '🧑',
+      vip: 'VIP学员',
+      studyTime: 128,
+      courses: 12,
+      cert: 3
+    };
+    localStorage.setItem('mp_user', JSON.stringify(user));
+    renderProfile();
+    showToast('登录成功', '✅');
+  }, 1200);
+}
+
+function renderProfile() {
+  const data = localStorage.getItem('mp_user');
+  const loginBtn = document.getElementById('loginBtn');
+  if (data) {
+    const u = JSON.parse(data);
+    document.getElementById('profileAvatar').textContent = u.avatar;
+    document.getElementById('profileName').textContent = u.nickname;
+    document.getElementById('profileTip').textContent = '继续学习，遇见更好的自己';
+    document.getElementById('profileVip').innerHTML = '<span class="vip-badge">★ ' + u.vip + '</span>';
+    document.getElementById('statTime').textContent = u.studyTime;
+    document.getElementById('statCourses').textContent = u.courses;
+    document.getElementById('statCert').textContent = u.cert;
+    loginBtn.textContent = '退出登录';
+    loginBtn.onclick = function() {
+      localStorage.removeItem('mp_user');
+      renderProfile();
+      showToast('已退出登录');
+    };
+  } else {
+    document.getElementById('profileAvatar').textContent = '👤';
+    document.getElementById('profileName').textContent = '点击登录';
+    document.getElementById('profileTip').textContent = '登录后享受更多学习服务';
+    document.getElementById('profileVip').innerHTML = '';
+    document.getElementById('statTime').textContent = '0';
+    document.getElementById('statCourses').textContent = '0';
+    document.getElementById('statCert').textContent = '0';
+    loginBtn.textContent = '微信授权登录';
+    loginBtn.onclick = wxLogin;
+  }
+}
+
+/* ================== Subpackage (FR-MP-07) ================== */
+function enterLive() {
+  navigateTo('page-live', '小程序直播');
+  document.getElementById('liveContent').innerHTML = `
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div class="spinner-text">正在加载直播分包...</div>
+    </div>`;
+  // Simulate subpackage loading
+  setTimeout(() => {
+    document.getElementById('liveContent').innerHTML = `
+      <div class="page-title-bar"><span class="back" onclick="goBack()">‹</span>小程序直播</div>
+      <div class="live-placeholder">
+        <div class="live-icon">📡</div>
+        <div class="lp-title">直播即将开始</div>
+        <div class="lp-sub">「考研政治高频考点冲刺」</div>
+        <div class="lp-time">⏰ 今日 20:00 准时开播</div>
+        <button class="live-back-btn" onclick="goBack()">返回首页</button>
+      </div>
+      <div style="padding:12px;font-size:12px;color:#999;text-align:center;">分包加载完成 · 直播模块 320KB</div>`;
+    showToast('分包加载完成', '✅');
+  }, 1600);
+}
+
+/* ================== Status bar time ================== */
+function updateClock() {
+  const d = new Date();
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2,'0');
+  document.getElementById('statusTime').textContent = h + ':' + m;
+}
+
+/* ================== Init ================== */
+function init() {
+  renderHome();
+  renderCourseList('全部');
+  renderProfile();
+  startCarousel();
+  updateClock();
+  setInterval(updateClock, 30000);
+  checkPrivacy();
+}
+init();
+</script>
+</body>
+</html>

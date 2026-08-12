@@ -1,0 +1,14 @@
+# D-115: .dockerignore for portal-web (workspace context = frontend/)
+**/target/
+**/.venv/
+**/node_modules/
+**/.git/
+**/*.md
+**/test/
+**/tests/
+**/.turbo/
+**/dist/
+**/coverage/
+.gitignore
+**/Dockerfile
+**/.dockerignore

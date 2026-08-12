@@ -660,5 +660,100 @@ function saveRoute() { alert('路由规则已保存并推送到 Nacos'); closeMo
 function saveRule() { alert('限流规则已保存并推送到 Sentinel'); closeModal('addRule'); }
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var _t = this;
+  /* 模拟数据 */
+  var services = [
+    {n:'网关服务',qps:1240,lat:18,s:'up',node:'3/3',cpu:42,mem:55},
+    {n:'认证服务',qps:860,lat:12,s:'up',node:'2/2',cpu:38,mem:47},
+    {n:'配置中心',qps:320,lat:8,s:'up',node:'3/3',cpu:25,mem:40},
+    {n:'.event-bus',qps:5200,lat:4,s:'up',node:'5/5',cpu:61,mem:68},
+    {n:'.ratelimit',qps:2100,lat:3,s:'warn',node:'2/2',cpu:78,mem:72},
+    {n:'.cache-cluster',qps:8800,lat:2,s:'up',node:'4/4',cpu:45,mem:80},
+    {n:'.mq-stream',qps:3400,lat:15,s:'up',node:'3/3',cpu:55,mem:60},
+    {n:'.mq-dead',qps:12,lat:90,s:'down',node:'1/1',cpu:90,mem:95}
+  ];
+  function fmtNum(n){return n.toLocaleString();}
+  function rowBadge(s){
+    if(s==='up')return '<span class="badge green">运行中</span>';
+    if(s==='warn')return '<span class="badge yellow">告警</span>';
+    return '<span class="badge red">异常</span>';
+  }
+  function renderSvc(){
+    var tb=document.querySelector('#page-health table tbody')||document.querySelector('#page-health tbody');
+    if(!tb)return;
+    tb.innerHTML=services.map(function(s){
+      return '<tr><td><span class="status-dot '+s.s+'"></span>'+s.n+'</td>'+
+        '<td>'+fmtNum(s.qps)+'</td><td>'+s.lat+'ms</td>'+
+        '<td>'+s.node+'</td><td>'+s.cpu+'%</td>'+
+        '<td>'+s.mem+'%</td><td>'+rowBadge(s.s)+'</td></tr>';
+    }).join('');
+  }
+  /* 搜索过滤 */
+  var searchInput=document.createElement('input');
+  searchInput.setAttribute('placeholder','搜索服务名...');
+  searchInput.className='btn';
+  searchInput.style.cssText='width:200px;margin-left:12px';
+  var ph=document.querySelector('#page-health .page-header .actions');
+  if(ph)ph.appendChild(searchInput);
+  var filtered=services.slice();
+  searchInput.addEventListener('input',function(){
+    var v=this.value.toLowerCase();
+    filtered=services.filter(function(s){return s.n.toLowerCase().indexOf(v)>=0;});
+    var tb=document.querySelector('#page-health table tbody')||document.querySelector('#page-health tbody');
+    if(!tb)return;
+    tb.innerHTML=filtered.map(function(s){
+      return '<tr><td><span class="status-dot '+s.s+'"></span>'+s.n+'</td>'+
+        '<td>'+fmtNum(s.qps)+'</td><td>'+s.lat+'ms</td>'+
+        '<td>'+s.node+'</td><td>'+s.cpu+'%</td>'+
+        '<td>'+s.mem+'%</td><td>'+rowBadge(s.s)+'</td></tr>';
+    }).join('');
+  });
+  /* CSS 柱状图 */
+  function renderChart(){
+    var ph2=document.querySelectorAll('.chart-placeholder .bars');
+    ph2.forEach(function(box,idx){
+      var data=[];
+      for(var i=0;i<12;i++)data.push(30+Math.round(Math.random()*70));
+      var mx=Math.max.apply(null,data);
+      box.innerHTML=data.map(function(v){
+        return '<div class="bar" style="height:'+(v/mx*100)+'%;opacity:0.7" title="'+v+'"></div>';
+      }).join('');
+    });
+  }
+  /* 自动刷新 5 秒 */
+  function autoRefresh(){
+    services.forEach(function(s){
+      s.qps=Math.max(100,s.qps+Math.round((Math.random()-0.5)*200));
+      s.lat=Math.max(1,Math.round(s.lat+(Math.random()-0.5)*6));
+      s.cpu=Math.max(10,Math.min(99,s.cpu+Math.round((Math.random()-0.5)*8)));
+      s.mem=Math.max(20,Math.min(99,s.mem+Math.round((Math.random()-0.5)*5)));
+      if(s.s!=='down'&&Math.random()<0.05)s.s=(Math.random()<0.5?'warn':'up');
+    });
+    if(!searchInput.value)renderSvc();
+    renderChart();
+    /* 更新统计卡片数值 */
+    var cards=document.querySelectorAll('.stat-card .value');
+    if(cards.length>=3){
+      cards[0].textContent=fmtNum(services.reduce(function(a,b){return a+b.qps;},0));
+      cards[1].textContent=services.reduce(function(a,b){return a+b.node.split('/')[0];},0)+'/'+services.reduce(function(a,b){return a+b.node.split('/')[1];},0);
+      cards[2].textContent=services.filter(function(s){return s.s==='up';}).length+'/'+services.length;
+    }
+  }
+  renderSvc();renderChart();
+  setInterval(autoRefresh,5000);
+  /* 行点击高亮 */
+  document.querySelectorAll('table').forEach(function(tbl){
+    tbl.addEventListener('click',function(e){
+      var tr=e.target.closest('tr');
+      if(!tr||tr.parentNode.tagName!=='TBODY')return;
+      tr.parentNode.querySelectorAll('tr').forEach(function(r){r.style.background='';});
+      tr.style.background='#1f6feb22';
+    });
+  });
+});
+</script>
+
 </body>
 </html>

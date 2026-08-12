@@ -1,0 +1,79 @@
+.live-list {
+  padding: 24px;
+
+  &__header {
+    margin-bottom: 24px;
+  }
+
+  &__title {
+    font-size: 36px;
+    font-weight: 600;
+    color: #262626;
+  }
+
+  &__item {
+    display: flex;
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    padding: 16px;
+  }
+
+  &__cover {
+    width: 200px;
+    height: 130px;
+    border-radius: 12px;
+  }
+
+  &__info {
+    flex: 1;
+    margin-left: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  &__name {
+    font-size: 30px;
+    font-weight: 500;
+    color: #262626;
+  }
+
+  &__teacher {
+    font-size: 24px;
+    color: #8c8c8c;
+  }
+
+  &__time {
+    font-size: 22px;
+    color: #bfbfbf;
+  }
+
+  &__status {
+    align-self: flex-start;
+    font-size: 22px;
+    padding: 2px 12px;
+    border-radius: 8px;
+
+    &--live {
+      color: #ff4d4f;
+      background: rgba(255, 77, 79, 0.1);
+    }
+
+    &--scheduled {
+      color: #1890ff;
+      background: rgba(24, 144, 255, 0.1);
+    }
+
+    &--ended {
+      color: #8c8c8c;
+      background: #f5f5f5;
+    }
+
+    &--cancelled {
+      color: #8c8c8c;
+      background: #f5f5f5;
+    }
+  }
+}

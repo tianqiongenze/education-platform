@@ -1,0 +1,75 @@
+# D-114: ArgoCD ApplicationSet — base infrastructure
+#
+# Manages the base (cluster-shared) K8s layer of the education platform:
+#   namespace, configmap, ingress, networkpolicy, hpa, pdb,
+#   otel-collector, TiDB cluster/monitor/backup, Karmada propagation policies.
+#
+# Sync wave 0: base must reconcile BEFORE cell overlays (wave 1) and
+# application services (wave 2). Sync waves are set here via annotations
+# rather than per-resource so the base bundle deploys as a unit.
+#
+# Reference: https://argo-cd.readthedocs.io/en/st/operator-manual/applicationset/
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ep-base-infra
+  namespace: argocd
+  annotations:
+    ep.io/decision: "D-114"
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  generators:
+    # List generator: one Application per (cluster, base bundle).
+    # For now the base bundle runs on the control-plane (Karmada host);
+    # Karmada PropagationPolicy then fans it out to member cells.
+    - list:
+        elements:
+          - cluster: in-cluster
+            server: https://kubernetes.default.svc
+            name: ep-base-infra
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/part-of: education-platform
+        app.kubernetes.io/managed-by: argocd
+        ep.io/layer: base
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: education-platform
+      source:
+        repoURL: https://github.com/edu-platform/education-platform.git
+        targetRevision: HEAD
+        path: deploy/k8s/base
+      destination:
+        server: '{{server}}'
+        namespace: education-platform
+      syncPolicy:
+        automated:
+          prune: true        # delete resources removed from Git
+          selfHeal: true     # re-apply if someone kubectl-edits out-of-band
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true   # avoids conflict with kubectl-managed fields
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      # Ignore HPA-managed replica drift so selfHeal doesn't fight the autoscaler.
+      ignoreDifferences:
+        - group: autoscaling
+          kind: HorizontalPodAutoscaler
+          jsonPointers:
+            - /status
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas   # HPA owns replicas; do not self-heal this field

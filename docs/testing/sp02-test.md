@@ -13,13 +13,13 @@
 | 层级 | 范围 | 工具 | 通过标准 |
 |------|------|------|---------|
 | L1 单元测试 | Flink 算子/UDF/CEP 模式 | JUnit5 + Flink MiniCluster + flink-testing | 覆盖率≥80% |
-| L2 集成测试 | CDC pipeline 全链路（TiDB→Kafka→Flink→Iceberg） | Testcontainers + flink-cdc-pipeline-test | 数据一致 100% |
+| L2 集成测试 | CDC pipeline 全链路（TiDB→Pulsar→Flink→Iceberg） | Testcontainers + flink-cdc-pipeline-test | 数据一致 100% |
 | L3 表测试 | Iceberg time-travel/schema evolution/compaction | Iceberg API + JUnit | 全通过 |
 | L4 端到端延迟 | 入湖 P95<5min（G-09） | 计时探针 + Prometheus | P95<5min |
 | L5 数据质量 | Avro schema/行数/空值/枚举 | Great Expectations + 自研 DQ | 0 critical |
-| L6 压测 | 吞吐≥10,000 ev/s（M1）/≥500,000 ev/s（M3） | 分布式 Locust + Kafka 压测工具 | 达标 |
-| L7 混沌 | checkpoint 失败/JM OOM/Kafka 分区迁移 | Chaos Mesh | 自动恢复 RTO<60s |
-| L8 安全 | Kafka ACL/Trino 行级权限/Feature 越权 | 渗透 + 配置审计 | 0 高危 |
+| L6 压测 | 吞吐≥10,000 ev/s（M1）/≥500,000 ev/s（M3） | 分布式 Locust + Pulsar 压测工具 | 达标 |
+| L7 混沌 | checkpoint 失败/JM OOM/Pulsar broker 切换 | Chaos Mesh | 自动恢复 RTO<60s |
+| L8 安全 | Pulsar ACL/Trino 行级权限/Feature 越权 | 渗透 + 配置审计 | 0 高危 |
 
 ---
 
@@ -83,10 +83,10 @@ void testLearningMetricAggregate() throws Exception {
 ## 3. CDC pipeline 集成测试（L2）
 
 ### 3.1 测试目标
-验证 TiDB→TiCDC→Kafka→Flink→Iceberg 全链路数据一致性（ADR-D01）。
+验证 TiDB→TiCDC→Pulsar→Flink→Iceberg 全链路数据一致性（ADR-D01）。
 
 ### 3.2 测试环境
-- Testcontainers：TiDB + Kafka + Schema Registry + PostgreSQL(catalog) + MinIO
+- Testcontainers：TiDB + Pulsar(含内置 Schema Registry) + PostgreSQL(catalog) + MinIO
 - Flink MiniCluster 运行 CDC pipeline YAML
 
 ### 3.3 测试用例
@@ -186,7 +186,7 @@ def test_time_travel():
 | 低并发 100 ev/s | 100 | <5min |
 | 中并发 10,000 ev/s | 10,000 | <5min |
 | 高并发 100,000 ev/s | 100,000 | <5min（M3 验证） |
-| 背压（Kafka lag 100k） | 10,000 | <5min（恢复后） |
+| 背压（Pulsar backlog 100k） | 10,000 | <5min（恢复后） |
 
 ### 5.4 计时探针
 ```python
@@ -250,14 +250,14 @@ expectations:
 - M3：≥500,000 ev/s
 
 ### 7.2 压测工具
-- Kafka 生产端：`kafka-producer-perf-test` + 自研 Avro 生成器
+- Pulsar 生产端：`pulsar-perf-producer` + 自研 Avro 生成器
 - Flink 背压监控：`flink-metrics` backpressure
 - Locust：模拟多 BU 数据分析师 Trino 并发查询
 
 ### 7.3 压测用例
 | 用例 | 并发 | 持续 | 期望 |
 |------|------|------|------|
-| CDC 入湖吞吐 | 100,000 ev/s | 1h | Kafka lag<100k，Iceberg commit 正常 |
+| CDC 入湖吞吐 | 100,000 ev/s | 1h | Pulsar backlog<100k，Iceberg commit 正常 |
 | 实时指标算子 | 100,000 ev/s | 1h | Flink throughput 稳定，checkpoint 不失败 |
 | Trino 并发查询 | 50 并发 | 30min | P95<10s，资源组隔离生效 |
 | Feature 在线查询 | 50,000 QPS | 30min | P99<5ms |
@@ -266,7 +266,7 @@ expectations:
 ### 7.4 容量推演
 - 单 Flink TM（4 vCPU/8GB）吞吐约 20,000 ev/s（学习事件）
 - 100,000 ev/s 需 8 TM；500,000 ev/s 需 32 TM（M3）
-- Kafka 分区：每分区 10,000 ev/s，100,000 ev/s 需 10 分区
+- Pulsar partition：每分区 10,000 ev/s，100,000 ev/s 需 10 分区
 
 ---
 
@@ -278,7 +278,7 @@ expectations:
 |------|------|------|
 | JM OOM | kill JobManager | 自动重启 + checkpoint 恢复，RTO<60s，无数据丢失 |
 | TM OOM | kill TaskManager | 重启，状态从 checkpoint 恢复 |
-| Kafka 分区迁移 | leader 切换 | Flink 自动重平衡，无中断 |
+| Pulsar broker 切换 | leader 切换 | Flink 自动重平衡，无中断 |
 | Schema Registry 宕机 | 网络分区 | Flink fallback 缓存 schema，继续运行 |
 | 对象存储抖动 | 延迟 5s | checkpoint 超时，自动重试 |
 | 跨区网络抖动 | cell 间延迟 500ms | 本地消费不阻塞，中心聚合延迟上升但可恢复 |
@@ -293,7 +293,7 @@ expectations:
 
 | 用例 | 操作 | 期望 |
 |------|------|------|
-| Kafka ACL 越权 | 非授权消费组读 CDC topic | 拒绝 |
+| Pulsar ACL 越权 | 非授权订阅读 CDC namespace | 拒绝 |
 | Trino 行级权限 | BU-A 查询 BU-B 表 | 拒绝 |
 | Feature 越权 | app 拼接他人 user_id 查特征 | 拒绝（key 强制 JWT 解析） |
 | Schema Registry 写越权 | 非平台工程师注册 schema | 拒绝 |
@@ -307,9 +307,9 @@ expectations:
 | 环境 | 用途 | 规模 |
 |------|------|------|
 | CI（单节点） | L1 单元测试 | MiniCluster |
-| 集成测试（Testcontainers） | L2/L3 | 容器化 TiDB/Kafka/MinIO |
+| 集成测试（Testcontainers） | L2/L3 | 容器化 TiDB/Pulsar/MinIO |
 | 预发（3 节点） | L4/L5 | 小规模真实拓扑 |
-| 压测（多节点） | L6 | 3+ Flink TM，多分区 Kafka |
+| 压测（多节点） | L6 | 3+ Flink TM，多分区 Pulsar |
 
 ### 10.2 测试数据
 - 合成数据生成器：按 TiDB 表结构生成 1亿/10亿 行
@@ -344,6 +344,51 @@ expectations:
 | NFR-01 (G-09) | §5 延迟测试 |
 | NFR-02 (G-06) | §7 压测 |
 | NFR-06 恢复 | §8 混沌 |
+
+---
+
+### §13 AI智能驱动功能测试 (D-042)
+
+#### 13.1 智能数据目录测试
+- L1单元测试: Semantic Tagger语义推断准确率(测试集100个字段, 准确率≥85%)
+- L1单元测试: 数据分布采样算子正确性(已知数据集验证min/max/null_ratio/cardinality)
+- L2集成测试: schema变更事件→元数据可搜索 端到端延迟<60s
+- L3验收测试: 字段级血缘覆盖率≥95%, 准确率≥90% (在测试数据集上验证)
+- L5质量测试: GNN血缘推断置信度分布检查(>0.8占比≥60%)
+
+#### 13.2 智能特征平台测试
+- L1单元测试: PSI计算正确性(已知分布对比, 误差<0.01)
+- L1单元测试: KL Divergence/KS Test计算正确性
+- L2集成测试: 特征漂移检测端到端 — 注入分布偏移数据 → PSI>0.2告警延迟<5min
+- L2集成测试: SHAP反馈闭环 — 模拟SP-04发送feature-feedback事件 → Feature Store缓存策略变更
+- L3验收测试: 自动特征推荐Top-10中有效特征占比≥60%(数据科学家评审)
+
+#### 13.3 预测性运维测试
+- L1单元测试: LSTM预测模型精度(RMSE < 历史均值20%)
+- L1单元测试: Isolation Forest异常检测F1≥0.85(标注测试集)
+- L2集成测试: 容量预测→扩容工单自动创建(模拟数据增长场景)
+- L2集成测试: 异常检测→根因分析报告生成(注入Flink checkpoint失败场景)
+- L7混沌测试: Kill AIOps模型服务 → 验证降级为规则告警(不影响核心数据管道)
+
+#### 13.4 自然语言查询测试
+- L1单元测试: SQL校验器(Antlr) — 拒绝非SELECT语句(INSERT/DELETE/DROP)
+- L1单元测试: 行级权限过滤(不同角色查询同一表, 返回不同行)
+- L3验收测试: Text-to-SQL执行成功率≥85% (100个测试问题集, 涵盖简单查询/聚合/JOIN/子查询)
+- L4端到端测试: NL Query P95响应<8s (含SQL生成+执行+返回)
+- L8安全测试: SQL注入防护(自然语言中嵌入恶意SQL)
+- L8安全测试: 速率限制(超过10次/min返回429)
+
+#### 13.5 AI驱动测试通过标准
+| 类别 | 指标 | 门禁 |
+|------|------|------|
+| 特征漂移检测 | 召回率 | ≥90% |
+| 特征漂移检测 | 精确率 | ≥85% |
+| Text-to-SQL | 执行成功率 | ≥85% |
+| 异常检测 | F1 Score | ≥0.85 |
+| 容量预测 | RMSE | <历史均值20% |
+| 字段级血缘 | 覆盖率 | ≥95% |
+| NL Query延迟 | P95 | <8s |
+| 漂移告警延迟 | P99 | <5min |
 
 ---
 

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@ep/api-client": ["../../packages/api-client/src"],
+      "@ep/query": ["../../packages/query/src"],
+      "@ep/shared": ["../../packages/shared/src"],
+      "@ep/shared/e2e-helpers": ["../../packages/shared/src/e2e-helpers"],
+      "@ep/ui-kit": ["../../packages/ui-kit/src"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "exclude": ["e2e", "playwright.config.ts"]
+}

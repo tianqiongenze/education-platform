@@ -4,7 +4,7 @@
 |------|------|------|------|------|------|
 | SP-02-DEPLOY | v1.0 | 2026-08-03 | Draft(待评审) | 文档工程师 | SP-02-SAD/SDD v1.0 + EP-SPEC §8 |
 
-> 本部署方案覆盖：Flink K8s Operator 部署、Iceberg catalog 配置、S3/MinIO 对接、Kafka 集群配置、Trino 部署、监控、CI/CD、运维 runbook。承接 SAD §9 部署拓扑。
+> 本部署方案覆盖：Flink K8s Operator 部署、Iceberg catalog 配置、S3/MinIO 对接、Pulsar CDC namespace 配置、Trino 部署、监控、CI/CD、运维 runbook。承接 SAD §9 部署拓扑。
 
 ---
 
@@ -19,13 +19,11 @@
 │   ├─ FlinkDeployment: rt-learn / rt-live / rt-trade / rt-risk / rt-bill│
 │   └─ FlinkDeployment: fs-online                                       │
 │                                                                       │
-│  namespace: kafka                                                     │
-│   └─ Kafka(Strimzi Operator) + ZooKeeper                              │
-│       topic: cdc.order_group / cdc.learning_event_group / cdc.user_group│
-│              alert.* / dash.*                                         │
-│                                                                       │
-│  namespace: schema-registry                                           │
-│   └─ Apicurio Registry(或 Confluent)                                  │
+│  namespace: pulsar                          (复用 SP-01 技术中台 Pulsar 3.3.x 集群)       │
+│   ├─ namespace: cdc                         (CDC 专用租户/namespace，topic 自动创建)        │
+│   │     persistent://cdc/.../cdc.order_group / cdc.learning_event_group / cdc.user_group      │
+│   │     alert.* / dash.*                                                                       │
+│   └─ Pulsar 内置 Schema Registry (Avro，替代 Apicurio/Strimzi)                                 │
 │                                                                       │
 │  namespace: iceberg-catalog                                           │
 │   └─ PostgreSQL(JDBC catalog)                                         │
@@ -38,7 +36,7 @@
 │   └─ SparkOperator(离线数仓/归档/对账作业)                            │
 │                                                                       │
 │  namespace: monitoring                                                │
-│   └─ Prometheus + Grafana(flink exporter/kafka exporter/iceberg DQ)  │
+│   └─ Prometheus + Grafana(flink exporter/pulsar exporter/iceberg DQ)  │
 └───────────────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -236,85 +234,74 @@ warehouse=s3://edu-iceberg/warehouse
 
 ---
 
-## 5. Kafka 集群配置（Strimzi）
+## 5. Pulsar CDC namespace 配置
 
-### 5.1 Kafka CRD
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: Kafka
-metadata:
-  name: edu-kafka
-  namespace: kafka
-spec:
-  kafka:
-    replicas: 5
-    listeners:
-      - name: plain
-        port: 9092
-        type: internal
-        tls: false
-    config:
-      offsets.topic.replication.factor: 3
-      transaction.state.log.replication.factor: 3
-      transaction.state.log.min.isr: 2
-      default.replication.factor: 3
-      min.insync.replicas: 2
-      log.retention.hours: 72
-      num.partitions: 12
-    storage:
-      type: jbod
-      volumes:
-        - id: 0
-          type: persistent-claim
-          size: 500Gi
-          class: ssd
-  zookeeper:
-    replicas: 3
-    storage:
-      type: persistent-claim
-      size: 50Gi
+> CDC 复用 SP-01 技术中台已部署的 Pulsar 3.3.x 集群（统一消息总线），不再单独部署独立消息中间件。
+> Pulsar 自带 Schema Registry（Avro），无需独立 schema-registry 组件；topic 在首次生产时自动创建。
+
+### 5.1 创建 CDC 专用 namespace 与租户
+
+```bash
+# 1. 创建租户与 namespace（在任一 Pulsar broker 或 pulsar-admin 容器执行）
+pulsar-admin tenants create cdc
+pulsar-admin namespaces create cdc/cdc
+
+# 2. 授权 CDC 作业的 ServiceAccount（Flink SA）读写
+pulsar-admin namespaces grant-permission cdc/cdc \
+  --actions produce,consume \
+  --role "flink-cdc-sa"
+
+# 3. topic 自动创建：生产者首次写入即创建
+#    命名规范：persistent://cdc/cdc/cdc.order_group / cdc.learning_event_group / cdc.user_group
+#    以及：persistent://cdc/cdc/alert.live_anomaly / alert.risk.* / dash.*
 ```
 
-### 5.2 Topic 创建
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: cdc.order-group
-  labels: { strimzi.io/cluster: edu-kafka }
-  namespace: kafka
-spec:
-  partitions: 12
-  replicas: 3
-  config:
-    retention.ms: 259200000   # 72h
-    compression.type: producer
-```
-topic 清单：`cdc.order_group` / `cdc.learning_event_group` / `cdc.user_group` / `alert.live_anomaly` / `alert.risk.*` / `dash.*`。
+### 5.2 Namespace 策略配置（retention / backlog / TTL / subscription expiry）
 
-### 5.3 Schema Registry（Apicurio）
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: apicurio-registry
-  namespace: schema-registry
-spec:
-  replicas: 2
-  template:
-    spec:
-      containers:
-        - name: registry
-          image: apicurio/apicurio-registry-sql:2.5
-          env:
-            - name: REGISTRY_DATASOURCE_URL
-              value: jdbc:postgresql://registry-pg:5432/registry
-            - name: REGISTRY_DATASOURCE_USERNAME
-              valueFrom: { secretKeyRef: { name: registry-secret, key: user } }
-            - name: REGISTRY_DATASOURCE_PASSWORD
-              valueFrom: { secretKeyRef: { name: registry-secret, key: password } }
+```bash
+# 保留策略：保留 72h 数据，超过后自动删除
+pulsar-admin namespaces set-retention cdc/cdc \
+  --size -1 --time 72h
+
+# Backlog quota：每个 topic backlog 上限 100GB，超出后 producer 拒绝（block_producer）
+pulsar-admin namespaces set-backlog-quota cdc/cdc \
+  --limit 100G --policy producer_request_hold
+
+# 订阅过期：Flink checkpoint 失败恢复后，subscription 7 天未活跃自动清理
+pulsar-admin namespaces set-subscription-expiration-time cdc/cdc \
+  --subscriptionExpirationTime 7
+
+# TTL：消息 7 天未确认自动标记为已确认（防止 backlog 无限增长）
+pulsar-admin namespaces set-message-ttl cdc/cdc \
+  --messageTTL 604800
 ```
-兼容性策略：全局 `BACKWARD_TRANSITIVE`，CDC topic 组 `FULL_TRANSITIVE`。
+
+### 5.3 Schema Registry（Pulsar 内置）
+
+Pulsar 内置 Schema Registry 在 topic 级别管理 Avro schema，无需独立部署：
+
+```bash
+# 上传/注册 Avro schema（首次发布即自动注册，支持 BACKWARD/FULL 演化）
+pulsar-admin schemas upload cdc/cdc/cdc.order_group \
+  --filename /opt/schemas/order_v1.avsc
+
+# 查询 schema 版本
+pulsar-admin schemas get cdc/cdc/cdc.order_group
+
+# 兼容性策略（CDC topic 组强制 FULL_TRANSITIVE，其余 BACKWARD_TRANSITIVE）
+pulsar-admin schemas set-compatibility cdc/cdc/cdc.order_group \
+  --compatibility FULL_TRANSITIVE
+```
+
+### 5.4 Topic 分区（按表分组）
+
+```bash
+# CDC 高频表分区（与 Flink 并行度对齐）
+pulsar-admin topics create-partitioned-topic cdc/cdc/cdc.order_group -p 12
+pulsar-admin topics create-partitioned-topic cdc/cdc/cdc.learning_event_group -p 16
+pulsar-admin topics create-partitioned-topic cdc/cdc/cdc.user_group -p 4
+```
+
 
 ---
 
@@ -413,7 +400,7 @@ spec:
 | Dashboard | 面板 |
 |-----------|------|
 | Flink Job 总览 | job 状态/吞吐/checkpoint 失败率/重启次数 |
-| CDC 链路 | TiCDC lag/Kafka lag/入湖延迟/commit 时长 |
+| CDC 链路 | TiCDC lag/Pulsar backlog/入湖延迟/commit 时长 |
 | Iceberg 表健康 | 小文件数/快照数/orphan/表大小 |
 | Feature Store | 在线查询 P99/skew 率/新鲜度 |
 | 数据质量 | schema 失败/行数漂移/空值率 |
@@ -501,7 +488,7 @@ deploy:prod:
 1. `kubectl logs <jm-pod> -n flink | grep "checkpoint"` 查失败原因
 2. 检查 TM 是否 OOM：`kubectl top pod -n flink`
 3. 检查对象存储延迟：Prometheus `s3_request_duration`
-4. 检查 Kafka lag：`kafka-consumer-lag`
+4. 检查 Pulsar backlog：`pulsar-admin topics backlog`
 
 **处理**：
 - 偶发失败：Flink 自动重启（exponential_delay），观察 5min
@@ -567,7 +554,7 @@ kubectl patch flinkdeployment cdc-learn --type=merge -p '{"spec":{"job":{"state"
 # 3. 从 savepoint 启动
 kubectl flink start cdc-learn --from-savepoint s3://edu-flink-sp/cdc-learn/sv-1234 -n flink
 ```
-RTO 目标 <60s（NFR-06）。验证：无数据丢失（对比 Kafka offset 与 Iceberg 行数）。
+RTO 目标 <60s（NFR-06）。验证：无数据丢失（对比 Pulsar cursor 与 Iceberg 行数）。
 
 ### 10.5 对象存储故障
 
@@ -591,13 +578,13 @@ RTO 目标 <60s（NFR-06）。验证：无数据丢失（对比 Kafka offset 与
 
 ## 11. 扩容规划
 
-| 阶段 | Flink TM | Kafka 分区 | Trino Worker | 目标 |
+| 阶段 | Flink TM | Pulsar 分区 | Trino Worker | 目标 |
 |------|---------|-----------|--------------|------|
 | M1 | 8 | 12 | 5 | 10,000 ev/s |
 | M2 | 16 | 24 | 8 | 50,000 ev/s |
 | M3 | 32 | 48 | 12 | 500,000 ev/s |
 
-扩容操作：`kubectl scale flinkdeployment cdc-learn --replicas=16`；Kafka 加分区（注意重分区）；Trino 加 Worker。
+扩容操作：`kubectl scale flinkdeployment cdc-learn --replicas=16`；Pulsar 加分区（注意重分区）；Trino 加 Worker。
 
 ---
 
@@ -621,6 +608,53 @@ RTO 目标 <60s（NFR-06）。验证：无数据丢失（对比 Kafka offset 与
 | 网络策略 | namespace 间 NetworkPolicy 限制 |
 | 镜像扫描 | Trivy 扫描 Flink/Trino 镜像 |
 | 审计 | K8s audit log + Flink 作业操作审计 |
+
+---
+
+### §13.5 AI智能驱动组件部署 (D-042)
+
+#### 13.5.1 部署拓扑
+AI智能驱动组件部署在SP-02数据中台K8s集群, 独立namespace: `ep-ai-driven`
+
+| 组件 | 副本数 | CPU | Memory | Storage | 说明 |
+|------|--------|-----|--------|---------|------|
+| metadata-discover-job | 2 | 2 | 4Gi | - | Flink Streaming, 元数据自动发现 |
+| lineage-gnn-job | 1 | 4 | 8Gi | - | Spark Batch, GNN字段血缘推断 |
+| drift-online-job | 2 | 2 | 4Gi | - | Flink Streaming, 在线漂移检测 |
+| drift-offline-job | 1 | 2 | 4Gi | - | Spark Batch, 离线漂移检测 |
+| feedback-consumer-job | 2 | 1 | 2Gi | - | Flink Streaming, 特征反馈消费 |
+| capacity-predict | 1 | 2 | 4Gi | - | Python+Cron, LSTM容量预测 |
+| anomaly-detect-job | 2 | 2 | 4Gi | - | Flink Streaming, 异常检测 |
+| nl-query-service | 3 | 2 | 4Gi | - | REST API, 自然语言查询 |
+| elasticsearch | 3 | 4 | 16Gi | 2TB SSD | 元数据搜索(StatefulSet) |
+| neo4j | 1 | 2 | 8Gi | 100GB SSD | 字段血缘图(StatefulSet) |
+| onnx-runtime | 2 | 2 | 4Gi | - | 轻量模型本地推理(LSTM/IF/GBT) |
+
+#### 13.5.2 AI模型部署策略
+- 轻量模型(LSTM/IsolationForest/GBT): ONNX Runtime本地推理, 延迟<100ms
+- LLM(GPT-4级别): 通过SP-04 AI网关远程调用, 不在SP-02本地部署
+- 模型更新: 每日/每周全量重训练, 模型文件存储MinIO bucket `ep-ai-models`
+- 模型版本管理: MLflow tracking, 支持回滚
+
+#### 13.5.3 Pulsar Topic规划
+| Topic | 类型 | 分区 | 说明 |
+|-------|------|------|------|
+| `cdc-schema-change` | 持久化 | 3 | CDC schema变更事件 |
+| `metadata-updated` | 持久化 | 3 | 元数据更新通知 |
+| `feature-feedback` | 持久化 | 3 | SP-04→SP-02 特征重要性反馈 |
+| `drift-alert` | 持久化 | 3 | SP-02→SP-04 特征漂移告警 |
+| `anomaly-alert` | 持久化 | 3 | 异常检测告警 |
+
+#### 13.5.4 监控补充
+- AI模型推理延迟: P95 < 100ms (ONNX), P95 < 3s (LLM via SP-04)
+- 漂移检测覆盖率: 已注册特征中被监控的比例 ≥ 95%
+- NL Query成功率: 成功执行/总请求 ≥ 85%
+- Elasticsearch集群健康: green状态, 搜索延迟 P99 < 200ms
+
+#### 13.5.5 CI/CD补充
+- AI模型训练流水线: GitHub Actions → PyTorch训练 → ONNX导出 → MinIO上传 → K8s rolling update
+- Feature DSL审核流程: AI生成草稿 → PR创建 → 数据工程师Review → Merge后注册到Feature Store
+- NL Query回归测试: 100个标准问题集, 每次部署自动运行, 成功率下降>5% 阻断发布
 
 ---
 

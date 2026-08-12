@@ -14,8 +14,8 @@
 |----------|-------------|
 | 业务架构(BA) | 8 个共享业务领域：UCM/OPM/MMP/NTF/CMP/SRH/TKT/RSK；事业群(BU)消费而非自建 |
 | 数据架构(DA) | 用户域 TiDB 单元分片(user_id shard) + 全局域主库单写多副本 + Redis Cluster + ES + Iceberg 湖仓 |
-| 应用架构(AA) | Java(Spring Cloud)主 + Rust(计费/风控热点) + Go(WS/IM 网关) + Python(数据侧)；Dubbo Triple RPC + OpenAPI 契约 |
-| 技术架构(TA) | K8s + TiDB/TiFlash + Redis Cluster + Pulsar + Kafka(CDC) + ES + Milvus + S3/MinIO + Loki/Prom/Tempo |
+| 应用架构(AA) | Java(Spring Cloud Alibaba + Dubbo, D-032/铁律6 禁 Spring Cloud 原生)主 + Rust(计费/风控热点) + Go(WS/IM 网关) + Python(数据侧)；Dubbo Triple RPC + OpenAPI 契约 |
+| 技术架构(TA) | K8s + TiDB/TiFlash + Redis Cluster + Pulsar(CDC+事件总线统一) + ES + Milvus + S3/MinIO + Loki/Prom/Tempo |
 
 ---
 
@@ -27,7 +27,7 @@
                         └─────────────────────────┬──────────────────────────┘
                                                    │ OpenAPI 3 契约 + traceparent
                         ┌──────────────────────────▼──────────────────────────┐
-                        │  BFF / API 网关(Java Spring Cloud Gateway + Go WS)   │
+                        │  BFF / API 网关(Java Netty edge+Disruptor+WebMVC + Go WS) │  ← D-032/ADR-T07(rev2)
                         │  JWT RS256+JWKS │ CellRouter │ Sentinel │ 灰度        │
                         └───┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬─┘
                             │      │      │      │      │      │      │      │
@@ -46,7 +46,7 @@
                                        │
         ┌──────────────────────────────▼──────────────────────────────────┐
         │  基础设施层(复用容器集群，不重建)                                  │
-        │ TiDB/TiFlash │ Redis Cluster │ Pulsar │ Kafka(CDC) │ ES          │
+        │ TiDB/TiFlash │ Redis Cluster │ Pulsar(CDC+事件) │ ES          │
         │ Milvus │ S3/MinIO │ K8s │ Loki/Prom/Tempo                      │
         └─────────────────────────────────────────────────────────────────┘
 ```
@@ -167,7 +167,7 @@
 │  ├─ MaterialService: 元数据落 CMP, 对象落 S3/MinIO                  │
 │  └─ CategoryService: 分类树 + 标签索引                              │
 │  数据: 全局域主库(华北单写) + 华东/华南只读副本                      │
-│  索引: TiCDC → Kafka → SRH(ES) 增量同步                            │
+│  索引: TiCDC → Pulsar(ns=cdc://) → SRH(ES) 增量同步                            │
 │  下架保护: 下架不影响已购用户学习(Enrollment 在用户域独立)           │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -181,7 +181,7 @@
 │  ├─ QuestionSearch: 题库检索(知识点/难度/题型)                      │
 │  ├─ Suggest: completion suggester(补全/纠错/热搜)                  │
 │  └─ Semantic(可选): Milvus 向量召回 + Reranker(混合检索)            │
-│  索引同步: TiCDC → Kafka → ES Sink(增量) + 全量重建(定时)           │
+│  索引同步: TiCDC → Pulsar(ns=cdc://) → ES Sink(增量) + 全量重建(定时)           │
 │  多租户: JWT tenant_id 过滤(事业群只见本 BU 课程)                   │
 │  集群: ES 3 master + N data(按 BU/课程量分索引)                     │
 └──────────────────────────────────────────────────────────────────┘
@@ -406,7 +406,7 @@ Schema 注册在 Pulsar Schema Registry(Avro)，CI 校验兼容性。
 | 边界 | 业务中台侧 | 对端中台 |
 |------|-----------|---------|
 | ↔ 技术中台 | 调网关/JWT/CellRouter/可观测 | 提供基础设施能力 |
-| ↔ 数据中台 | 发 Pulsar 事件 + TiCDC 出 Kafka | Flink 聚合/特征/对账 |
+| ↔ 数据中台 | 发 Pulsar 事件 + TiCDC 出 Pulsar(ns=cdc://) | Flink 聚合/特征/对账 |
 | ↔ AI 中台 | SRH 语义检索调 RAG；RSK 调 AI 内容审核 | 提供 RAG/审核能力 |
 | ↔ 事业群 | 暴露 OpenAPI/Dubbo Triple | BU 调中台 + 自建专属 |
 
@@ -429,3 +429,5 @@ Schema 注册在 Pulsar Schema Registry(Avro)，CI 校验兼容性。
 | 版本 | 日期 | 变更 | 作者 |
 |------|------|------|------|
 | v1.0 | 2026-08-03 | 初始版本 | 架构组 |
+| v1.1 | 2026-08-08 | D-094: 基础设施共享JAR (ep-web-common) — RoleChecker×6拷贝消灭, 统一GlobalExceptionHandler/ErrorResponse, 遵循Philipp Hauer基础设施共享原则(共享安全/日志, 不共享领域逻辑); D-095: OPM支付域策略模式 — PaymentChannelSpi抽象 + 5渠道实现(MOCK/ALIPAY/WECHAT/BALANCE/CREDIT), Order泛化(productType+tenantId), 统一OPM不拆中台符合经典聚合支付设计; D-100/D-101: Order泛化+敏感数据脱敏增强 | 架构组 |
+| v1.2 | 2026-08-08 | D-104: 订单中台独立抽取(sp03-order, 多模块Maven, port 8084/20884, OrderEntity↔OrderDto分离, @DubboReference PaymentService跨服务RPC, refundOrder缺口修复); D-105: 支付中台独立抽取(sp03-payment, 多模块Maven, port 8087/20887, PaymentChannelSpi策略保留, MockChannel EP_DEV_ONLY guard)。§4.2 OPM从单体拆为订单+支付两个独立中台, sp03-business瘦身保留课程/用户域, BFF依赖sp03-order-api+sp03-payment-api。 | 架构组 |

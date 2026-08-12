@@ -1,0 +1,111 @@
+name: Go Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/ws-gateway/**'
+      - 'services/ep-common-go/**'
+      - 'services/**/go.mod'
+      - 'services/**/go.sum'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - services/ws-gateway
+          - services/ep-common-go
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.service }}/go.mod
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+      - name: Download dependencies
+        working-directory: ${{ matrix.service }}
+        run: go mod download
+      - name: Vet
+        working-directory: ${{ matrix.service }}
+        run: go vet ./...
+        continue-on-error: true  # advisory
+      - name: Run tests with race detector and coverage
+        working-directory: ${{ matrix.service }}
+        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        working-directory: ${{ matrix.service }}
+        run: |
+          echo "## Go Coverage — ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out | tee cover-func.txt
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat cover-func.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          pct=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Total coverage: **${pct}** (threshold 60%)" >> $GITHUB_STEP_SUMMARY
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/coverage.out
+          if-no-files-found: ignore
+
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: go-coverage-*
+          path: go-coverage
+          merge-multiple: false
+        continue-on-error: true
+      - name: Check coverage >= 60%
+        run: |
+          echo "## Go Coverage Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          overall_ok=1
+          for dir in go-coverage/*/; do
+            [ -d "$dir" ] || continue
+            svc=$(basename "$dir")
+            cov=$(find "$dir" -name 'coverage.out' | head -1)
+            if [ -z "$cov" ]; then
+              echo "::warning::No coverage.out for ${svc}"
+              echo "| ${svc} | — | skipped |" >> /tmp/gate.md
+              continue
+            fi
+            pct=$(go tool cover -func="$cov" | tail -1 | awk '{print $3}')
+            # D-137: Hard gate — below 60% coverage fails the job (was WARN).
+            pct_num="${pct%\%}"
+            status="PASS"
+            if ! [ "${pct_num}" -ge 60 ] 2>/dev/null; then
+              status="FAIL"
+              overall_ok=0
+              echo "::error::${svc} coverage ${pct} is below 60% threshold"
+            fi
+            echo "| ${svc} | ${pct} | ${status} |" >> /tmp/gate.md
+            echo "${svc}: ${pct} — ${status}"
+          done
+          echo "| Service | Coverage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          [ -f /tmp/gate.md ] && cat /tmp/gate.md >> $GITHUB_STEP_SUMMARY
+          if [ "$overall_ok" -ne 1 ]; then
+            echo "::error::Go coverage gate FAILED — one or more services below 60%"
+            exit 1
+          fi
+          echo "All Go services meet the 60% coverage threshold."

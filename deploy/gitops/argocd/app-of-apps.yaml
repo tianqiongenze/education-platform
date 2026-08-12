@@ -1,0 +1,45 @@
+# D-114: ArgoCD root "app-of-apps"
+#
+# This is the ONLY ArgoCD manifest that needs a manual `kubectl apply`.
+# Once applied, ArgoCD reconciles this Application, which in turn manages
+# every other manifest in deploy/gitops/argocd/ — the AppProject and the
+# three ApplicationSets (base, cells, apps).
+#
+# Bootstrap (one-time):
+#   kubectl apply -f deploy/gitops/argocd/app-of-apps.yaml
+#
+# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ep-root
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/managed-by: argocd
+    ep.io/layer: root
+  annotations:
+    ep.io/decision: "D-114"
+spec:
+  project: default   # use built-in project until AppProject is reconciled
+  source:
+    repoURL: https://github.com/edu-platform/education-platform.git
+    targetRevision: HEAD
+    path: deploy/gitops/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true       # deleting a file here removes the child Application
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

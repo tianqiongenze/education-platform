@@ -249,7 +249,7 @@
 
 ### 7.1 测试环境
 - 单 cell K8s 集群（MVP 拓扑，非多 cell）
-- TiDB/Redis/Pulsar/Kafka/Milvus/对象存储/CDN/SRS/LiveKit/Firecracker CRD
+- TiDB/Redis/Pulsar(CDC+事件统一)/Milvus/对象存储/CDN/SRS/LiveKit/Firecracker CRD
 - AI 网关 mock 模式（不依赖外部 LLM）
 - 三端测试环境（web/h5/小程序模拟器）
 

@@ -1,0 +1,72 @@
+# =============================================================================
+# SP-02 Data Middle-Platform — Flink CDC 3.x YAML pipeline
+# User CDC: Pulsar (Avro) -> Iceberg ods.ods_user
+# Low-volume dimension table: parallelism 8
+# D-028 / C-02 / C-03 / C-07
+# =============================================================================
+source:
+  type: pulsar
+  name: user-cdc-source
+  topic: persistent://public/cdc/user_group
+  subscription: flink-cdc-user-ods
+  subscriptionType: Failover
+  value:
+    format: avro
+    avro-schema-file: avro/user-cdc.avsc
+  startCursor: Latest
+  properties:
+    schema.registry.url: "http://pulsar-broker:8080"
+    schema.registry.namespace: "cdc://"
+
+route:
+  - source-table: user
+    sink-table: ods.ods_user
+
+sink:
+  type: iceberg
+  name: iceberg-user-ods
+  catalog:
+    name: iceberg_jdbc
+    type: jdbc
+    uri: jdbc:postgresql://catalog-pg:5432/iceberg
+    warehouse: s3://edu-iceberg/warehouse
+    driver: org.postgresql.Driver
+  database: ods
+  table: ods_user
+  # C-03: checkpoint commit
+  commit:
+    mode: checkpoint
+  target-file-size: 256MB
+  compression: zstd
+  partition:
+    - days(created_at)
+  properties:
+    format-version: "2"
+    write.format.default: parquet
+    write.parquet.compression-codec: zstd
+
+maintenance:
+  rewrite_data_files:
+    enabled: true
+    target-file-size: 256MB
+  expire_snapshots:
+    enabled: true
+    retain_last: 5
+  remove_orphan_files:
+    enabled: true
+
+flink:
+  parallelism: 8
+  checkpoint:
+    interval: 5min
+    mode: EXACTLY_ONCE
+    state-backend: rocksdb
+    min-pause: 1min
+    timeout: 10min
+    max-concurrent: 1
+    externalized-checkpoint: RETAIN_ON_CANCELLATION
+  restart-strategy:
+    type: exponential-delay
+    initial-backoff: 10s
+    max-backoff: 5min
+    backoff-multiplier: 2.0

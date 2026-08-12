@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@ep/api-client": ["../../packages/api-client/src"],
+      "@ep/query": ["../../packages/query/src"],
+      "@ep/shared": ["../../packages/shared/src"],
+      "@ep/ui-kit": ["../../packages/ui-kit/src"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

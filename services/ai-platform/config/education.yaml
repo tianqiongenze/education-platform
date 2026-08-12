@@ -1,0 +1,50 @@
+domain_name: education
+system_prompt: "You are EP education assistant."
+agent_graphs:
+  - name: grading_agent
+    module: ai_agent.graphs.grading_agent
+    builder: build_grading_subgraph
+  - name: quiz_agent
+    module: ai_agent.graphs.quiz_agent
+    builder: build_quiz_subgraph
+  - name: learnpath_agent
+    module: ai_agent.graphs.learnpath_agent
+    builder: build_learnpath_subgraph
+  - name: digital_human
+    module: ai_agent.graphs.digital_human
+    builder: build_digital_subgraph
+  - name: debate
+    module: ai_agent.graphs.debate
+    builder: build_debate_subgraph
+tool_catalog:
+  - name: rag_search
+    server: sp04-rag
+    description: Search the RAG knowledge base
+  - name: grade_submission
+    server: sp04-grading
+    description: Grade a student submission
+  - name: generate_quiz
+    server: sp04-quiz
+    description: Generate a quiz from course material
+  - name: memory_search
+    server: sp04-memory
+    description: Search long-term memory
+  - name: memory_add
+    server: sp04-memory
+    description: Add to long-term memory
+  - name: create_learnpath
+    server: sp04-learnpath
+    description: Create a personalized learning path
+intent_keywords:
+  grading_agent: [grade, grading, 批改, 评分, rubric, score essay]
+  quiz_agent: [quiz, 出题, 题目, generate question, mcq, irt]
+  learnpath_agent: [learning path, 学习路径, study plan, personalized path, 学习计划]
+  digital_human: [digital human, 数字人, avatar, tts, lip sync]
+  debate: [debate, 辩论, 正方, 反方, adversarial]
+event_routes:
+  SUBMISSION_CREATED: [grading-agent]
+  GRADING_COMPLETED: [learnpath-agent, notification-agent]
+  QUIZ_GENERATED: [notification-agent]
+  LEARNPATH_UPDATED: [notification-agent]
+  SESSION_ENDED: [analytics-agent]
+  TASK_STATUS_CHANGED: [orchestrator-agent]

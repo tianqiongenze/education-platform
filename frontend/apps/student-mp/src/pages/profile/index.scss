@@ -1,0 +1,109 @@
+.profile {
+  &__header {
+    display: flex;
+    align-items: center;
+    padding: 40px 24px;
+    background: linear-gradient(135deg, #1890ff, #36cfc9);
+  }
+
+  &__avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.6);
+  }
+
+  &__user {
+    margin-left: 24px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__nickname {
+    font-size: 36px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  &__role {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 8px;
+    align-self: flex-start;
+    padding: 2px 16px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 12px;
+  }
+
+  &__stats {
+    display: flex;
+    background: #fff;
+    margin: 24px;
+    border-radius: 16px;
+    padding: 24px 0;
+  }
+
+  &__stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    &-num {
+      font-size: 40px;
+      font-weight: 600;
+      color: #1890ff;
+    }
+
+    &-label {
+      font-size: 24px;
+      color: #8c8c8c;
+      margin-top: 8px;
+    }
+  }
+
+  &__menu {
+    background: #fff;
+    margin: 0 24px;
+    border-radius: 16px;
+    overflow: hidden;
+
+    &-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 24px;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &--danger {
+        .profile__menu-label {
+          color: #ff4d4f;
+        }
+      }
+    }
+
+    &-label {
+      font-size: 28px;
+      color: #262626;
+    }
+
+    &-arrow {
+      font-size: 32px;
+      color: #bfbfbf;
+    }
+  }
+
+  &__login-btn {
+    margin: 24px;
+    padding: 24px;
+    text-align: center;
+    background: #1890ff;
+    color: #fff;
+    border-radius: 16px;
+    font-size: 28px;
+  }
+}

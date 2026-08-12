@@ -1,0 +1,329 @@
+{
+  "_meta": {
+    "description": "共享测试夹具数据 (unit/integration test fixtures). 供 Java/Go/Python/前端测试引用, 保证跨服务测试数据一致。",
+    "version": "1.0.0",
+    "generated_by": "scripts/seed-test-fixtures.json (D-113)",
+    "idempotency_note": "所有 idempotencyKey / token 均为确定性值, 多次运行结果一致, 不会与 seed-loadtest-data.py 的种子行冲突 (后者用 uuid4 + 全局偏移)。",
+    "tenant_id": "default",
+    "conventions": {
+      "student_ids": "9001-9010",
+      "teacher_ids": "9501-9510",
+      "admin_ids": "8001-8010",
+      "course_ids": "1001-1010",
+      "assignment_ids": "5001-5010",
+      "submission_ids": "6001-6010",
+      "order_ids": "7001-7010",
+      "payment_ids": "7101-7110",
+      "refund_ids": "7201-7210"
+    }
+  },
+
+  "users": {
+    "student": {
+      "id": 9001,
+      "userId": "9001",
+      "username": "test_student",
+      "email": "test_student@ep.local",
+      "phone": "13900009001",
+      "role": "student",
+      "tenantId": "default",
+      "status": 1,
+      "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MDAxIiwiZW1haWwiOiJ0ZXN0X3N0dWRlbnRAZXAubG9jYWwiLCJuYW1lIjoidGVzdF9zdHVkZW50Iiwicm9sZSI6InN0dWRlbnQiLCJpYXQiOjE3NjUwMDAwMDAsImV4cCI6OTk5OTk5OTk5OX0.fixture-student-token-not-verifiable"
+    },
+    "teacher": {
+      "id": 9501,
+      "userId": "9501",
+      "username": "test_teacher",
+      "email": "test_teacher@ep.local",
+      "phone": "13900009501",
+      "role": "teacher",
+      "tenantId": "default",
+      "status": 1,
+      "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5NTAxIiwiZW1haWwiOiJ0ZXN0X3RlYWNoZXJAZXAubG9jYWwiLCJuYW1lIjoidGVzdF90ZWFjaGVyIiwicm9sZSI6InRlYWNoZXIiLCJpYXQiOjE3NjUwMDAwMDAsImV4cCI6OTk5OTk5OTk5OX0.fixture-teacher-token-not-verifiable"
+    },
+    "admin": {
+      "id": 8001,
+      "userId": "8001",
+      "username": "test_admin",
+      "email": "test_admin@ep.local",
+      "phone": "13900008001",
+      "role": "admin",
+      "tenantId": "default",
+      "status": 1,
+      "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4MDAxIiwiZW1haWwiOiJ0ZXN0X2FkbWluQGVwLmxvY2FsIiwibmFtZSI6InRlc3RfYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NjUwMDAwMDAsImV4cCI6OTk5OTk5OTk5OX0.fixture-admin-token-not-verifiable"
+    },
+    "guest": {
+      "id": 0,
+      "userId": "0",
+      "username": "guest",
+      "email": "guest@ep.local",
+      "role": "guest",
+      "tenantId": "default",
+      "status": 0,
+      "token": null
+    }
+  },
+
+  "courses": [
+    {"id": 1001, "title": "Java基础", "subject": "Java基础", "teacherId": 9501, "category": 1, "difficulty": 1, "price": 99.00, "status": 1, "studentCount": 1200},
+    {"id": 1002, "title": "数据结构", "subject": "数据结构", "teacherId": 9502, "category": 1, "difficulty": 2, "price": 129.00, "status": 1, "studentCount": 980},
+    {"id": 1003, "title": "操作系统", "subject": "操作系统", "teacherId": 9503, "category": 2, "difficulty": 3, "price": 199.00, "status": 1, "studentCount": 450},
+    {"id": 1004, "title": "计算机网络", "subject": "计算机网络", "teacherId": 9504, "category": 2, "difficulty": 2, "price": 149.00, "status": 1, "studentCount": 720},
+    {"id": 1005, "title": "数据库原理", "subject": "数据库原理", "teacherId": 9505, "category": 3, "difficulty": 2, "price": 179.00, "status": 1, "studentCount": 1500},
+    {"id": 1006, "title": "分布式系统", "subject": "分布式系统", "teacherId": 9506, "category": 4, "difficulty": 3, "price": 299.00, "status": 1, "studentCount": 320},
+    {"id": 1007, "title": "机器学习", "subject": "机器学习", "teacherId": 9507, "category": 5, "difficulty": 3, "price": 399.00, "status": 1, "studentCount": 880},
+    {"id": 1008, "title": "深度学习", "subject": "深度学习", "teacherId": 9508, "category": 5, "difficulty": 3, "price": 499.00, "status": 1, "studentCount": 610},
+    {"id": 1009, "title": "算法面试", "subject": "算法面试", "teacherId": 9509, "category": 1, "difficulty": 2, "price": 89.00, "status": 1, "studentCount": 2300},
+    {"id": 1010, "title": "系统设计", "subject": "系统设计", "teacherId": 9510, "category": 4, "difficulty": 3, "price": 349.00, "status": 1, "studentCount": 540}
+  ],
+
+  "orders": {
+    "pending": {
+      "id": 7001,
+      "orderId": "7001",
+      "userId": "9001",
+      "courseId": 1001,
+      "amount": 99.00,
+      "status": 0,
+      "statusLabel": "PENDING",
+      "payMethod": null,
+      "idempotencyKey": "fix-order-pending-9001-1001-7001",
+      "tenantId": "default",
+      "productType": "COURSE"
+    },
+    "paid": {
+      "id": 7002,
+      "orderId": "7002",
+      "userId": "9002",
+      "courseId": 1002,
+      "amount": 129.00,
+      "status": 1,
+      "statusLabel": "PAID",
+      "payMethod": "ALIPAY",
+      "idempotencyKey": "fix-order-paid-9002-1002-7002",
+      "tenantId": "default",
+      "productType": "COURSE"
+    },
+    "refunded": {
+      "id": 7003,
+      "orderId": "7003",
+      "userId": "9003",
+      "courseId": 1003,
+      "amount": 199.00,
+      "status": 2,
+      "statusLabel": "REFUNDED",
+      "payMethod": "WECHAT",
+      "idempotencyKey": "fix-order-refunded-9003-1003-7003",
+      "tenantId": "default",
+      "productType": "COURSE"
+    },
+    "cancelled": {
+      "id": 7004,
+      "orderId": "7004",
+      "userId": "9004",
+      "courseId": 1004,
+      "amount": 149.00,
+      "status": 3,
+      "statusLabel": "CANCELLED",
+      "payMethod": null,
+      "idempotencyKey": "fix-order-cancelled-9004-1004-7004",
+      "tenantId": "default",
+      "productType": "COURSE"
+    },
+    "idempotency_dup": {
+      "_comment": "用于幂等性去重测试: 同一 idempotencyKey 第二次提交应返回首次结果, 不产生副作用",
+      "id": 7005,
+      "orderId": "7005",
+      "userId": "9005",
+      "courseId": 1005,
+      "amount": 179.00,
+      "status": 1,
+      "statusLabel": "PAID",
+      "payMethod": "ALIPAY",
+      "idempotencyKey": "fix-order-idempotency-dup-9005-1005-7005",
+      "tenantId": "default",
+      "productType": "COURSE"
+    }
+  },
+
+  "payments": {
+    "success": {
+      "id": 7101,
+      "paymentId": "7101",
+      "orderId": "7002",
+      "tenantId": "default",
+      "channel": "ALIPAY",
+      "amount": 129.00,
+      "currency": "CNY",
+      "channelTxId": "fix-pay-7101-ALIPAY",
+      "status": 1,
+      "statusLabel": "SUCCESS"
+    },
+    "pending": {
+      "id": 7102,
+      "paymentId": "7102",
+      "orderId": "7001",
+      "tenantId": "default",
+      "channel": "WECHAT",
+      "amount": 99.00,
+      "currency": "CNY",
+      "channelTxId": null,
+      "status": 0,
+      "statusLabel": "PENDING"
+    },
+    "failed": {
+      "id": 7103,
+      "paymentId": "7103",
+      "orderId": "7004",
+      "tenantId": "default",
+      "channel": "MOCK",
+      "amount": 149.00,
+      "currency": "CNY",
+      "channelTxId": "fix-pay-7103-MOCK-FAIL",
+      "status": 2,
+      "statusLabel": "FAILED"
+    },
+    "refunded": {
+      "id": 7104,
+      "paymentId": "7104",
+      "orderId": "7003",
+      "tenantId": "default",
+      "channel": "WECHAT",
+      "amount": 199.00,
+      "currency": "CNY",
+      "channelTxId": "fix-pay-7104-WECHAT",
+      "status": 3,
+      "statusLabel": "REFUNDED"
+    }
+  },
+
+  "refunds": {
+    "success": {
+      "id": 7201,
+      "refundId": "7201",
+      "orderId": "7003",
+      "paymentId": "7104",
+      "tenantId": "default",
+      "amount": 199.00,
+      "reason": "用户申请退款",
+      "status": 1,
+      "statusLabel": "SUCCESS"
+    },
+    "pending": {
+      "id": 7202,
+      "refundId": "7202",
+      "orderId": "7002",
+      "paymentId": "7101",
+      "tenantId": "default",
+      "amount": 50.00,
+      "reason": "活动优惠差额",
+      "status": 0,
+      "statusLabel": "PENDING"
+    }
+  },
+
+  "assignments": [
+    {
+      "id": 5001,
+      "title": "Java基础 - 作业1: 变量与类型",
+      "description": "练习 Java 基本数据类型与变量声明。",
+      "courseId": 1001,
+      "teacherId": 9501,
+      "maxScore": 100,
+      "deadline": "2026-12-31T23:59:59",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 5002,
+      "title": "数据结构 - 作业1: 链表实现",
+      "description": "手写单向链表并实现增删查改。",
+      "courseId": 1002,
+      "teacherId": 9502,
+      "maxScore": 100,
+      "deadline": "2026-12-31T23:59:59",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 5003,
+      "title": "操作系统 - 作业1: 进程调度",
+      "description": "实现一个简单的进程调度模拟器。",
+      "courseId": 1003,
+      "teacherId": 9503,
+      "maxScore": 100,
+      "deadline": "2026-12-31T23:59:59",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 5004,
+      "title": "机器学习 - 作业1: 线性回归",
+      "description": "用梯度下降实现线性回归。",
+      "courseId": 1007,
+      "teacherId": 9507,
+      "maxScore": 100,
+      "deadline": "2026-12-31T23:59:59",
+      "status": "PUBLISHED"
+    }
+  ],
+
+  "submissions": [
+    {
+      "id": 6001,
+      "submissionId": "6001",
+      "assignmentId": 5001,
+      "studentId": "9001",
+      "userId": "9001",
+      "content": "public class Main { public static void main(String[] args) { int a = 1; } }",
+      "status": "GRADED",
+      "score": 90,
+      "feedback": "答案正确, 代码规范。",
+      "idempotencyKey": "fix-submission-6001-9001-5001",
+      "submittedAt": "2026-08-01T10:00:00",
+      "gradedAt": "2026-08-01T10:30:00"
+    },
+    {
+      "id": 6002,
+      "submissionId": "6002",
+      "assignmentId": 5002,
+      "studentId": "9002",
+      "userId": "9002",
+      "content": "class Node { int val; Node next; }",
+      "status": "SUBMITTED",
+      "score": null,
+      "feedback": null,
+      "idempotencyKey": "fix-submission-6002-9002-5002",
+      "submittedAt": "2026-08-02T14:00:00",
+      "gradedAt": null
+    },
+    {
+      "id": 6003,
+      "submissionId": "6003",
+      "assignmentId": 5001,
+      "studentId": "9003",
+      "userId": "9003",
+      "content": "// 查重测试样本 (与 6001 高度相似)",
+      "status": "SUBMITTED",
+      "score": null,
+      "feedback": null,
+      "idempotencyKey": "fix-submission-6003-9003-5001",
+      "submittedAt": "2026-08-03T09:00:00",
+      "gradedAt": null
+    }
+  ],
+
+  "search": {
+    "hot_terms": [
+      {"term": "Java", "searchCount": 980000},
+      {"term": "Spring Boot", "searchCount": 720000},
+      {"term": "机器学习", "searchCount": 650000},
+      {"term": "Redis", "searchCount": 540000},
+      {"term": "面试", "searchCount": 510000}
+    ]
+  },
+
+  "redis_keys": {
+    "_comment": "压测用 Redis key 模板 (lt: 前缀, 见 scripts/seed-cache-data.py)",
+    "course": "lt:course:{courseId}",
+    "search_hot": "lt:search:hot",
+    "user_session": "lt:user:session:{userId}"
+  }
+}

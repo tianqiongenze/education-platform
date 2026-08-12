@@ -217,3 +217,95 @@
 ---
 
 （全文完，共约 230 行有效内容）
+
+---
+
+## D-046: 智能体架构需求
+
+### 功能需求
+
+| 编号 | 需求 | 描述 | 验收标准 |
+|------|------|------|---------|
+| FR-AGT-01 | MCP 协议支持 | 平台支持 Model Context Protocol 接入外部工具/资源/Prompts，支持 stdio 与 Streamable HTTP 双传输，注册表 Redis 优先 YAML 兜底 | 可注册/注销/列举 MCP Server；可经 MCPClient 调用 Tools/Resources/Prompts |
+| FR-AGT-02 | A2A 协议支持 | 支持 Agent-to-Agent Protocol，AgentCard 发布于 `/.well-known/agent.json`，Task 生命周期 6 态，JSON-RPC over HTTPS + SSE | Task 可在 submitted→working→input-required→completed 间正确流转；SSE 可订阅进度 |
+| FR-AGT-03 | 分层多智能体图 | Supervisor + 5 业务 Agent（QA/Grading/Quiz/LearnPath/DigitalHuman）+ Debate 子图，子图作为节点嵌入父图，RedisSaver checkpointer | Supervisor 路由准确率 ≥90%；`_round_done` 保证图必然终止 |
+| FR-AGT-04 | Reflexion 自反思 | 每个业务子图内置 evaluate→reflect→retry 循环，max_trials=3，阈值 0.7，episodic memory Redis TTL 30d | 反思后输出质量提升；达 max_trials 必然终止并返回 grounded answer |
+| FR-AGT-05 | Harness 执行护栏 | AgentExecutor 超时 120s / 深度 50 / 试验 3；SandboxedToolNode 权限+注入清洗+预算+截断+审计；AuditLogger Redis Stream→Iceberg | 超限请求被拒绝；所有工具调用留审计记录；预算超额拒绝执行 |
+| FR-AGT-06 | Hermes 事件编排 | EventBus 统一 pub/sub，Pulsar 3 重试 + DLQ，`PULSAR_ENABLED=false` 降级 InMemoryBus；EventRouter 规则 + Redis 热更 | 事件链 submission.created→grading.completed→quiz.generated→learnpath.updated 可端到端触发 |
+| FR-AGT-07 | 插件系统 | PluginManifest 声明式注册，6 类 PluginPermission，tenant_whitelist 隔离，PluginSandbox 强制校验，向量检索发现 | 非白名单租户调用被拒；权限不足调用被拒；manifest 校验失败拒绝注册 |
+| FR-AGT-08 | HITL 人工审核 | Grading/Quiz/LearnPath 子图设置 `interrupt_before` 暂停于 teacher_review/teacher_audit/review 节点，A2A Task 进入 input-required | 暂停后状态持久化；教师审核后可 resume；超时自动 reject |
+| FR-AGT-09 | 多租户隔离 | 所有子系统（MCP/A2A/Harness/Hermes/Plugin/Memory）按 tenant_id 隔离，Redis 键含 `{tenant}` 段 | 跨租户访问被拒；租户间数据零泄漏 |
+| FR-AGT-10 | 降级容错 | Redis 不可用→YAML 兜底（MCP/Plugin 注册表）；Pulsar 不可用→InMemoryBus 降级（Hermes）；RedisSaver 不可用→MemorySaver 兜底 | 故障注入下核心读路径不中断；降级触发告警 |
+
+### 非功能需求
+
+| 编号 | 需求 | 指标 |
+|------|------|------|
+| NFR-AGT-1 | 性能 | Agent 执行 P95 < 3s（不含 HITL 等待） |
+| NFR-AGT-2 | 可用性 | 智能体层 99.9%，降级路径不丢事件 |
+| NFR-AGT-3 | 安全 | 所有工具调用审计留痕；插件沙箱零逃逸 |
+| NFR-AGT-4 | 可观测 | AuditLogger 端到端延迟 < 5s 落 Iceberg |
+
+### 追溯矩阵
+
+| 需求 | ADR | 测试项 | 部署项 |
+|------|-----|--------|--------|
+| FR-AGT-01 | ADR-A07 | MCP 注册/传输测试 | MCP_ENABLED 环境变量 |
+| FR-AGT-02 | ADR-A08 | A2A Task 生命周期测试 | A2A_ENABLED |
+| FR-AGT-03 | ADR-A09 | Supervisor 路由 + _round_done 测试 | REDIS_CHECKPOINTER_URL |
+| FR-AGT-04 | ADR-A10 | Reflexion 收敛测试 | REFLEXION_MAX_TRIALS / THRESHOLD |
+| FR-AGT-05 | ADR-A11 | Harness 限额 + 沙箱拒绝测试 | AUDIT_REDIS_STREAM |
+| FR-AGT-06 | ADR-A12 | Hermes pub/sub + 降级测试 | PULSAR_ENABLED / HERMES_ENABLED |
+| FR-AGT-07 | ADR-A13 | 插件 manifest + 白名单测试 | — |
+| FR-AGT-08 | ADR-A09 | interrupt_before HITL 测试 | — |
+| FR-AGT-09 | — | 多租户隔离渗透测试 | — |
+| FR-AGT-10 | — | 降级容错故障注入测试 | — |
+
+---
+
+（D-046 章节完）
+
+---
+
+## §ep-memory 记忆需求 (D-045, FR-MEM-01..08)
+
+> 关联：ADR-A05（L0~L3 四级架构）；ADR-A06（Mem0 集成）。
+
+### 功能需求
+
+| 编号 | 需求 | 描述 | 验收标准 |
+|------|------|------|---------|
+| FR-MEM-01 | L0 即时记忆 | Redis Cluster 存储当前会话最近 10 轮对话，key=`mem:imm:{tenant}:{user}:{session}`，TTL 24h，LPUSH+LTRIM 维持窗口 | 第 11 轮写入后 L0 仅保留最近 10 轮；24h 无更新自动淘汰；recall 优先返回 L0 |
+| FR-MEM-02 | L1 工作记忆 | Redis Cluster 存储会话摘要 + 任务上下文，key=`mem:work:{tenant}:{user}`，TTL 7d；摘要经 Reflexion 评估阈值 0.7 | 会话切换时生成摘要写入 L1；7d 到期降级到 L2 后删除；L1 命中时 recall 含摘要 |
+| FR-MEM-03 | L2 情景记忆 | Milvus collection `mem_episodic`（dim=1536, partition_key=tenant_id）存储用户对话片段向量化，Mem0 pipeline 提取，向量相似度 top-k 召回 | Mem0 client.add 写入成功；search 返回 top-k 相似片段；partition_key 隔离租户 |
+| FR-MEM-04 | L2 语义记忆 | TiDB 表 `mem_semantic` 存储结构化事实（偏好/属性/已确认信息），含 confidence/status 字段，SQL 精确查询 | 事实提取写入成功；新旧冲突时旧值标记 superseded；status 30d→decayed/90d→archived |
+| FR-MEM-05 | L2 程序记忆 | Neo4j 图 `mem_procedural` 存储实体-关系图谱（User/Course/Skill/Goal），Cypher 图遍历召回 | 实体关系正确抽取写入；图遍历返回关联实体；边权重 30d×0.5/90d 归档 |
+| FR-MEM-06 | L3 组织记忆 | Milvus `mem_org` + Neo4j `mem_org_graph` 存储租户级共享知识，跨用户共享需显式授权，永不自动过期 | promote_to_org 需双人审核 + 审计；授权用户 recall 含 L3；未授权用户 L3 不可见 |
+| FR-MEM-07 | 遗忘机制 | L0 TTL 24h；L1 7d 降级 L2；L2 30d 降权（score×0.5）/ 90d 归档（冷存）；L3 仅手动 | CronJob 每日扫描执行降级/降权/归档；归档项召回被 filter 排除 |
+| FR-MEM-08 | 记忆 API | Python SDK（MemoryManager）+ Java SDK（gRPC stub→Dubbo 服务），暴露 remember/recall/forget/promote_to_org；REST 网关 `POST /v1/memory/*` | Python SDK 可直接调用；Java SDK 经 gRPC 调通；REST 端点鉴权 + 租户隔离 |
+
+### 非功能需求
+
+| 编号 | 需求 | 指标 |
+|------|------|------|
+| NFR-MEM-1 | 性能 | recall P95 < 200ms（L0/L1 命中）/ < 500ms（L2 三路 RRF） |
+| NFR-MEM-2 | 可用性 | ep-memory 服务 99.9%；Redis 故障 L0/L1 降级 MemorySaver |
+| NFR-MEM-3 | 安全 | L3 跨用户访问需显式授权；所有记忆操作审计落 Iceberg |
+| NFR-MEM-4 | 扩展性 | L2 无状态可水平扩展；支撑 3 亿用户 / 千级租户 |
+
+### 追溯矩阵
+
+| 需求 | ADR | 测试项 | 部署项 |
+|------|-----|--------|--------|
+| FR-MEM-01 | ADR-A05 | L0 窗口管理测试 | REDIS_CLUSTER_URL |
+| FR-MEM-02 | ADR-A05 | L1 摘要 + 降级测试 | — |
+| FR-MEM-03 | ADR-A05/A06 | L2 Mem0 提取 + 向量检索测试 | MILVUS_COLLECTION_MEM |
+| FR-MEM-04 | ADR-A05 | L2 语义事实冲突消解测试 | TIDB_DSN |
+| FR-MEM-05 | ADR-A05/A06 | L2 程序图谱测试 | NEO4J_GRAPH_MEM |
+| FR-MEM-06 | ADR-A05 | L3 共享 + 权限测试 | — |
+| FR-MEM-07 | ADR-A05 | 遗忘机制 CronJob 测试 | MEM0_CONFIG_PATH |
+| FR-MEM-08 | ADR-A06 | API + Java SDK gRPC 测试 | EP_MEMORY_GRPC_PORT |
+
+---
+
+（D-045 章节完）

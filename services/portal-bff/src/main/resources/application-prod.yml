@@ -1,0 +1,14 @@
+# D-069: Production profile — all secrets from env vars. NEVER commit real credentials.
+spring:
+  aot:
+    enabled: true
+
+dubbo:
+  registry:
+    address: nacos://${NACOS_ADDR}
+
+logging:
+  level:
+    com.ep: INFO
+    root: WARN
+    # ADR-T14 ⑤: OTel tail-sampling 在 Collector 层配置, 应用层只发全量

@@ -1,0 +1,372 @@
+# =============================================================================
+# docker-compose-test.yml
+# =============================================================================
+# One-command integration-test environment for the education platform.
+#
+# All services run with the Spring `dev-local` profile which uses H2 in-memory
+# databases — NO external TiDB / Redis / Pulsar required, safe to run on a
+# laptop without touching the shared K8s cluster.
+#
+# Usage:
+#   cd deploy/test
+#   docker compose -f docker-compose-test.yml up --build
+#   # run tests / smoke checks against the mapped ports
+#   docker compose -f docker-compose-test.yml down -v
+#
+# Service-to-service HTTP calls use the container DNS names (e.g. portal-bff),
+# host port mappings are for local tooling / curl access only.
+#
+# Port assignments come from each service's application.yml:
+#   portal-bff              8090
+#   core-business           8083
+#   order-platform          8084
+#   payment-platform        8087
+#   grading-service         8085
+#   data-platform           8082
+#   ai-platform (granian)   8086
+#   ws-gateway              8081  (PORT env; default 8080 overridden here)
+#   knowledge-bff           8070
+#   knowledge-service       8071
+#   retrieval-service       8072
+#   agent-service           8073
+#   tenant-service          8074
+#   mcp-server              8090 (container) -> 8091 (host; avoids clash with portal-bff)
+#
+# NOTE on 8090 clash: portal-bff and mcp-server both default to 8090 in their
+# application.yml. Inside the compose network that is fine (separate containers),
+# but for host access we remap mcp-server to 8091.
+# =============================================================================
+
+name: ep-test
+
+# Common build context is the repo root so every service can resolve its module
+# path under services/<svc>. Set REPO_ROOT explicitly when invoking from elsewhere:
+#   REPO_ROOT=/path/to/education-platform docker compose -f docker-compose-test.yml up
+x-repo-root: &repo-root ${REPO_ROOT:-../..}
+
+x-java-env: &java-env
+  SPRING_PROFILES_ACTIVE: dev-local
+  # H2 in-memory — no external DB. Each service gets its own DB name within the
+  # shared in-process H2 instance so cross-service interference is impossible.
+  SPRING_DATASOURCE_URL: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+  SPRING_DATASOURCE_USERNAME: sa
+  SPRING_DATASOURCE_PASSWORD: ""
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.H2Dialect
+  # Disable real Redis/Pulsar clients in dev-local profile
+  EP_CACHE_TYPE: none
+  EP_MQ_TYPE: none
+  TZ: Asia/Shanghai
+
+# -----------------------------------------------------------------------------
+# Services
+# -----------------------------------------------------------------------------
+services:
+
+  # ---- Gateway (Go) ---------------------------------------------------------
+  ws-gateway:
+    image: ghcr.io/education-platform/ws-gateway:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/ws-gateway/Dockerfile
+    environment:
+      PORT: "8081"
+      BFF_URL: "http://portal-bff:8090"
+      BUSINESS_URL: "http://core-business:8083"
+      ITBACKEND_URL: "http://grading-service:8085"
+      AIGW_URL: "http://ai-platform:8086"
+      LOG_LEVEL: info
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [ep-net]
+
+  # ---- BFF (Java) -----------------------------------------------------------
+  portal-bff:
+    image: ghcr.io/education-platform/portal-bff:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/portal-bff/Dockerfile
+    environment:
+      <<: *java-env
+      BUSINESS_SERVICE_URL: http://core-business:8083
+      ORDER_SERVICE_URL: http://order-platform:8084
+      PAYMENT_SERVICE_URL: http://payment-platform:8087
+      ITBACKEND_SERVICE_URL: http://grading-service:8085
+      AIGW_SERVICE_URL: http://ai-platform:8086
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 40s
+    depends_on:
+      core-business:
+        condition: service_healthy
+      order-platform:
+        condition: service_healthy
+      payment-platform:
+        condition: service_healthy
+      grading-service:
+        condition: service_healthy
+    networks: [ep-net]
+
+  # ---- Data Platform --------------------------------------------------------
+  data-platform:
+    image: ghcr.io/education-platform/data-platform:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/data-platform/Dockerfile
+    environment: *java-env
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  # ---- Core Business --------------------------------------------------------
+  core-business:
+    image: ghcr.io/education-platform/core-business:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/core-business/Dockerfile
+    environment:
+      <<: *java-env
+      DATA_SERVICE_URL: http://data-platform:8082
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      data-platform:
+        condition: service_healthy
+    networks: [ep-net]
+
+  # ---- Order ----------------------------------------------------------------
+  order-platform:
+    image: ghcr.io/education-platform/order-platform:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/order-platform/Dockerfile
+    environment:
+      <<: *java-env
+      PAYMENT_SERVICE_URL: http://payment-platform:8087
+      BUSINESS_SERVICE_URL: http://core-business:8083
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8084/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      core-business:
+        condition: service_healthy
+    networks: [ep-net]
+
+  # ---- Payment --------------------------------------------------------------
+  payment-platform:
+    image: ghcr.io/education-platform/payment-platform:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/payment-platform/Dockerfile
+    environment: *java-env
+    ports:
+      - "8087:8087"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8087/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  # ---- AI Gateway (Python / granian) ----------------------------------------
+  ai-platform:
+    image: ghcr.io/education-platform/ai-platform:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/ai-platform/Dockerfile
+    environment:
+      APP_ENV: test
+      EP_BUSINESS_URL: http://core-business:8083
+      EP_ITBACKEND_URL: http://grading-service:8085
+      EP_CACHE_TYPE: none
+      EP_MQ_TYPE: none
+      TZ: Asia/Shanghai
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8086/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      core-business:
+        condition: service_healthy
+      grading-service:
+        condition: service_healthy
+    networks: [ep-net]
+
+  # ---- Grading Service ------------------------------------------------------
+  grading-service:
+    image: ghcr.io/education-platform/grading-service:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/grading-service/Dockerfile
+    environment:
+      <<: *java-env
+      AIGW_SERVICE_URL: http://ai-platform:8086
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8085/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  # ===========================================================================
+  # Knowledge Platform services (ports 8070-8074 + mcp-server 8091)
+  # ===========================================================================
+
+  knowledge-bff:
+    image: ghcr.io/education-platform/knowledge-bff:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/knowledge-bff/Dockerfile
+    environment:
+      <<: *java-env
+      KNOWLEDGE_SERVICE_URL: http://knowledge-service:8071
+      RETRIEVAL_SERVICE_URL: http://retrieval-service:8072
+      AGENT_SERVICE_URL: http://agent-service:8073
+      TENANT_SERVICE_URL: http://tenant-service:8074
+    ports:
+      - "8070:8070"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8070/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      knowledge-service:
+        condition: service_healthy
+      retrieval-service:
+        condition: service_healthy
+      agent-service:
+        condition: service_healthy
+      tenant-service:
+        condition: service_healthy
+    networks: [ep-net]
+
+  knowledge-service:
+    image: ghcr.io/education-platform/knowledge-service:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/knowledge-service/Dockerfile
+    environment: *java-env
+    ports:
+      - "8071:8071"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8071/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  retrieval-service:
+    image: ghcr.io/education-platform/retrieval-service:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/retrieval-service/Dockerfile
+    environment: *java-env
+    ports:
+      - "8072:8072"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8072/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  agent-service:
+    image: ghcr.io/education-platform/agent-service:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/agent-service/Dockerfile
+    environment: *java-env
+    ports:
+      - "8073:8073"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8073/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  tenant-service:
+    image: ghcr.io/education-platform/tenant-service:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/tenant-service/Dockerfile
+    environment: *java-env
+    ports:
+      - "8074:8074"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8074/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [ep-net]
+
+  mcp-server:
+    image: ghcr.io/education-platform/mcp-server:dev-local
+    build:
+      context: *repo-root
+      dockerfile: services/knowledge-platform/mcp-server/Dockerfile
+    environment: *java-env
+    # Container listens on 8090 (its application.yml default); we map host 8091
+    # to avoid clashing with portal-bff's host port 8090.
+    ports:
+      - "8091:8090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      knowledge-service:
+        condition: service_healthy
+    networks: [ep-net]
+
+# -----------------------------------------------------------------------------
+# Network
+# -----------------------------------------------------------------------------
+networks:
+  ep-net:
+    driver: bridge
+    name: ep-test-net

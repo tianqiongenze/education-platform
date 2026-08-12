@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: senior-care
+  labels:
+    app: senior-care
+    app.kubernetes.io/name: senior-care
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: education-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: senior-care
+  template:
+    metadata:
+      labels:
+        app: senior-care
+        app.kubernetes.io/name: senior-care
+        app.kubernetes.io/component: backend
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: senior-care
+      containers:
+        - name: senior-care
+          image: registry.local:5000/ep/senior-care:latest
+          ports:
+            - name: http
+              containerPort: 8088
+            - name: dubbo
+              containerPort: 20888
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: ELDAR_WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8088
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8088
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: senior-care
+  labels:
+    app: senior-care
+    app.kubernetes.io/name: senior-care
+    app.kubernetes.io/part-of: education-platform
+spec:
+  selector:
+    app: senior-care
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8088
+    - name: dubbo
+      port: 20888
+      targetPort: 20888
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: senior-care
+  labels:
+    app: senior-care
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: senior-care
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s

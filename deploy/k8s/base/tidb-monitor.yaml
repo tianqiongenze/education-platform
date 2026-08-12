@@ -1,0 +1,86 @@
+# TidbMonitor — TiDB 集群可观测性 (Prometheus + Grafana)
+#
+# 提供 PD/TiKV/TiDB/TiFlash 全组件指标采集，对接现有 otel-collector 体系。
+# Grafana 内置 TiDB 官方 Dashboard (Overview / Performance / Disk I/O)。
+# 数据保留 15 天，足以覆盖一次月度扩缩容复盘窗口。
+---
+apiVersion: pingcap.com/v1alpha1
+kind: TidbMonitor
+metadata:
+  name: education-tidb-monitor
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: education-tidb-monitor
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    education.io/design-decisions: "D-035,D-079"
+spec:
+  # 关联到 tidb-cluster.yaml 定义的集群
+  clusters:
+    - name: education-tidb
+
+  # Prometheus 采集与告警
+  prometheus:
+    base: true
+    # 15 天保留: 覆盖扩缩容前后对比窗口
+    reserveDays: 15
+    config:
+      global:
+        scrape_interval: 30s
+        evaluation_interval: 30s
+        external_labels:
+          cluster: education-tidb
+          cell: cell-hz
+      # 告警规则 — 对应 runbook §10
+      rule_files:
+        - /etc/prometheus/rules/tidb-alerts.yml
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "2Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+    storageClassName: local-path
+    storage: "50Gi"
+
+  # Grafana 可视化
+  grafana:
+    base: true
+    # TiDB 官方 Dashboard 随镜像预置
+    image: grafana/grafana:10.4.2
+    service:
+      type: ClusterIP
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    storageClassName: local-path
+    storage: "10Gi"
+
+  # 初始账号: 生产部署后必须立即通过 Secrets 注入并轮换
+  initializer:
+    image: pingcap/tidb-monitor-initializer:v8.5.5
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  # 重启策略
+  reloader:
+    image: pingcap/tidb-monitor-reloader:v1.5.0
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"

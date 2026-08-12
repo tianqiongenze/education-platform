@@ -116,7 +116,7 @@ tr:hover{background:var(--panel2)}
         <div class="kpi"><div class="label">总吞吐 (ev/s)</div><div class="val">86,420</div><div class="sub up">↑ 12.4% vs 1h前</div></div>
         <div class="kpi"><div class="label">入湖延迟 P95</div><div class="val up">3m18s</div><div class="sub">SLO <5min ✓</div></div>
         <div class="kpi"><div class="label">Checkpoint 失败率</div><div class="val up">0.02%</div><div class="sub">阈值 <1%</div></div>
-        <div class="kpi"><div class="label">Kafka 积压</div><div class="val">1,240</div><div class="sub warn">监控中</div></div>
+        <div class="kpi"><div class="label">Pulsar 积压</div><div class="val">1,240</div><div class="sub warn">监控中</div></div>
       </div>
 
       <div class="panel">
@@ -155,7 +155,7 @@ tr:hover{background:var(--panel2)}
 
     <!-- CDC pipeline 监控 -->
     <div class="section" id="cdc">
-      <div class="topbar"><div><h1>CDC pipeline 监控</h1><div class="meta">TiDB → TiCDC → Kafka → Flink → Iceberg · ADR-D01</div></div>
+      <div class="topbar"><div><h1>CDC pipeline 监控</h1><div class="meta">TiDB → TiCDC → Pulsar → Flink → Iceberg · ADR-D01</div></div>
         <div class="actions"><button class="btn">新建 changefeed</button></div>
       </div>
       <div class="kpi-grid">
@@ -169,7 +169,7 @@ tr:hover{background:var(--panel2)}
         <div class="panel-head"><h2>CDC changefeed 列表</h2></div>
         <div class="panel-body" style="padding:0">
           <table>
-            <thead><tr><th>Changefeed</th><th>源表组</th><th>Kafka topic</th><th>同步延迟</th><th>数据量(今日)</th><th>Schema</th><th>状态</th></tr></thead>
+            <thead><tr><th>Changefeed</th><th>源表组</th><th>Pulsar topic</th><th>同步延迟</th><th>数据量(今日)</th><th>Schema</th><th>状态</th></tr></thead>
             <tbody id="cdcTable"></tbody>
           </table>
         </div>
@@ -332,7 +332,7 @@ tr:hover{background:var(--panel2)}
         <div class="panel-head"><h2>容量水位</h2></div>
         <div class="panel-body">
           <div class="feat-row"><div><div class="feat-name">Flink TM 利用率</div><div class="feat-meta">M1 目标 10,000 ev/s · 当前 86,420 ev/s</div></div><div style="width:200px"><div class="progress"><div style="width:62%"></div></div></div></div>
-          <div class="feat-row"><div><div class="feat-name">Kafka 分区</div><div class="feat-meta">12/48 分区 · 当前吞吐 86k ev/s</div></div><div style="width:200px"><div class="progress"><div style="width:25%"></div></div></div></div>
+          <div class="feat-row"><div><div class="feat-name">Pulsar 分区</div><div class="feat-meta">12/48 分区 · 当前吞吐 86k ev/s</div></div><div style="width:200px"><div class="progress"><div style="width:25%"></div></div></div></div>
           <div class="feat-row"><div><div class="feat-name">Iceberg 存储</div><div class="feat-meta">1.7 PB · bucket 配额 5 PB</div></div><div style="width:200px"><div class="progress"><div style="width:34%"></div></div></div></div>
           <div class="feat-row"><div><div class="feat-name">Trino Worker</div><div class="feat-meta">5 worker · 并发 18/50</div></div><div style="width:200px"><div class="progress"><div style="width:36%"></div></div></div></div>
         </div>
@@ -436,6 +436,78 @@ function bars(id,data,color){
 }
 bars('throughputChart',[42,38,45,52,61,68,74,80,86,82,79,86],'#4f8cff');
 bars('latencyChart',[210,198,225,240,195,188,202,198,178,185,205,198],'#22c55e');
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  /* 搜索过滤栏 */
+  var searchWrap=document.createElement('div');
+  searchWrap.style.cssText='margin:12px 0;display:flex;gap:8px;align-items:center';
+  searchWrap.innerHTML='<input id="dataSearch" placeholder="搜索任务/表名/规则..." style="flex:1;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:13px"><button id="dataSearchBtn" style="padding:8px 16px;background:#238636;border:none;border-radius:6px;color:#fff;cursor:pointer">搜索</button>';
+  var main=document.querySelector('.main')||document.querySelector('main');
+  if(main)main.insertBefore(searchWrap,main.firstChild);
+  function filterTables(){
+    var kw=(document.getElementById('dataSearch').value||'').toLowerCase().trim();
+    document.querySelectorAll('tbody tr').forEach(function(r){
+      r.style.display=(!kw||r.textContent.toLowerCase().indexOf(kw)>=0)?'':'none';
+    });
+  }
+  document.getElementById('dataSearch').addEventListener('input',filterTables);
+  document.getElementById('dataSearchBtn').addEventListener('click',filterTables);
+
+  /* 模态框：任务详情 */
+  var modal=document.createElement('div');
+  modal.id='modal-jobDetail';
+  modal.style.cssText='display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center';
+  modal.innerHTML='<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;width:480px;max-height:80vh;overflow:auto;color:#c9d1d9">'+
+    '<div style="padding:16px 20px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between"><h3 style="color:#f0f6fc">任务详情</h3><span style="cursor:pointer;color:#8b949e" id="jdClose">✕</span></div>'+
+    '<div style="padding:20px"><p>任务名称: <strong id="jd-name">-</strong></p><p>状态: <span id="jd-status">-</span></p><p>延迟: <span id="jd-lat">-</span></p><p>吞吐: <span id="jd-thr">-</span></p></div>'+
+    '<div style="padding:16px 20px;border-top:1px solid #30363d;display:flex;justify-content:flex-end;gap:12px"><button id="jdCloseBtn">关闭</button><button id="jdRestart" style="background:#238636;border:none;border-radius:6px;color:#fff;padding:8px 16px;cursor:pointer">重启任务</button></div></div>';
+  document.body.appendChild(modal);
+  function closeJD(){modal.style.display='none';}
+  document.getElementById('jdClose').onclick=closeJD;
+  document.getElementById('jdCloseBtn').onclick=closeJD;
+  document.getElementById('jdRestart').onclick=function(){
+    var s=document.getElementById('jd-status');
+    s.textContent='重启中';s.style.color='#d29922';
+    setTimeout(function(){s.textContent='运行中';s.style.color='#3fb950';},1500);
+  };
+
+  /* 行点击打开模态框 */
+  document.querySelectorAll('tbody tr').forEach(function(tr){
+    tr.style.cursor='pointer';
+    tr.addEventListener('click',function(){
+      var cells=tr.querySelectorAll('td');
+      var name=cells[0]?cells[0].textContent:'-';
+      var st=cells[cells.length-2]?cells[cells.length-2].textContent:'-';
+      document.getElementById('jd-name').textContent=name;
+      var stEl=document.getElementById('jd-status');
+      stEl.textContent=st;stEl.style.color=st.indexOf('运行')>=0?'#3fb950':'#f85149';
+      document.getElementById('jd-lat').textContent=cells[2]?cells[2].textContent:'-';
+      document.getElementById('jd-thr').textContent=cells[1]?cells[1].textContent:'-';
+      modal.style.display='flex';
+    });
+  });
+
+  /* 5 秒自动刷新 */
+  var thrData=[42,38,45,52,61,68,74,80,86,82,79,86];
+  var latData=[210,198,225,240,195,188,202,198,178,185,205,198];
+  setInterval(function(){
+    thrData=thrData.map(function(v){return Math.max(20,Math.round(v+(Math.random()-0.5)*12));});
+    latData=latData.map(function(v){return Math.max(100,Math.round(v+(Math.random()-0.5)*30));});
+    if(typeof bars==='function'){
+      bars('throughputChart',thrData,'#4f8cff');
+      bars('latencyChart',latData,'#22c55e');
+    }
+    /* 动态状态标签 */
+    document.querySelectorAll('.tag').forEach(function(t){
+      if(Math.random()<0.08){
+        if(t.classList.contains('green')){t.classList.remove('green');t.classList.add('amber');t.textContent='波动';}
+        else if(t.classList.contains('amber')){t.classList.remove('amber');t.classList.add('green');t.textContent='运行中';}
+      }
+    });
+  },5000);
+});
 </script>
 </body>
 </html>

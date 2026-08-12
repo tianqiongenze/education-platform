@@ -1,0 +1,106 @@
+# D-114: ArgoCD ApplicationSet — application services
+#
+# One Application per microservice so each can be rolled back / promoted
+# independently. Each Application points at deploy/k8s/base and uses a
+# kustomize component-style filter to watch only its own deployment YAML.
+#
+# Sync wave 2: app services reconcile AFTER base infra (wave 0) and cell
+# overlays (wave 1) so that ConfigMaps, Services, Ingress, HPA/PDB and
+# network policies already exist when the Deployment is rolled out.
+#
+# Independent apps matter for blast-radius control:
+#   - Rolling the image tag of one service only re-syncs that Application.
+#   - A failing rollout in ai-platform does not block portal-bff from self-healing.
+#
+# Image promotion flow (D-035 rule 6):
+#   CI builds image → pushes to harbor.edu.internal → opens PR updating the
+#   `images:` block in deploy/k8s/base/kustomization.yaml → merge →
+#   ArgoCD detects the diff → auto-syncs the affected Application.
+#
+# Reference: https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ep-apps
+  namespace: argocd
+  annotations:
+    ep.io/decision: "D-114"
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  generators:
+    - list:
+        elements:
+          - app: portal-bff
+            component: bff
+          - app: ws-gateway
+            component: gateway
+          - app: core-business
+            component: business
+          - app: order-platform
+            component: order
+          - app: payment-platform
+            component: payment
+          - app: grading-service
+            component: itbackend
+          - app: ai-platform
+            component: ai
+          - app: frontend-portal
+            component: portal
+  template:
+    metadata:
+      # Finalizer ensures the Application's resources are garbage-collected
+      # when the Application itself is deleted (e.g. a service is retired).
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      name: 'ep-app-{{app}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/part-of: education-platform
+        app.kubernetes.io/managed-by: argocd
+        ep.io/layer: app
+        ep.io/component: '{{component}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    spec:
+      project: education-platform
+      source:
+        repoURL: https://github.com/edu-platform/education-platform.git
+        targetRevision: HEAD
+        # Each app renders the full base kustomization. Kustomize namePrefix
+        # (edu-) and commonLabels apply uniformly; per-app rollouts are driven
+        # by image tag changes in base/kustomization.yaml `images:` block.
+        # To split a single service into its own kustomize component later,
+        # point `path` at deploy/k8s/base and add a `component` reference.
+        path: deploy/k8s/base
+      destination:
+        # Apps deploy to the control-plane cluster; Karmada PropagationPolicy
+        # (deploy/k8s/base/karmada-propagation.yaml) fans out Deployments,
+        # Services, HPA, PDB and ServiceMonitor to member cells.
+        server: https://kubernetes.default.svc
+        namespace: education-platform
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      ignoreDifferences:
+        - group: autoscaling
+          kind: HorizontalPodAutoscaler
+          jsonPointers:
+            - /status
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas

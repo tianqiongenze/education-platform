@@ -1,0 +1,319 @@
+# D-133: Internal service isolation NetworkPolicy.
+#
+# Architecture scorecard P1 finding: internal services could be directly
+# accessed by any pod in the cluster, bypassing the BFF RBAC layer. A
+# compromised or misconfigured pod (or a developer port-forwarding) could
+# reach core-business, grading-service, etc. without authentication.
+#
+# This file complements networkpolicy.yaml (which carries the namespace
+# default-deny + the bff→business allow rule) with an explicit, deny-by-
+# default ingress policy scoped to every internal service. The intended
+# data-plane model is:
+#
+#   Internet ──► nginx-ingress ──► portal-bff  (RBAC, /api/** fan-out)
+#                                 ws-gateway (WebSocket, /ws/**)
+#
+#   portal-bff ──► core-business / order-platform / payment-platform / ai-platform / grading-service
+#   grading-service ──► core-business (Dubbo RPC)
+#
+# Internal services MUST NOT be reachable from:
+#   - the internet (only portal-bff and ws-gateway have Ingress backends)
+#   - arbitrary pods in the cluster
+#
+# NetworkPolicy enforcement requires a CNI plugin that implements the API
+# (Calico / Cilium). See the header comment in networkpolicy.yaml. Without
+# such a CNI, these policies are accepted by the API server but NOT enforced
+# at the data plane — verify with a pod-to-pod reachability test before
+# relying on them for security.
+
+---
+# 1. portal-bff (HTTP 8080) — only the nginx-ingress namespace may reach it.
+#    RBAC lives here, so it is the only service allowed to receive external
+#    HTTP traffic. Same-namespace pods are also allowed so ws-gateway and
+#    internal health-checks/metrics can still reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: portal-bff-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: portal-bff
+  policyTypes:
+    - Ingress
+  ingress:
+    # External traffic via the nginx ingress controller.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Same-namespace pods (ws-gateway, internal probes, sp-* calling back).
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: education-platform
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus scraping (actuator/prometheus) from the monitoring namespace.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# 2. ws-gateway (WebSocket 8081) — nginx-ingress for /ws + same-namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ws-gateway-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ws-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    # External WebSocket traffic via the nginx ingress controller.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8081
+    # Same-namespace pods.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: education-platform
+      ports:
+        - protocol: TCP
+          port: 8081
+    # Prometheus scraping from the monitoring namespace.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8081
+
+---
+# 3. core-business (HTTP 8083 + Dubbo 20883).
+#    Ingress allowed from: portal-bff (HTTP fan-out), grading-service (Dubbo RPC),
+#    and Prometheus. Denied from: everything else (no direct external access).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: core-business-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: core-business
+  policyTypes:
+    - Ingress
+  ingress:
+    # portal-bff HTTP fan-out.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8083
+    # grading-service Dubbo RPC (grading calls back into business).
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grading-service
+      ports:
+        - protocol: TCP
+          port: 20883
+        - protocol: TCP
+          port: 8083
+    # Prometheus scraping.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8083
+
+---
+# 4. order-platform (HTTP 8084 + Dubbo 20884) — portal-bff + Prometheus only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: order-platform-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: order-platform
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8084
+        - protocol: TCP
+          port: 20884
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8084
+
+---
+# 5. payment-platform (HTTP 8087 + Dubbo 20887) — portal-bff + Prometheus only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-platform-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: payment-platform
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8087
+        - protocol: TCP
+          port: 20887
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8087
+
+---
+# 6. ai-platform (HTTP 8086) — portal-bff + Prometheus only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-platform-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ai-platform
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8086
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8086
+
+---
+# 7. grading-service (HTTP 8085 + Dubbo 20885) — portal-bff + Prometheus only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grading-service-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grading-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: portal-bff
+      ports:
+        - protocol: TCP
+          port: 8085
+        - protocol: TCP
+          port: 20885
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8085
+
+---
+# 8. frontend-portal (HTTP 80) — nginx-ingress (www.edu.com) + Prometheus.
+#    Public static SPA, no inter-service calls.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-portal-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend-portal
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 80

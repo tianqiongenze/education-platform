@@ -1,0 +1,78 @@
+# Dependabot configuration — D-063: Automated dependency updates
+# Keeps Java (Maven), Python (Poetry/pip), JavaScript (npm), and GitHub Actions
+# dependencies up to date with weekly checks.
+
+version: 2
+
+updates:
+  # Java — sp03-business
+  - package-ecosystem: "maven"
+    directory: "/services/sp03-business"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — sp05-itbackend
+  - package-ecosystem: "maven"
+    directory: "/services/sp05-itbackend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — bff-java
+  - package-ecosystem: "maven"
+    directory: "/services/bff-java"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — sp07-knowledge (sp07-retrieval-service)
+  - package-ecosystem: "maven"
+    directory: "/services/sp07-knowledge/sp07-retrieval-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+
+  # Java — integration-tests
+  - package-ecosystem: "maven"
+    directory: "/services/integration-tests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "java", "test"]
+
+  # Python — sp04-ai
+  - package-ecosystem: "pip"
+    directory: "/services/sp04-ai"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+
+  # JavaScript — frontend (pnpm workspace root)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "javascript"]
+
+  # GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "github-actions"]

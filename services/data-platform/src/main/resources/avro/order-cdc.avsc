@@ -1,0 +1,20 @@
+{
+  "type": "record",
+  "name": "OrderCDC",
+  "namespace": "com.ep.data.cdc",
+  "doc": "Order CDC event envelope: TiCDC row image + envelope fields. D-028/C-07.",
+  "fields": [
+    {"name": "op_type", "type": "string", "doc": "CDC operation code c/u/d/r"},
+    {"name": "ts_ms", "type": "long", "doc": "CDC event timestamp in epoch ms"},
+    {"name": "source_cell", "type": "string", "doc": "Source cell name"},
+    {"name": "table", "type": "string", "doc": "Source table name", "default": "order"},
+    {"name": "order_id", "type": "long"},
+    {"name": "user_id", "type": "long"},
+    {"name": "course_id", "type": "long"},
+    {"name": "amount", "type": ["null", "string"], "default": null},
+    {"name": "status", "type": ["null", "int"], "default": null},
+    {"name": "idempotency_key", "type": ["null", "string"], "default": null},
+    {"name": "created_at", "type": ["null", "long"], "default": null},
+    {"name": "updated_at", "type": ["null", "long"], "default": null}
+  ]
+}

@@ -1,0 +1,1466 @@
+<!-- SP-06 student-h5 交互原型 | education-platform | 2026-08-04 | 技术栈: Taro4+TanStack Query(目标实现), 此为HTML原型 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学生H5学习中心 - 交互原型</title>
+<style>
+  /* ============ 基础重置 ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    color: #1a1a1a;
+    background: #f0f2f5;
+    height: 100%;
+    overflow: hidden;
+  }
+  button { font-family: inherit; border: none; cursor: pointer; background: none; }
+  ul, li { list-style: none; }
+  a { color: inherit; text-decoration: none; }
+  input { font-family: inherit; outline: none; border: none; }
+
+  /* ============ 桌面端手机框架 ============ */
+  .desktop-bg {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #e8eef5 0%, #d9e2ec 100%);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .phone-frame {
+    position: relative;
+    width: 393px;
+    height: 760px;
+    background: #1a1a1a;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.35), 0 0 0 2px #2a2a2a inset;
+  }
+  .phone-screen {
+    position: relative;
+    width: 100%; height: 100%;
+    background: #f5f7fa;
+    border-radius: 32px;
+    overflow: hidden;
+  }
+  /* 手机刘海 */
+  .phone-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 150px; height: 22px;
+    background: #1a1a1a;
+    border-radius: 0 0 18px 18px;
+    z-index: 9999;
+  }
+
+  /* ============ 状态栏 ============ */
+  .status-bar {
+    height: 30px;
+    background: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px 0 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    position: relative;
+    z-index: 100;
+  }
+  .status-bar .time { letter-spacing: 0.5px; }
+  .status-icons { display: flex; align-items: center; gap: 5px; }
+  .status-icons svg { display: block; }
+
+  /* ============ 页面容器 ============ */
+  .app {
+    position: relative;
+    height: calc(100% - 30px);
+    overflow: hidden;
+  }
+  .page {
+    position: absolute; inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    background: #f5f7fa;
+    padding-bottom: 60px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .page.active { opacity: 1; pointer-events: auto; z-index: 2; }
+  .page::-webkit-scrollbar { width: 0; display: none; }
+
+  /* ============ 底部 TabBar ============ */
+  .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 56px;
+    background: #fff;
+    border-top: 1px solid #eef0f3;
+    display: flex;
+    z-index: 50;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
+  }
+  .tabbar-item {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px;
+    color: #8a8f99;
+    font-size: 10px;
+    transition: color 0.2s;
+  }
+  .tabbar-item .icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+  .tabbar-item.active { color: #1677ff; }
+  .tabbar-item.active .icon svg { fill: #1677ff; }
+  .tabbar-item svg { width: 22px; height: 22px; fill: #8a8f99; transition: fill 0.2s; }
+
+  /* ============ 首页 ============ */
+  .home-header {
+    background: linear-gradient(135deg, #1677ff 0%, #0d5fe0 100%);
+    padding: 12px 16px 18px;
+    color: #fff;
+  }
+  .home-top {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 4px;
+  }
+  .search-bar {
+    flex: 1;
+    height: 36px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 18px;
+    display: flex; align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    color: #9aa3ad;
+    font-size: 13px;
+  }
+  .search-bar svg { flex-shrink: 0; }
+  .search-bar input { flex: 1; background: transparent; font-size: 13px; color: #1a1a1a; }
+  .notify-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .notify-btn::after {
+    content: '';
+    position: absolute; top: 7px; right: 8px;
+    width: 7px; height: 7px;
+    background: #ff6b35;
+    border-radius: 50%;
+    border: 1.5px solid #1677ff;
+  }
+
+  /* ============ 轮播图 ============ */
+  .carousel {
+    margin: 14px 16px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    height: 140px;
+    position: relative;
+    box-shadow: 0 6px 16px rgba(22,119,255,0.18);
+  }
+  .carousel-track {
+    display: flex;
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.22,0.61,0.36,1);
+  }
+  .carousel-slide {
+    min-width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: center; padding: 0 20px;
+    color: #fff;
+    position: relative;
+  }
+  .carousel-slide:nth-child(1) { background: linear-gradient(120deg, #ff6b35, #ff9558); }
+  .carousel-slide:nth-child(2) { background: linear-gradient(120deg, #1677ff, #4a9dff); }
+  .carousel-slide:nth-child(3) { background: linear-gradient(120deg, #7b61ff, #a78bfa); }
+  .carousel-slide .slide-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .carousel-slide .slide-sub { font-size: 12px; opacity: 0.9; }
+  .carousel-slide .slide-tag {
+    position: absolute; top: 12px; right: 14px;
+    background: rgba(255,255,255,0.25);
+    padding: 3px 10px; border-radius: 10px;
+    font-size: 11px; backdrop-filter: blur(4px);
+  }
+  .carousel-dots {
+    position: absolute; bottom: 8px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 6px;
+  }
+  .carousel-dot {
+    width: 6px; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.5);
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .carousel-dot.active { width: 18px; background: #fff; }
+
+  /* ============ 区块标题 ============ */
+  .section {
+    margin: 18px 16px 0;
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 17px; font-weight: 700; color: #1a1a1a;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-title::before {
+    content: ''; width: 4px; height: 16px;
+    background: #1677ff; border-radius: 2px;
+  }
+  .section-more { font-size: 12px; color: #8a8f99; }
+
+  /* ============ 课程卡片 (2列网格) ============ */
+  .course-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .course-card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.15s;
+    cursor: pointer;
+  }
+  .course-card:active { transform: scale(0.97); }
+  .course-cover {
+    width: 100%; height: 88px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 22px; font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .course-cover .cover-tag {
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(0,0,0,0.4);
+    color: #fff; font-size: 10px;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .course-info { padding: 8px 10px 10px; }
+  .course-title {
+    font-size: 13px; font-weight: 600; color: #1a1a1a;
+    line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+    height: 36px;
+  }
+  .course-instructor {
+    font-size: 11px; color: #8a8f99; margin-top: 6px;
+  }
+  .course-price {
+    margin-top: 6px;
+    display: flex; align-items: baseline; gap: 4px;
+  }
+  .course-price .now { color: #ff6b35; font-size: 15px; font-weight: 700; }
+  .course-price .old { color: #b8bdc4; font-size: 11px; text-decoration: line-through; }
+  .course-price .free { color: #52c41a; font-size: 14px; font-weight: 700; }
+
+  /* ============ 学习进度 (横向滚动) ============ */
+  .progress-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 2px 16px 6px;
+    margin: 0 -16px;
+    scroll-snap-type: x mandatory;
+  }
+  .progress-scroll::-webkit-scrollbar { display: none; }
+  .progress-card {
+    min-width: 200px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+  .progress-card .pc-cover {
+    width: 100%; height: 70px; border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 600;
+  }
+  .progress-card .pc-title {
+    font-size: 13px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .progress-card .pc-meta { font-size: 11px; color: #8a8f99; margin-top: 4px; }
+  .progress-bar {
+    height: 5px; background: #eef0f3; border-radius: 3px;
+    margin-top: 8px; overflow: hidden;
+  }
+  .progress-bar .fill {
+    height: 100%; background: linear-gradient(90deg, #1677ff, #4a9dff);
+    border-radius: 3px; transition: width 0.6s;
+  }
+  .progress-pct { font-size: 11px; color: #1677ff; font-weight: 600; margin-top: 4px; }
+
+  /* ============ 继续学习 CTA ============ */
+  .cta-continue {
+    margin: 20px 16px 0;
+    height: 48px;
+    background: linear-gradient(135deg, #ff6b35, #ff8555);
+    border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; font-weight: 600;
+    gap: 8px;
+    box-shadow: 0 6px 16px rgba(255,107,53,0.3);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .cta-continue:active { transform: scale(0.98); }
+
+  /* ============ 课程列表页 ============ */
+  .page-title-bar {
+    background: #fff;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #eef0f3;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .page-title-bar .title { font-size: 17px; font-weight: 700; flex: 1; text-align: center; margin-right: 28px; }
+
+  .category-tabs {
+    background: #fff;
+    display: flex;
+    overflow-x: auto;
+    padding: 0 8px;
+    border-bottom: 1px solid #eef0f3;
+    position: sticky; top: 49px; z-index: 9;
+  }
+  .category-tabs::-webkit-scrollbar { display: none; }
+  .cat-tab {
+    padding: 12px 14px;
+    font-size: 13px; color: #5a6068;
+    white-space: nowrap;
+    position: relative;
+    transition: color 0.2s;
+  }
+  .cat-tab.active { color: #1677ff; font-weight: 600; }
+  .cat-tab.active::after {
+    content: ''; position: absolute;
+    bottom: 6px; left: 50%; transform: translateX(-50%);
+    width: 20px; height: 3px; background: #1677ff; border-radius: 2px;
+  }
+
+  /* 下拉刷新 */
+  .pull-indicator {
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    color: #8a8f99;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 40px;
+    overflow: hidden;
+    transition: height 0.3s;
+  }
+  .pull-indicator .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid #e0e4ea; border-top-color: #1677ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  .pull-indicator.loading .spinner { display: block; }
+  .pull-indicator.loading { height: 40px; }
+  .pull-indicator.success .spinner { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 课程列表(纵向) */
+  .course-list { padding: 10px 16px; }
+  .course-list-item {
+    background: #fff;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .course-list-item:active { transform: scale(0.98); }
+  .cli-cover {
+    width: 110px; height: 72px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px; font-weight: 600;
+    position: relative;
+  }
+  .cli-cover .play-icon {
+    position: absolute;
+    width: 28px; height: 28px;
+    background: rgba(0,0,0,0.45);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cli-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .cli-title {
+    font-size: 14px; font-weight: 600; color: #1a1a1a; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cli-meta { font-size: 11px; color: #8a8f99; margin-top: 6px; display: flex; gap: 10px; align-items: center; }
+  .cli-meta .rating { color: #ff9500; font-weight: 600; }
+  .cli-bottom {
+    margin-top: auto; display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .cli-price .now { color: #ff6b35; font-size: 16px; font-weight: 700; }
+  .cli-price .free { color: #52c41a; font-size: 15px; font-weight: 700; }
+  .cli-students { font-size: 11px; color: #b8bdc4; }
+
+  .load-more-indicator {
+    text-align: center; padding: 16px;
+    font-size: 12px; color: #8a8f99;
+    display: none;
+  }
+  .load-more-indicator.show { display: block; }
+  .load-more-indicator .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid #e0e4ea; border-top-color: #1677ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block; vertical-align: middle; margin-right: 6px;
+  }
+
+  /* ============ 课程详情页 ============ */
+  .detail-page {
+    position: absolute; inset: 0;
+    background: #fff;
+    z-index: 200;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.22,0.61,0.36,1);
+    overflow-y: auto;
+    padding-bottom: 70px;
+  }
+  .detail-page.show { transform: translateX(0); }
+  .detail-page::-webkit-scrollbar { display: none; }
+
+  .detail-header {
+    position: sticky; top: 0; z-index: 10;
+    background: #fff;
+    height: 48px;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid #eef0f3;
+  }
+  .back-btn {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .back-btn:active { background: #f0f2f5; }
+  .detail-header .title {
+    flex: 1; text-align: center; font-size: 16px; font-weight: 600;
+    margin-right: 36px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .video-area {
+    width: 100%; height: 210px;
+    background: #000;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .video-area .video-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .video-area .video-bg::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(22,119,255,0.2), transparent 60%);
+  }
+  .play-overlay {
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    cursor: pointer;
+    z-index: 2;
+    transition: transform 0.2s;
+  }
+  .play-overlay:active { transform: scale(0.92); }
+  .video-duration {
+    position: absolute; bottom: 10px; right: 12px;
+    background: rgba(0,0,0,0.5);
+    color: #fff; font-size: 11px;
+    padding: 2px 8px; border-radius: 4px;
+    z-index: 2;
+  }
+
+  .detail-info { padding: 16px; }
+  .detail-title { font-size: 18px; font-weight: 700; line-height: 1.4; }
+  .detail-meta {
+    display: flex; align-items: center; gap: 14px;
+    margin-top: 10px; font-size: 12px; color: #8a8f99;
+  }
+  .detail-meta .rating { color: #ff9500; font-weight: 600; font-size: 13px; }
+  .detail-meta .rating-star { color: #ff9500; }
+  .detail-instructor {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px; background: #f7f9fc; border-radius: 10px;
+  }
+  .instructor-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #1677ff, #4a9dff);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 600; font-size: 14px;
+  }
+  .instructor-info .name { font-size: 14px; font-weight: 600; }
+  .instructor-info .desc { font-size: 11px; color: #8a8f99; margin-top: 2px; }
+
+  .detail-tabs {
+    display: flex;
+    border-bottom: 1px solid #eef0f3;
+    margin-top: 16px;
+    position: sticky; top: 48px; background: #fff; z-index: 5;
+  }
+  .detail-tab {
+    flex: 1; text-align: center;
+    padding: 14px 0;
+    font-size: 14px; color: #5a6068;
+    position: relative;
+  }
+  .detail-tab.active { color: #1677ff; font-weight: 600; }
+  .detail-tab.active::after {
+    content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 24px; height: 3px; background: #1677ff; border-radius: 2px;
+  }
+  .detail-panel { display: none; padding: 16px; }
+  .detail-panel.active { display: block; }
+
+  .intro-text { font-size: 13px; color: #5a6068; line-height: 1.8; }
+  .intro-features { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .feature-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #5a6068;
+  }
+  .feature-item .dot { width: 6px; height: 6px; background: #1677ff; border-radius: 50%; }
+
+  /* 章节折叠 */
+  .chapter {
+    border: 1px solid #eef0f3;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .chapter-head {
+    padding: 14px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #f7f9fc;
+    cursor: pointer;
+  }
+  .chapter-head .ch-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .chapter-head .ch-num {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: #1677ff; color: #fff;
+    font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chapter-head .ch-meta { font-size: 11px; color: #8a8f99; display: flex; align-items: center; gap: 8px; }
+  .chapter-arrow { transition: transform 0.3s; }
+  .chapter.open .chapter-arrow { transform: rotate(90deg); }
+  .chapter-body {
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .chapter.open .chapter-body { max-height: 500px; }
+  .lesson {
+    padding: 12px 14px 12px 46px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid #f0f2f5;
+    font-size: 13px; color: #5a6068;
+  }
+  .lesson .l-left { display: flex; align-items: center; gap: 8px; }
+  .lesson .l-duration { font-size: 11px; color: #b8bdc4; }
+  .lesson .l-play { color: #1677ff; }
+
+  /* 评价 */
+  .review-summary {
+    display: flex; gap: 16px; padding: 16px;
+    background: #f7f9fc; border-radius: 10px; margin-bottom: 14px;
+  }
+  .review-score { text-align: center; }
+  .review-score .big { font-size: 30px; font-weight: 700; color: #ff9500; }
+  .review-score .stars { color: #ff9500; font-size: 12px; margin-top: 2px; }
+  .review-score .label { font-size: 11px; color: #8a8f99; margin-top: 2px; }
+  .review-tags { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-content: center; }
+  .review-tag { font-size: 11px; padding: 4px 10px; background: #fff; border-radius: 12px; color: #5a6068; border: 1px solid #eef0f3; }
+  .review-item { padding: 14px 0; border-bottom: 1px solid #eef0f3; }
+  .review-item .r-head { display: flex; align-items: center; gap: 8px; }
+  .review-item .r-avatar { width: 28px; height: 28px; border-radius: 50%; background: #e0e4ea; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #8a8f99; }
+  .review-item .r-name { font-size: 13px; font-weight: 500; }
+  .review-item .r-stars { margin-left: auto; color: #ff9500; font-size: 11px; }
+  .review-item .r-content { font-size: 13px; color: #5a6068; line-height: 1.6; margin-top: 8px; }
+  .review-item .r-date { font-size: 11px; color: #b8bdc4; margin-top: 6px; }
+
+  /* 底部操作栏 */
+  .detail-action-bar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 60px;
+    background: #fff;
+    border-top: 1px solid #eef0f3;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    gap: 10px;
+    z-index: 20;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.05);
+  }
+  .action-icon-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 50px; font-size: 10px; color: #5a6068; gap: 2px;
+  }
+  .action-icon-btn svg { width: 22px; height: 22px; }
+  .action-icon-btn:active { color: #1677ff; }
+  .action-cart {
+    flex: 1; height: 40px;
+    background: #fff7f0;
+    color: #ff6b35;
+    border: 1px solid #ffd4be;
+    border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+  }
+  .action-buy {
+    flex: 1; height: 40px;
+    background: linear-gradient(135deg, #ff6b35, #ff8555);
+    color: #fff;
+    border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 10px rgba(255,107,53,0.3);
+  }
+  .action-cart:active, .action-buy:active { transform: scale(0.97); }
+
+  /* ============ 我的页面 ============ */
+  .profile-header {
+    background: linear-gradient(135deg, #1677ff 0%, #0d5fe0 100%);
+    padding: 20px 16px 24px;
+    color: #fff;
+  }
+  .profile-user {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .profile-avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    border: 2px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 600;
+    backdrop-filter: blur(6px);
+  }
+  .profile-name-block { flex: 1; }
+  .profile-name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .vip-badge {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    color: #5a3a00;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .profile-desc { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+
+  .profile-stats {
+    display: flex;
+    background: #fff;
+    margin: -14px 16px 0;
+    border-radius: 12px;
+    padding: 16px 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    position: relative;
+    z-index: 2;
+  }
+  .stat-item {
+    flex: 1; text-align: center;
+    border-right: 1px solid #eef0f3;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num { font-size: 20px; font-weight: 700; color: #1a1a1a; }
+  .stat-label { font-size: 11px; color: #8a8f99; margin-top: 4px; }
+
+  .menu-group {
+    background: #fff;
+    margin: 14px 16px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .menu-item {
+    display: flex; align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f2f5;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item:active { background: #f7f9fc; }
+  .menu-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    margin-right: 12px;
+  }
+  .menu-icon svg { width: 18px; height: 18px; }
+  .menu-label { flex: 1; font-size: 14px; color: #1a1a1a; }
+  .menu-extra { font-size: 12px; color: #b8bdc4; margin-right: 6px; }
+  .menu-arrow { color: #c8ccd2; }
+
+  /* ============ Toast ============ */
+  .toast {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-size: 13px;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    max-width: 240px;
+    text-align: center;
+    display: flex; align-items: center; gap: 8px;
+    backdrop-filter: blur(8px);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .toast svg { flex-shrink: 0; }
+
+  /* ============ 桌面端提示 ============ */
+  .desktop-tip {
+    position: fixed;
+    bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: #fff; font-size: 12px;
+    padding: 8px 16px; border-radius: 20px;
+    z-index: 999;
+    backdrop-filter: blur(6px);
+  }
+
+  /* 隐藏滚动条 */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body>
+
+<div class="desktop-bg">
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+
+      <!-- 状态栏 -->
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <!-- 信号 -->
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="7" width="3" height="4" rx="0.5" fill="#1a1a1a"/><rect x="4.5" y="5" width="3" height="6" rx="0.5" fill="#1a1a1a"/><rect x="9" y="3" width="3" height="8" rx="0.5" fill="#1a1a1a"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="#1a1a1a"/></svg>
+          <!-- WiFi -->
+          <svg width="15" height="11" viewBox="0 0 15 11" fill="#1a1a1a"><path d="M7.5 0C4.6 0 2 1 0 2.7l1.3 1.5C2.9 2.8 5.1 2 7.5 2s4.6.8 6.2 2.2L15 2.7C13 1 10.4 0 7.5 0zm0 4C5.6 4 3.9 4.6 2.5 5.7l1.3 1.5C4.8 6.4 6.1 6 7.5 6s2.7.4 3.7 1.2l1.3-1.5C11.1 4.6 9.4 4 7.5 4zm0 4c-1 0-1.9.3-2.6.9l2.6 2.9 2.6-2.9C9.4 8.3 8.5 8 7.5 8z"/></svg>
+          <!-- 电池 -->
+          <svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="22" height="11" rx="2.5" stroke="#1a1a1a" stroke-opacity="0.4"/><rect x="2" y="2" width="18" height="8" rx="1.5" fill="#1a1a1a"/><rect x="23.5" y="3.5" width="2" height="5" rx="1" fill="#1a1a1a" fill-opacity="0.4"/></svg>
+        </div>
+      </div>
+
+      <div class="app">
+
+        <!-- ============ 首页 ============ -->
+        <div class="page active" id="page-home">
+          <div class="home-header">
+            <div class="home-top">
+              <div class="search-bar">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#9aa3ad"><path d="M7 1.5C4 1.5 1.5 4 1.5 7S4 12.5 7 12.5 12.5 10 12.5 7 10 1.5 7 1.5zm0 1.8c2 0 3.7 1.7 3.7 3.7S9 10.7 7 10.7 3.3 9 3.3 7 5 3.3 7 3.3z"/><path d="M10.8 10.8l3.4 3.4 1.3-1.3-3.4-3.4z"/></svg>
+                <input type="text" placeholder="搜索课程、讲师" readonly>
+              </div>
+              <div class="notify-btn" onclick="showToast('暂无新消息')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 轮播图 -->
+          <div class="carousel" id="carousel">
+            <div class="carousel-track" id="carouselTrack">
+              <div class="carousel-slide">
+                <span class="slide-tag">限时优惠</span>
+                <div class="slide-title">2026国考冲刺班</div>
+                <div class="slide-sub">名师领衔 · 高分通关</div>
+              </div>
+              <div class="carousel-slide">
+                <span class="slide-tag">新课上线</span>
+                <div class="slide-title">全栈工程师进阶</div>
+                <div class="slide-sub">React + Node 实战教学</div>
+              </div>
+              <div class="carousel-slide">
+                <span class="slide-tag">热门推荐</span>
+                <div class="slide-title">考研英语高分秘籍</div>
+                <div class="slide-sub">阅读 + 写作专项突破</div>
+              </div>
+            </div>
+            <div class="carousel-dots" id="carouselDots">
+              <div class="carousel-dot active" data-idx="0"></div>
+              <div class="carousel-dot" data-idx="1"></div>
+              <div class="carousel-dot" data-idx="2"></div>
+            </div>
+          </div>
+
+          <!-- 推荐课程 -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">推荐课程</div>
+              <div class="section-more">查看全部 ›</div>
+            </div>
+            <div class="course-grid" id="recommendGrid"></div>
+          </div>
+
+          <!-- 学习进度 -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">学习进度</div>
+              <div class="section-more">全部 ›</div>
+            </div>
+            <div class="progress-scroll" id="progressScroll"></div>
+          </div>
+
+          <!-- 继续学习 CTA -->
+          <div class="cta-continue" onclick="showToast('继续上次学习')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+            继续学习上次课程
+          </div>
+        </div>
+
+        <!-- ============ 课程列表页 ============ -->
+        <div class="page" id="page-course">
+          <div class="page-title-bar">
+            <div class="title">全部课程</div>
+          </div>
+          <div class="category-tabs" id="categoryTabs">
+            <div class="cat-tab active" data-cat="全部">全部</div>
+            <div class="cat-tab" data-cat="IT编程">IT编程</div>
+            <div class="cat-tab" data-cat="公考">公考</div>
+            <div class="cat-tab" data-cat="考研">考研</div>
+            <div class="cat-tab" data-cat="健康">健康</div>
+          </div>
+
+          <div class="pull-indicator" id="pullIndicator">
+            <div class="spinner"></div>
+            <span class="pull-text">下拉刷新</span>
+          </div>
+
+          <div class="course-list" id="courseList"></div>
+          <div class="load-more-indicator" id="loadMoreIndicator">
+            <span class="spinner"></span> 加载更多课程...
+          </div>
+        </div>
+
+        <!-- ============ 我的页面 ============ -->
+        <div class="page" id="page-profile">
+          <div class="profile-header">
+            <div class="profile-user">
+              <div class="profile-avatar">学</div>
+              <div class="profile-name-block">
+                <div class="profile-name">
+                  张同学
+                  <span class="vip-badge">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#5a3a00"><path d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5zm0 2h14v2H5z"/></svg>
+                    VIP会员
+                  </span>
+                </div>
+                <div class="profile-desc">学无止境 · 已学习 286 天</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-stats">
+            <div class="stat-item">
+              <div class="stat-num">128<span style="font-size:12px;color:#8a8f99">h</span></div>
+              <div class="stat-label">学习时长</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num">14</div>
+              <div class="stat-label">完成课程</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num">9</div>
+              <div class="stat-label">获得证书</div>
+            </div>
+          </div>
+
+          <div class="menu-group">
+            <div class="menu-item" onclick="showToast('功能开发中')">
+              <div class="menu-icon" style="background:#e6f0ff;">
+                <svg viewBox="0 0 24 24" fill="#1677ff"><path d="M7 18a2 2 0 100-4 2 2 0 000 4zM17 18a2 2 0 100-4 2 2 0 000 4z"/><path d="M5 16L3 7h14l2 6h2v3h-2a2 2 0 11-4 0H9a2 2 0 11-4 0z"/></svg>
+              </div>
+              <div class="menu-label">我的订单</div>
+              <span class="menu-extra">3个待评价</span>
+              <span class="menu-arrow">›</span>
+            </div>
+            <div class="menu-item" onclick="showToast('功能开发中')">
+              <div class="menu-icon" style="background:#fff0e6;">
+                <svg viewBox="0 0 24 24" fill="#ff6b35"><path d="M13 3a9 9 0 00-9 9H1l3.9 4 4.1-4H6a7 7 0 117 7v2a9 9 0 100-18z"/></svg>
+              </div>
+              <div class="menu-label">学习记录</div>
+              <span class="menu-arrow">›</span>
+            </div>
+            <div class="menu-item" onclick="showToast('功能开发中')">
+              <div class="menu-icon" style="background:#fff7e6;">
+                <svg viewBox="0 0 24 24" fill="#faad14"><path d="M12 1L9.5 8H2l6 4.5L5.5 20 12 15.5 18.5 20 16 12.5 22 8h-7.5z"/></svg>
+              </div>
+              <div class="menu-label">我的证书</div>
+              <span class="menu-extra">9张</span>
+              <span class="menu-arrow">›</span>
+            </div>
+            <div class="menu-item" onclick="showToast('功能开发中')">
+              <div class="menu-icon" style="background:#fff0f0;">
+                <svg viewBox="0 0 24 24" fill="#ff4d4f"><path d="M12 21C8 17 3 13.5 3 9a5 5 0 019-3 5 5 0 019 3c0 4.5-5 8-9 12z"/></svg>
+              </div>
+              <div class="menu-label">收藏夹</div>
+              <span class="menu-extra">23门课程</span>
+              <span class="menu-arrow">›</span>
+            </div>
+            <div class="menu-item" onclick="showToast('功能开发中')">
+              <div class="menu-icon" style="background:#f0f0f0;">
+                <svg viewBox="0 0 24 24" fill="#5a6068"><path d="M19.4 13a7.5 7.5 0 00.1-1 7.5 7.5 0 00-.1-1l2-1.6a.5.5 0 00.1-.6l-1.9-3.3a.5.5 0 00-.6-.2l-2.4 1a7 7 0 00-1.7-1l-.4-2.5a.5.5 0 00-.5-.4h-3.8a.5.5 0 00-.5.4l-.4 2.5a7 7 0 00-1.7 1l-2.4-1a.5.5 0 00-.6.2L2.4 8.8a.5.5 0 00.1.6L4.5 11a7.5 7.5 0 000 2l-2 1.6a.5.5 0 00-.1.6l1.9 3.3a.5.5 0 00.6.2l2.4-1a7 7 0 001.7 1l.4 2.5a.5.5 0 00.5.4h3.8a.5.5 0 00.5-.4l.4-2.5a7 7 0 001.7-1l2.4 1a.5.5 0 00.6-.2l1.9-3.3a.5.5 0 00-.1-.6L19.4 13zM12 15.5A3.5 3.5 0 1112 8.5a3.5 3.5 0 010 7z"/></svg>
+              </div>
+              <div class="menu-label">设置</div>
+              <span class="menu-arrow">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ 课程详情页 ============ -->
+        <div class="detail-page" id="detailPage">
+          <div class="detail-header">
+            <div class="back-btn" onclick="closeDetail()">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="#1a1a1a"><path d="M15.4 7.4L14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg>
+            </div>
+            <div class="title" id="detailTitle">课程详情</div>
+          </div>
+
+          <div class="video-area">
+            <div class="video-bg"></div>
+            <div class="play-overlay" onclick="showToast('视频播放中(原型)')">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <div class="video-duration">预览 03:42</div>
+          </div>
+
+          <div class="detail-info">
+            <div class="detail-title" id="detailTitleText">2026国考行测冲刺全攻略</div>
+            <div class="detail-meta">
+              <span class="rating-star">★★★★★</span>
+              <span class="rating">4.9分</span>
+              <span>·</span>
+              <span id="detailStudents">12,580 人在学</span>
+            </div>
+            <div class="detail-instructor">
+              <div class="instructor-avatar">李</div>
+              <div class="instructor-info">
+                <div class="name">李明华 老师</div>
+                <div class="desc">10年公考培训经验 · 累计学员10万+</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-tabs">
+            <div class="detail-tab active" data-dtab="intro">简介</div>
+            <div class="detail-tab" data-dtab="chapter">章节</div>
+            <div class="detail-tab" data-dtab="review">评价</div>
+          </div>
+
+          <div class="detail-panel active" id="panel-intro">
+            <div class="intro-text">
+              本课程针对2026年国家公务员考试行测科目精心打造，涵盖言语理解、数量关系、判断推理、资料分析、常识判断五大模块。通过系统化讲解 + 真题演练，帮助考生在短时间内掌握核心解题技巧，快速提分。
+            </div>
+            <div class="intro-features">
+              <div class="feature-item"><span class="dot"></span> 80课时高清视频</div>
+              <div class="feature-item"><span class="dot"></span> 5大模块全覆盖</div>
+              <div class="feature-item"><span class="dot"></span> 真题深度解析</div>
+              <div class="feature-item"><span class="dot"></span> 班主任督学</div>
+              <div class="feature-item"><span class="dot"></span> 终身回放</div>
+              <div class="feature-item"><span class="dot"></span> 学习资料包</div>
+            </div>
+          </div>
+
+          <div class="detail-panel" id="panel-chapter">
+            <div class="chapter open">
+              <div class="chapter-head" onclick="toggleChapter(this)">
+                <div class="ch-title"><span class="ch-num">1</span> 言语理解与表达</div>
+                <div class="ch-meta">8课时 <span class="chapter-arrow">›</span></div>
+              </div>
+              <div class="chapter-body">
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 1.1 题型概述与解题思路</div><span class="l-duration">18:32</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 1.2 主旨概括题精讲</div><span class="l-duration">22:10</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 1.3 意图判断题技巧</div><span class="l-duration">19:45</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 1.4 细节理解题</div><span class="l-duration">16:28</span></div>
+              </div>
+            </div>
+            <div class="chapter">
+              <div class="chapter-head" onclick="toggleChapter(this)">
+                <div class="ch-title"><span class="ch-num">2</span> 数量关系</div>
+                <div class="ch-meta">10课时 <span class="chapter-arrow">›</span></div>
+              </div>
+              <div class="chapter-body">
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 2.1 数字推理核心方法</div><span class="l-duration">20:15</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 2.2 数学运算常用公式</div><span class="l-duration">24:30</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 2.3 工程问题专项</div><span class="l-duration">18:50</span></div>
+              </div>
+            </div>
+            <div class="chapter">
+              <div class="chapter-head" onclick="toggleChapter(this)">
+                <div class="ch-title"><span class="ch-num">3</span> 判断推理</div>
+                <div class="ch-meta">12课时 <span class="chapter-arrow">›</span></div>
+              </div>
+              <div class="chapter-body">
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 3.1 图形推理规律</div><span class="l-duration">22:00</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 3.2 定义判断技巧</div><span class="l-duration">17:45</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 3.3 类比推理精讲</div><span class="l-duration">19:20</span></div>
+              </div>
+            </div>
+            <div class="chapter">
+              <div class="chapter-head" onclick="toggleChapter(this)">
+                <div class="ch-title"><span class="ch-num">4</span> 资料分析</div>
+                <div class="ch-meta">9课时 <span class="chapter-arrow">›</span></div>
+              </div>
+              <div class="chapter-body">
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 4.1 速算技巧大全</div><span class="l-duration">25:10</span></div>
+                <div class="lesson"><div class="l-left"><span class="l-play">▶</span> 4.2 增长率相关题型</div><span class="l-duration">21:30</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-panel" id="panel-review">
+            <div class="review-summary">
+              <div class="review-score">
+                <div class="big">4.9</div>
+                <div class="stars">★★★★★</div>
+                <div class="label">综合评分</div>
+              </div>
+              <div class="review-tags">
+                <span class="review-tag">讲解清晰(892)</span>
+                <span class="review-tag">干货满满(756)</span>
+                <span class="review-tag">提分明显(623)</span>
+                <span class="review-tag">性价比高(521)</span>
+              </div>
+            </div>
+            <div class="review-item">
+              <div class="r-head">
+                <div class="r-avatar">王</div>
+                <div class="r-name">王同学</div>
+                <div class="r-stars">★★★★★</div>
+              </div>
+              <div class="r-content">老师讲得非常细致，资料分析模块的速算技巧特别实用，模考分数提升了20分！</div>
+              <div class="r-date">2026-07-28</div>
+            </div>
+            <div class="review-item">
+              <div class="r-head">
+                <div class="r-avatar">刘</div>
+                <div class="r-name">刘同学</div>
+                <div class="r-stars">★★★★★</div>
+              </div>
+              <div class="r-content">课程体系完整，每个知识点都有真题配套练习，跟着学下来收获很大。</div>
+              <div class="r-date">2026-07-25</div>
+            </div>
+            <div class="review-item">
+              <div class="r-head">
+                <div class="r-avatar">陈</div>
+                <div class="r-name">陈同学</div>
+                <div class="r-stars">★★★★☆</div>
+              </div>
+              <div class="r-content">内容很好，就是数量关系部分节奏稍快，希望能再补充一些基础讲解。</div>
+              <div class="r-date">2026-07-20</div>
+            </div>
+          </div>
+
+          <!-- 底部操作栏 -->
+          <div class="detail-action-bar">
+            <div class="action-icon-btn" id="favBtn" onclick="toggleFav(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#5a6068" stroke-width="2"><path d="M12 21C8 17 3 13.5 3 9a5 5 0 019-3 5 5 0 019 3c0 4.5-5 8-9 12z"/></svg>
+              收藏
+            </div>
+            <button class="action-cart" onclick="showToast('已加入购物车')">加入购物车</button>
+            <button class="action-buy" onclick="showToast('跳转结算页(原型)')">立即购买</button>
+          </div>
+        </div>
+
+        <!-- ============ TabBar ============ -->
+        <div class="tabbar">
+          <div class="tabbar-item active" data-tab="home">
+            <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3z"/></svg></div>
+            首页
+          </div>
+          <div class="tabbar-item" data-tab="course">
+            <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg></div>
+            课程
+          </div>
+          <div class="tabbar-item" data-tab="profile">
+            <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 3-9 7v1h18v-1c0-4-4-7-9-7z"/></svg></div>
+            我的
+          </div>
+        </div>
+
+        <!-- Toast -->
+        <div class="toast" id="toast">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+          <span id="toastText">提示</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="desktop-tip">SP-06 学生H5学习中心 交互原型 · 桌面端请使用手机视图查看</div>
+
+<script>
+/* ============ 模拟数据 ============ */
+const COLORS = ['#1677ff','#ff6b35','#7b61ff','#52c41a','#faad14','#eb2f96','#13c2c2','#fa541c'];
+
+const recommendCourses = [
+  {id:1, title:'2026国考行测冲刺全攻略', instructor:'李明华', price:299, old:599, cat:'公考', cover:'#1677ff', tag:'热销'},
+  {id:2, title:'React 18 + TypeScript 实战开发', instructor:'张工', price:0, cat:'IT编程', cover:'#ff6b35', tag:'免费'},
+  {id:3, title:'考研政治高频考点精讲', instructor:'王教授', price:199, old:399, cat:'考研', cover:'#7b61ff', tag:'推荐'},
+  {id:4, title:'中医养生与日常保健', instructor:'陈医师', price:0, cat:'健康', cover:'#52c41a', tag:'新课'},
+];
+
+const progressCourses = [
+  {title:'React 18 + TypeScript', lesson:'第3章 Hooks进阶', pct:65, cover:'#ff6b35'},
+  {title:'国考行测冲刺', lesson:'第5章 资料分析', pct:42, cover:'#1677ff'},
+  {title:'考研英语阅读', lesson:'第2章 长难句', pct:88, cover:'#7b61ff'},
+  {title:'Node.js服务端', lesson:'第6章 数据库', pct:25, cover:'#13c2c2'},
+];
+
+const allCourses = [
+  {id:1, title:'2026国考行测冲刺全攻略', instructor:'李明华', rating:4.9, students:12580, price:299, cat:'公考', cover:'#1677ff'},
+  {id:2, title:'React 18 + TypeScript 实战开发', instructor:'张工', rating:4.8, students:8932, price:0, cat:'IT编程', cover:'#ff6b35'},
+  {id:3, title:'考研政治高频考点精讲', instructor:'王教授', rating:4.7, students:6541, price:199, cat:'考研', cover:'#7b61ff'},
+  {id:4, title:'中医养生与日常保健', instructor:'陈医师', rating:4.9, students:9821, price:0, cat:'健康', cover:'#52c41a'},
+  {id:5, title:'Node.js 企业级服务端开发', instructor:'刘架构', rating:4.8, students:4521, price:399, cat:'IT编程', cover:'#13c2c2'},
+  {id:6, title:'2026省考申论专项突破', instructor:'赵老师', rating:4.6, students:3210, price:159, cat:'公考', cover:'#fa541c'},
+  {id:7, title:'考研英语阅读理解精讲', instructor:'Smith', rating:4.9, students:7654, price:259, cat:'考研', cover:'#eb2f96'},
+  {id:8, title:'营养学与健康管理师认证', instructor:'林营养师', rating:4.7, students:2341, price:0, cat:'健康', cover:'#faad14'},
+  {id:9, title:'Vue3 + Vite 工程化实战', instructor:'张工', rating:4.8, students:5832, price:0, cat:'IT编程', cover:'#1677ff'},
+  {id:10, title:'公务员面试通关技巧', instructor:'李明华', rating:4.9, students:4521, price:499, cat:'公考', cover:'#ff6b35'},
+  {id:11, title:'考研数学线性代数专题', instructor:'周博士', rating:4.8, students:3892, price:299, cat:'考研', cover:'#7b61ff'},
+  {id:12, title:'运动康复与损伤预防', instructor:'陈医师', rating:4.6, students:1827, price:0, cat:'健康', cover:'#52c41a'},
+];
+
+/* ============ 渲染推荐课程 ============ */
+function renderRecommend(){
+  const grid = document.getElementById('recommendGrid');
+  grid.innerHTML = recommendCourses.map(c => `
+    <div class="course-card" onclick="openDetail(${c.id})">
+      <div class="course-cover" style="background:linear-gradient(135deg, ${c.cover}, ${shade(c.cover, -20)});">
+        <span class="cover-tag">${c.tag}</span>
+        ${c.cat}
+      </div>
+      <div class="course-info">
+        <div class="course-title">${c.title}</div>
+        <div class="course-instructor">${c.instructor}</div>
+        <div class="course-price">
+          ${c.price === 0
+            ? '<span class="free">免费</span>'
+            : `<span class="now">¥${c.price}</span><span class="old">¥${c.old}</span>`}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ============ 渲染学习进度 ============ */
+function renderProgress(){
+  const el = document.getElementById('progressScroll');
+  el.innerHTML = progressCourses.map(c => `
+    <div class="progress-card" onclick="showToast('继续学习: ${c.title}')">
+      <div class="pc-cover" style="background:linear-gradient(135deg, ${c.cover}, ${shade(c.cover,-20)});">${c.title.slice(0,8)}</div>
+      <div class="pc-title">${c.title}</div>
+      <div class="pc-meta">${c.lesson}</div>
+      <div class="progress-bar"><div class="fill" style="width:${c.pct}%"></div></div>
+      <div class="progress-pct">已学 ${c.pct}%</div>
+    </div>
+  `).join('');
+}
+
+/* ============ 渲染课程列表 ============ */
+let courseListData = [];
+let listLoadedCount = 0;
+const PAGE_SIZE = 5;
+
+function renderCourseList(append){
+  const list = document.getElementById('courseList');
+  const start = append ? listLoadedCount : 0;
+  const slice = courseListData.slice(start, start + PAGE_SIZE);
+  const html = slice.map(c => `
+    <div class="course-list-item" onclick="openDetail(${c.id})">
+      <div class="cli-cover" style="background:linear-gradient(135deg, ${c.cover}, ${shade(c.cover,-20)});">
+        ${c.cat}
+        <div class="play-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+      </div>
+      <div class="cli-info">
+        <div class="cli-title">${c.title}</div>
+        <div class="cli-meta">
+          <span class="rating">★ ${c.rating}</span>
+          <span>${c.instructor}</span>
+        </div>
+        <div class="cli-bottom">
+          <div class="cli-price">
+            ${c.price === 0 ? '<span class="free">免费</span>' : `<span class="now">¥${c.price}</span>`}
+          </div>
+          <div class="cli-students">${formatStudents(c.students)}人在学</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  if(append) list.insertAdjacentHTML('beforeend', html);
+  else list.innerHTML = html;
+  listLoadedCount = start + slice.length;
+}
+
+function formatStudents(n){
+  if(n >= 10000) return (n/10000).toFixed(1)+'万';
+  return n;
+}
+
+/* ============ TabBar 切换 ============ */
+const tabPages = {home:'page-home', course:'page-course', profile:'page-profile'};
+document.querySelectorAll('.tabbar-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const tab = item.dataset.tab;
+    document.querySelectorAll('.tabbar-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(tabPages[tab]).classList.add('active');
+    // 滚动到顶
+    document.getElementById(tabPages[tab]).scrollTop = 0;
+  });
+});
+
+/* ============ 轮播图 ============ */
+let carouselIdx = 0;
+let carouselTimer = null;
+const carouselTrack = document.getElementById('carouselTrack');
+const carouselDots = document.querySelectorAll('.carousel-dot');
+
+function goCarousel(idx){
+  carouselIdx = idx;
+  carouselTrack.style.transform = `translateX(-${idx*100}%)`;
+  carouselDots.forEach((d,i) => d.classList.toggle('active', i===idx));
+}
+function nextCarousel(){
+  goCarousel((carouselIdx+1) % 3);
+}
+function startCarousel(){
+  stopCarousel();
+  carouselTimer = setInterval(nextCarousel, 3000);
+}
+function stopCarousel(){
+  if(carouselTimer) clearInterval(carouselTimer);
+}
+carouselDots.forEach(d => {
+  d.addEventListener('click', () => {
+    goCarousel(parseInt(d.dataset.idx));
+    startCarousel();
+  });
+});
+
+/* ============ 分类筛选 ============ */
+document.querySelectorAll('.cat-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const cat = tab.dataset.cat;
+    courseListData = cat === '全部' ? [...allCourses] : allCourses.filter(c => c.cat === cat);
+    listLoadedCount = 0;
+    renderCourseList(false);
+    document.getElementById('page-course').scrollTop = 0;
+  });
+});
+
+/* ============ 下拉刷新 ============ */
+const coursePage = document.getElementById('page-course');
+const pullIndicator = document.getElementById('pullIndicator');
+let pullStartY = 0;
+let pulling = false;
+
+coursePage.addEventListener('touchstart', e => {
+  if(coursePage.scrollTop === 0){
+    pullStartY = e.touches[0].clientY;
+    pulling = true;
+  }
+}, {passive:true});
+
+coursePage.addEventListener('touchmove', e => {
+  if(!pulling) return;
+  const diff = e.touches[0].clientY - pullStartY;
+  if(diff > 0 && diff < 80){
+    pullIndicator.style.height = diff + 'px';
+    pullIndicator.querySelector('.pull-text').textContent = diff > 50 ? '释放立即刷新' : '下拉刷新';
+  }
+}, {passive:true});
+
+coursePage.addEventListener('touchend', e => {
+  if(!pulling) return;
+  pulling = false;
+  const height = parseInt(pullIndicator.style.height) || 0;
+  if(height > 50){
+    pullIndicator.classList.add('loading');
+    pullIndicator.style.height = '40px';
+    pullIndicator.querySelector('.pull-text').textContent = '正在刷新...';
+    setTimeout(() => {
+      pullIndicator.classList.remove('loading');
+      pullIndicator.classList.add('success');
+      pullIndicator.querySelector('.pull-text').textContent = '刷新成功';
+      // 重置数据
+      courseListData = [...allCourses];
+      listLoadedCount = 0;
+      renderCourseList(false);
+      setTimeout(() => {
+        pullIndicator.classList.remove('success');
+        pullIndicator.style.height = '0';
+        pullIndicator.querySelector('.pull-text').textContent = '下拉刷新';
+      }, 800);
+    }, 1200);
+  } else {
+    pullIndicator.style.height = '0';
+  }
+});
+
+// 桌面端模拟下拉刷新(点击顶部)
+pullIndicator.addEventListener('click', () => {
+  if(pullIndicator.classList.contains('loading')) return;
+  pullIndicator.classList.add('loading');
+  pullIndicator.style.height = '40px';
+  pullIndicator.querySelector('.pull-text').textContent = '正在刷新...';
+  setTimeout(() => {
+    pullIndicator.classList.remove('loading');
+    pullIndicator.querySelector('.pull-text').textContent = '刷新成功';
+    courseListData = [...allCourses];
+    listLoadedCount = 0;
+    renderCourseList(false);
+    setTimeout(() => {
+      pullIndicator.style.height = '0';
+      pullIndicator.querySelector('.pull-text').textContent = '下拉刷新';
+    }, 800);
+  }, 1200);
+});
+
+/* ============ 无限滚动加载更多 ============ */
+const loadMoreIndicator = document.getElementById('loadMoreIndicator');
+coursePage.addEventListener('scroll', () => {
+  if(coursePage.scrollTop + coursePage.clientHeight >= coursePage.scrollHeight - 50){
+    if(listLoadedCount < courseListData.length && !loadMoreIndicator.classList.contains('show')){
+      loadMoreIndicator.classList.add('show');
+      setTimeout(() => {
+        renderCourseList(true);
+        loadMoreIndicator.classList.remove('show');
+        if(listLoadedCount >= courseListData.length){
+          loadMoreIndicator.innerHTML = '没有更多课程了';
+          loadMoreIndicator.classList.add('show');
+          setTimeout(() => loadMoreIndicator.classList.remove('show'), 1500);
+          loadMoreIndicator.innerHTML = '<span class="spinner"></span> 加载更多课程...';
+        }
+      }, 800);
+    }
+  }
+});
+
+/* ============ 课程详情页 ============ */
+function openDetail(id){
+  const c = allCourses.find(x => x.id === id) || recommendCourses.find(x => x.id === id);
+  if(c){
+    document.getElementById('detailTitleText').textContent = c.title;
+    document.getElementById('detailStudents').textContent = (c.students ? formatStudents(c.students) : '1.2万') + ' 人在学';
+    document.getElementById('detailTitle').textContent = c.title.length > 14 ? c.title.slice(0,14)+'...' : c.title;
+  }
+  document.getElementById('detailPage').classList.add('show');
+  document.getElementById('detailPage').scrollTop = 0;
+}
+function closeDetail(){
+  document.getElementById('detailPage').classList.remove('show');
+}
+
+/* ============ 详情页 Tab ============ */
+document.querySelectorAll('.detail-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.detail-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.dtab).classList.add('active');
+  });
+});
+
+/* ============ 章节折叠 ============ */
+function toggleChapter(headEl){
+  const chapter = headEl.parentElement;
+  chapter.classList.toggle('open');
+}
+
+/* ============ 收藏 ============ */
+let isFav = false;
+function toggleFav(btn){
+  isFav = !isFav;
+  const svg = btn.querySelector('svg');
+  if(isFav){
+    svg.setAttribute('fill', '#ff6b35');
+    svg.removeAttribute('stroke');
+    svg.querySelector('path').setAttribute('fill', '#ff6b35');
+    showToast('已收藏');
+  } else {
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', '#5a6068');
+    svg.setAttribute('stroke-width', '2');
+    showToast('已取消收藏');
+  }
+}
+
+/* ============ Toast ============ */
+let toastTimer = null;
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  toast.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+/* ============ 工具函数 ============ */
+function shade(hex, percent){
+  hex = hex.replace('#','');
+  let r = parseInt(hex.substr(0,2),16);
+  let g = parseInt(hex.substr(2,2),16);
+  let b = parseInt(hex.substr(4,2),16);
+  r = Math.max(0, Math.min(255, r + Math.round(r * percent/100)));
+  g = Math.max(0, Math.min(255, g + Math.round(g * percent/100)));
+  b = Math.max(0, Math.min(255, b + Math.round(b * percent/100)));
+  return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+/* ============ 初始化 ============ */
+courseListData = [...allCourses];
+renderRecommend();
+renderProgress();
+renderCourseList(false);
+startCarousel();
+
+// 防止桌面端滚动穿透
+document.addEventListener('wheel', e => {}, {passive:true});
+</script>
+</body>
+</html>

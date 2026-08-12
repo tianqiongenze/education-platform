@@ -15,7 +15,7 @@
 │                                                                    │
 │  namespace: sp03(每单元独立 ns, 如 sp03-cell0/sp03-cell1)            │
 │                                                                    │
-│  ┌─ Java 组件(UCM/OPM/MMP/NTF/CMP/SRH/TKT/RSK) Spring Cloud ──┐    │
+│  ┌─ Java 组件(UCM/OPM/MMP/NTF/CMP/SRH/TKT/RSK) SCA+Dubbo ──────┐    │  ← D-032
 │  ├─ Rust 热点(OPM-Billing / RSK-Rule) ─────────────────────────┤    │
 │  ├─ Go(WS/IM 网关) ────────────────────────────────────────────┤    │
 │  └─ ES Operator / Milvus Operator / TiDB Operator(托管的 CR) ──┘    │

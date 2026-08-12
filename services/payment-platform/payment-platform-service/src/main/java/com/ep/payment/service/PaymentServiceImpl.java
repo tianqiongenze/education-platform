@@ -1,0 +1,350 @@
+package com.ep.payment.service;
+
+import com.ep.payment.api.Payment;
+import com.ep.payment.api.PaymentChannel;
+import com.ep.payment.api.PaymentChannelSpi;
+import com.ep.payment.api.PaymentRequest;
+import com.ep.payment.api.PaymentResult;
+import com.ep.payment.api.PaymentService;
+import com.ep.payment.api.PaymentStatus;
+import com.ep.payment.api.Refund;
+import com.ep.payment.api.RefundResult;
+import com.ep.payment.api.RefundStatus;
+import com.ep.payment.channel.MockPaymentChannel;
+import com.ep.payment.entity.PaymentEntity;
+import com.ep.payment.entity.RefundEntity;
+import com.ep.payment.repository.PaymentJpaRepository;
+import com.ep.payment.repository.RefundJpaRepository;
+import org.apache.dubbo.config.annotation.DubboService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * {@link PaymentService} implementation. Wires the OPM Payment/Refund domain
+ * to the {@link PaymentChannelSpi} strategy set (SDD §3.3).
+ *
+ * <p><b>D-132: persistence.</b> Payment and Refund records are now persisted to
+ * TiDB via {@link PaymentJpaRepository} / {@link RefundJpaRepository} (tables
+ * {@code ep_payment} / {@code ep_refund}), so they survive process restarts.
+ * The repositories are injected through {@link ObjectProvider} so the pure-Mockito
+ * unit tests (which construct this service with {@code new} and no Spring context)
+ * keep working — when the repositories are absent the service transparently falls
+ * back to the legacy in-memory {@link ConcurrentHashMap} store. In every Spring
+ * context (dev/prod/test-context) the JPA repositories are present and the
+ * in-memory store is unused.
+ *
+ * <p>Channel selection: collects every {@link PaymentChannelSpi} bean Spring
+ * finds and dispatches by {@link PaymentChannelSpi#getChannel()}.
+ * EP_DEV_ONLY: when {@code ep.payment.dev-guard=true} (the default), the
+ * requested channel is overridden to {@link PaymentChannel#MOCK} so dev/CI
+ * never accidentally hits a real gateway even if a real-channel bean were
+ * present. The {@link com.ep.payment.config.DevGuardConfig} startup guard
+ * additionally refuses to boot if {@code EP_DEV_ONLY=true} in a non-dev
+ * profile.
+ *
+ * <p>Idempotency: {@code paymentId} is a UUID minted per create call. A
+ * production version adds the Redis SETNX + DB UNIQUE-key layer from SDD §3.3.
+ */
+@DubboService
+public class PaymentServiceImpl implements PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+
+    /**
+     * D-132: legacy in-memory fallback. Used only when the JPA repositories are
+     * not available — i.e. the pure-Mockito unit tests that construct this service
+     * directly. In any Spring context the repositories are wired and these maps
+     * stay empty. D-039: ConcurrentHashMap, no synchronized.
+     */
+    private final Map<String, Payment> paymentsById = new ConcurrentHashMap<>();
+    private final Map<String, Payment> paymentsByOrder = new ConcurrentHashMap<>();
+    private final Map<String, Refund> refundsById = new ConcurrentHashMap<>();
+
+    private final Map<PaymentChannel, PaymentChannelSpi> channels;
+    private final PaymentChannelSpi defaultChannel;
+    private final boolean devGuard;
+
+    /**
+     * D-132: JPA repositories (optional via {@link ObjectProvider}). Present in
+     * every Spring context; absent in pure-Mockito unit tests, where the in-memory
+     * fallback above is used instead.
+     */
+    private final PaymentJpaRepository paymentRepository;
+    private final RefundJpaRepository refundRepository;
+
+    /**
+     * Spring-managed constructor. The repositories are injected via
+     * {@link ObjectProvider} so they are optional — when both are resolved the
+     * service persists to TiDB; when neither is available (pure unit test) the
+     * in-memory maps are used.
+     *
+     * @param channelSpis             every {@link PaymentChannelSpi} bean Spring discovers
+     *                                (may be empty in some test contexts — defaults are used)
+     * @param paymentRepositoryProvider JPA repository for {@code ep_payment} (optional)
+     * @param refundRepositoryProvider  JPA repository for {@code ep_refund} (optional)
+     * @param devGuard                value of {@code ep.payment.dev-guard}; when true the
+     *                                requested channel is forced to MOCK
+     */
+    @Autowired
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis,
+                              ObjectProvider<PaymentJpaRepository> paymentRepositoryProvider,
+                              ObjectProvider<RefundJpaRepository> refundRepositoryProvider,
+                              @Value("${ep.payment.dev-guard:true}") boolean devGuard) {
+        this.devGuard = devGuard;
+        this.paymentRepository = paymentRepositoryProvider == null ? null : paymentRepositoryProvider.getIfAvailable();
+        this.refundRepository = refundRepositoryProvider == null ? null : refundRepositoryProvider.getIfAvailable();
+        ConcurrentHashMap<PaymentChannel, PaymentChannelSpi> map = new ConcurrentHashMap<>();
+        PaymentChannelSpi fallback = null;
+        if (channelSpis != null) {
+            for (PaymentChannelSpi spi : channelSpis) {
+                PaymentChannel existing = spi.getChannel();
+                if (existing == null) {
+                    // SPI that cannot identify itself — skip it but log.
+                    log.warn("PaymentChannelSpi without a channel, ignoring: {}", spi.getClass());
+                    continue;
+                }
+                map.putIfAbsent(existing, spi);
+                if (existing == PaymentChannel.MOCK) {
+                    fallback = spi;
+                }
+            }
+        }
+        if (fallback == null) {
+            // No MOCK bean discovered (e.g. plain unit test). Synthesize one so the
+            // service always has a working default channel.
+            fallback = new MockPaymentChannel();
+        }
+        this.channels = map;
+        this.defaultChannel = fallback;
+        log.info("PaymentServiceImpl initialised: channels={}, devGuard={}, defaultChannel={}, persistence={}",
+                map.keySet(), devGuard, defaultChannel.getChannel(),
+                paymentRepository != null ? "JPA" : "in-memory");
+    }
+
+    /**
+     * Back-compat constructor for the pure-Mockito unit tests (no Spring context).
+     * Equivalent to the Spring constructor with {@code null} repository providers,
+     * so the service falls back to the in-memory store.
+     */
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard) {
+        this(channelSpis, null, null, devGuard);
+    }
+
+    private boolean isJpa() {
+        return paymentRepository != null && refundRepository != null;
+    }
+
+    @Override
+    @Transactional
+    public PaymentResult createPayment(PaymentRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        requireNonBlank(request.orderId(), "orderId");
+        requireNonBlank(request.tenantId(), "tenantId");
+        Objects.requireNonNull(request.amount(), "amount must not be null");
+        if (request.amount().signum() <= 0) {
+            throw new IllegalArgumentException("amount must be > 0");
+        }
+        if (request.channel() == null) {
+            throw new IllegalArgumentException("channel must not be null");
+        }
+
+        PaymentChannel effective = devGuard ? PaymentChannel.MOCK : request.channel();
+        PaymentChannelSpi spi = resolveChannel(effective);
+
+        String paymentId = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        Payment payment = new Payment(paymentId, request.orderId(), request.tenantId(),
+                request.amount(), request.currency() == null ? "CNY" : request.currency(),
+                spi.getChannel(), PaymentStatus.PENDING, now);
+
+        // Drive the channel. The mock is synchronous and returns SUCCESS; a real
+        // channel may return PROCESSING and complete via callback.
+        PaymentResult raw = spi.pay(new PaymentRequest(request.orderId(), request.tenantId(),
+                spi.getChannel(), request.amount(), request.currency()));
+
+        if (raw.status() == PaymentStatus.SUCCESS) {
+            payment.markSuccess(raw.channelTxId(), raw.paidAt());
+        } else if (raw.status() == PaymentStatus.PROCESSING) {
+            payment.beginProcessing();
+        } else if (raw.status() == PaymentStatus.FAILED) {
+            payment.markFailed();
+        }
+
+        if (isJpa()) {
+            PaymentEntity entity = toEntity(payment);
+            paymentRepository.save(entity);
+        } else {
+            paymentsById.put(paymentId, payment);
+            paymentsByOrder.put(request.orderId(), payment);
+        }
+
+        log.info("createPayment: orderId={}, channel={}, status={}, paymentId={}, channelTxId={}",
+                request.orderId(), spi.getChannel(), payment.getStatus(), paymentId,
+                payment.getChannelTxId());
+
+        return new PaymentResult(paymentId, payment.getStatus(), payment.getChannelTxId(),
+                payment.getPaidAt());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Payment getPayment(String paymentId) {
+        requireNonBlank(paymentId, "paymentId");
+        if (isJpa()) {
+            return paymentRepository.findById(paymentId).map(PaymentServiceImpl::toDomain).orElse(null);
+        }
+        return paymentsById.get(paymentId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Payment getPaymentByOrder(String orderId) {
+        requireNonBlank(orderId, "orderId");
+        if (isJpa()) {
+            return paymentRepository.findFirstByOrderId(orderId)
+                    .map(PaymentServiceImpl::toDomain).orElse(null);
+        }
+        return paymentsByOrder.get(orderId);
+    }
+
+    @Override
+    @Transactional
+    public Refund refund(String orderId, BigDecimal amount, String reason) {
+        requireNonBlank(orderId, "orderId");
+        Objects.requireNonNull(amount, "amount must not be null");
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("amount must be > 0");
+        }
+        Payment payment;
+        PaymentEntity paymentEntity = null;
+        if (isJpa()) {
+            paymentEntity = paymentRepository.findFirstByOrderId(orderId).orElse(null);
+            payment = paymentEntity == null ? null : toDomain(paymentEntity);
+        } else {
+            payment = paymentsByOrder.get(orderId);
+        }
+        if (payment == null) {
+            throw new IllegalStateException("No payment for order: " + orderId);
+        }
+        if (!payment.canRefund()) {
+            throw new IllegalStateException(
+                    "Payment not refundable (status=" + payment.getStatus()
+                            + "), paymentId=" + payment.getPaymentId());
+        }
+
+        PaymentChannelSpi spi = resolveChannel(payment.getChannel());
+        if (!spi.supportsRefund()) {
+            throw new IllegalStateException(
+                    "Channel " + spi.getChannel() + " does not support refund");
+        }
+        Optional<RefundResult> result = spi.refund(payment.getChannelTxId(), amount, reason);
+        if (result.isEmpty() || !result.get().success()) {
+            Refund failed = new Refund(UUID.randomUUID().toString(), payment.getPaymentId(),
+                    orderId, payment.getTenantId(), amount, RefundStatus.FAILED, reason, Instant.now());
+            if (isJpa()) {
+                refundRepository.save(toEntity(failed));
+            } else {
+                refundsById.put(failed.getRefundId(), failed);
+            }
+            log.warn("refund failed: orderId={}, paymentId={}, amount={}", orderId,
+                    payment.getPaymentId(), amount);
+            return failed;
+        }
+
+        Refund refund = new Refund(UUID.randomUUID().toString(), payment.getPaymentId(),
+                orderId, payment.getTenantId(), amount, RefundStatus.PENDING, reason, Instant.now());
+        refund.markSuccess(Instant.now());
+        if (isJpa()) {
+            refundRepository.save(toEntity(refund));
+        } else {
+            refundsById.put(refund.getRefundId(), refund);
+        }
+
+        // Full refund → flip the Payment to REFUNDED; partial → leave SUCCESS.
+        if (amount.compareTo(payment.getAmount()) >= 0) {
+            payment.markRefunded();
+        }
+
+        if (isJpa()) {
+            // Persist the post-refund payment state (status may have flipped).
+            assert paymentEntity != null;
+            paymentEntity.setStatus(payment.getStatus());
+            paymentRepository.save(paymentEntity);
+        }
+
+        log.info("refund ok: orderId={}, paymentId={}, refundId={}, amount={}, paymentStatus={}",
+                orderId, payment.getPaymentId(), refund.getRefundId(), amount, payment.getStatus());
+        return refund;
+    }
+
+    /**
+     * Resolve the SPI for a channel. Falls back to the default (MOCK) when the
+     * channel has no registered bean, so the service keeps working in dev/CI
+     * even if only the mock bean is present.
+     */
+    private PaymentChannelSpi resolveChannel(PaymentChannel channel) {
+        PaymentChannelSpi spi = channels.get(channel);
+        return spi != null ? spi : defaultChannel;
+    }
+
+    private static void requireNonBlank(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+    }
+
+    // --------------------- domain ↔ entity mapping (D-132) ---------------------
+
+    private static PaymentEntity toEntity(Payment p) {
+        PaymentEntity e = new PaymentEntity();
+        e.setPaymentId(p.getPaymentId());
+        e.setOrderId(p.getOrderId());
+        e.setTenantId(p.getTenantId());
+        e.setAmount(p.getAmount());
+        e.setCurrency(p.getCurrency());
+        e.setChannel(p.getChannel());
+        e.setStatus(p.getStatus());
+        e.setChannelTxId(p.getChannelTxId());
+        e.setCreatedAt(p.getCreatedAt());
+        e.setPaidAt(p.getPaidAt());
+        e.setLockVersion(p.getLockVersion() == null ? 0 : p.getLockVersion());
+        return e;
+    }
+
+    private static Payment toDomain(PaymentEntity e) {
+        Payment p = new Payment(e.getPaymentId(), e.getOrderId(), e.getTenantId(),
+                e.getAmount(), e.getCurrency(), e.getChannel(), e.getStatus(), e.getCreatedAt());
+        p.setChannelTxId(e.getChannelTxId());
+        p.setPaidAt(e.getPaidAt());
+        p.setLockVersion(e.getLockVersion());
+        return p;
+    }
+
+    private static RefundEntity toEntity(Refund r) {
+        RefundEntity e = new RefundEntity();
+        e.setRefundId(r.getRefundId());
+        e.setPaymentId(r.getPaymentId());
+        e.setOrderId(r.getOrderId());
+        e.setTenantId(r.getTenantId());
+        e.setAmount(r.getAmount());
+        e.setStatus(r.getStatus());
+        e.setReason(r.getReason());
+        e.setCreatedAt(r.getCreatedAt());
+        e.setRefundedAt(r.getRefundedAt());
+        e.setLockVersion(0);
+        return e;
+    }
+}

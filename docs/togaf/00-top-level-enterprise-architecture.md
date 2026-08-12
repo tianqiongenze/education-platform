@@ -24,6 +24,9 @@
 11. [变更管理(Phase H)](#11-变更管理)
 12. [ADR 全集索引](#12-adr-全集索引)
 13. [双向追溯矩阵](#13-双向追溯矩阵)
+14. [技术架构增强 (D-039/D-040)](#14-技术架构增强)
+15. [多区域多活部署架构 (D-041)](#15-多区域多活部署架构)
+16. [AI智能驱动架构增强 (D-042)](#16-ai智能驱动架构增强)
 
 ---
 
@@ -281,7 +284,7 @@ education-platform 业务能力地图
                     │
               TiCDC changefeed
                     │
-              Kafka(Avro+SchemaRegistry)
+              Pulsar(Avro+内置SchemaRegistry, ns=cdc://)
                     │
          ┌──────────┼──────────┐
          │          │          │
@@ -314,7 +317,7 @@ education-platform 业务能力地图
 | 数据质量 | Avro Schema Registry 强制校验 | 数据中台队 |
 | 数据安全 | JWT 驱动 FGAC(禁 app 拼 tenant_id) | AI中台队 |
 | 数据合规 | PIPL 海外隔离 / 国内数据不出境 | 安全合规队 |
-| 数据 lineage | TiCDC → Kafka → Flink → Iceberg 全链路 | 数据中台队 |
+| 数据 lineage | TiCDC → Pulsar(ns=cdc://) → Flink → Iceberg 全链路 | 数据中台队 |
 | 数据保留 | 热6月→冷归档；订单永久(合规) | 运营 + SRE |
 | 数据加密 | 传输 TLS / 静态 AES-256 | SRE |
 
@@ -334,7 +337,7 @@ education-platform 业务能力地图
 └────────────────────────────────┬────────────────────────────────┘
                                  │
 ┌────────────────────────────────▼────────────────────────────────┐
-│  BFF / API 网关层(Java/Spring Cloud Gateway + Go WS网关)         │
+│  BFF / API 网关层(Java/Netty edge+Disruptor+WebMVC + Go WS网关)     │  ← D-032/ADR-T07(rev2)
 │  JWT RS256 签发+JWKS │ CellRouter │ Sentinel限流 │ 灰度           │
 └────────────────────────────────┬────────────────────────────────┘
                                  │
@@ -361,8 +364,8 @@ education-platform 业务能力地图
                                  │
 ┌────────────────────────────────▼────────────────────────────────┐
 │  基础设施层(复用容器集群)                                         │
-│  TiDB/TiFlash │ Redis Cluster │ Pulsar │ Milvus │ 图库 │ K8s      │
-│  Kafka(CDC) │ S3/MinIO │ 可观测(Loki/Prom/Tempo)                 │
+│  TiDB/TiFlash │ Redis Cluster │ Pulsar(CDC+事件统一) │ Milvus │ 图库 │ K8s │
+│  S3/MinIO │ 可观测(Loki/Prom/Tempo)                                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -371,7 +374,7 @@ education-platform 业务能力地图
 | 服务 | 中台/BU | 语言 | 域归属 | 单元化 | 关键依赖 |
 |------|--------|------|--------|--------|---------|
 | bff-java | 技术中台 | Java | 接入层 | 无状态 | Redis(JWKS)/Nacos |
-| gateway-go | 技术中台 | Go | 接入层 | 无状态 | Redis(Pub/Sub) |
+| gateway-go | 技术中台 | Go | 接入层 | 无状态 | Redis/Pulsar(WS跨pod广播) |
 | CellRouter | 技术中台 | Java | 接入层 | 无状态 | Nacos(路由表) |
 | ep-rw-java | 技术中台 | Java | SDK | — | TiDB |
 | ep-disruptor | 技术中台 | Java | SDK | — | — |
@@ -385,7 +388,7 @@ education-platform 业务能力地图
 | srh-service | 业务中台 | Java | 全局域 | 共享 | ES/Milvus |
 | tkt-service | 业务中台 | Java | 全局域 | 共享 | TiDB/ES |
 | rsk-service | 业务中台 | Rust+Java | 全域+用户域 | 混合 | Redis/Flink |
-| flink-jobs | 数据中台 | Python/SQL | 数据域 | — | Kafka/Iceberg/TiDB |
+| flink-jobs | 数据中台 | Python/SQL | 数据域 | — | Pulsar(ns=cdc://)/Iceberg/TiDB |
 | ai-gateway | AI中台 | Python | AI域 | 无状态 | Redis(LangCache)/Kong |
 | rag-service | AI中台 | Python | AI域 | namespace+FGAC | Milvus/pgvector |
 | agent-service | AI中台 | Python | AI域 | — | LangGraph/AI网关 |
@@ -402,8 +405,8 @@ education-platform 业务能力地图
 | 同步 RPC | 请求-响应 | Dubbo Triple | BFF→UCM 查用户 |
 | 异步事件 | 跨服务解耦 | Pulsar | 订单支付成功→开通课程 |
 | 进程内削峰 | 高频写 | Disruptor | 学习事件 ingest |
-| WS 长连接 | 实时推送 | Go WS网关 + Redis Pub/Sub | 直播弹幕/连麦信令 |
-| CDC 流 | 数据同步 | TiCDC→Kafka→Flink | TiDB 变更入湖 |
+| WS 长连接 | 实时推送 | Go WS网关 + Pulsar(跨pod广播) | 直播弹幕/连麦信令 |
+| CDC 流 | 数据同步 | TiCDC→Pulsar→Flink | TiDB 变更入湖 |
 | 批处理 | 离线计算 | Spark on Iceberg | 留存/画像/报表 |
 
 ### 5.4 契约治理
@@ -424,9 +427,13 @@ education-platform 业务能力地图
 | 组件 | 选型 | 版本 | 用途 | 复用 |
 |------|------|------|------|------|
 | 分布式数据库 | TiDB | 8.5 LTS | HTAP 在线库(Primary/Follower) + TiFlash 列存；对齐 ESP v8.5.7 3-region Raft 验证(ADR-T-DB) | ✅ 集群已有 |
+| Java 框架 | Spring Boot | 4.0.7 | 全栈基座(D-032 pin, SCA 2025.1.0.0 强映射 SB4.0) | ✅ |
+| 微服务治理 | Spring Cloud Alibaba | 2025.1.0.0 | Nacos 注册/配置 + Sentinel 限流 + Dubbo Triple RPC(D-032/铁律6: 禁 Spring Cloud Netflix/SCG 原生组件) | ✅ |
+| Spring Cloud | Spring Cloud | 2025.1.2 | 仅作 SCA release train 对齐基线(SCA 2025.1.0.0↔SC 2025.1.x↔SB4.0), 不直接使用其原生组件 | ✅ |
+| 边缘网关 | Netty + Disruptor + WebMVC | 4.1.136.Final / 4.0.0 / SB4.0.7 | 自建 BFF 边缘接入层(ADR-T07 rev2, 禁 SCG — D-032) | ✅ |
 | 缓存 | Redis Cluster | 8.0 | L2 缓存/会话/路由表/特征(对齐 ESP 实际部署 redis:8.0-alpine, 非 7.x) | ✅ |
-| 消息队列 | Pulsar | 3.3.x | 跨服务事件/geo-rep(ADR-02 承接 ESP, 不用 Kafka 做事件总线; 4.x 升级延迟至 v2.0 — ADR-T11) | ✅ |
-| CDC 总线 | Kafka | 3.x | TiCDC changefeed 缓冲(仅 CDC, 不替代 Pulsar) | ✅ |
+| 消息队列 | Pulsar | 3.3.x | 跨服务事件/CDC 统一总线/geo-rep(ADR-02 承接 ESP, CDC 亦走 Pulsar — ADR-D01, 彻底不引入 Kafka; 4.x 升级延迟至 v2.0 — ADR-T11) | ✅ |
+| CDC sink | TiCDC→Pulsar | 8.5 LTS / 3.3.x | TiCDC changefeed 直达 Pulsar(ns=cdc://, Avro+内置 Schema Registry), Flink CDC 消费入湖 — 替代原 Kafka 缓冲方案(ADR-D01) | ✅ |
 | 向量数据库 | Milvus | 2.5+ | RAG/语义检索/查重(对齐 ESP 验证 2.5.0) | ✅ |
 | 图数据库 | Neo4j | 5.25+ | 知识图谱/学习路径(对齐 ESP 验证 5.25.1-community) | ✅ |
 | 对象存储 | S3/MinIO | — | 录制/资料/Iceberg 底层 | ✅ |
@@ -572,6 +579,22 @@ networkPolicy: { deny-all + allow-namespace }
 | 等保2.0 | 安全等级保护 | 审计日志 + 加密 + 访问控制 |
 | 著作权法 | 课程内容版权 | DRM + 水印 + 访问控制 |
 
+### 7.4 TOGAF 构件索引
+
+> 本项目群 TOGAF ADM 完整构件集(D-157 补全)。所有构件以本文件(00)为伞文档,通过双向追溯保持一致。
+
+| 文件 | 构件类型 | TOGAF 阶段 | 内容摘要 |
+|------|---------|-----------|---------|
+| `00-top-level-enterprise-architecture.md` | 顶层企业架构伞文档 | A-H | 本文件,四架构域+治理+ADR+追溯 |
+| `01-esp-experience-absorption-report.md` | 经验吸收报告 | A(愿景输入) | ESP 项目经验教训沉淀 |
+| `02-architecture-building-blocks.md` | ABB 登记表 | C/D | 28 个架构构建块(ABB-01..28) |
+| `03-solution-building-blocks.md` | SBB 登记表 | E | 31 个解决方案构建块(产品/技术+版本锁定+禁用清单) |
+| `04-standards-information-base.md` | 标准信息库(SIB) | G | 编码/命名/API/安全/可观测/部署/测试/数据 8 类标准 + CI 门禁 |
+| `05-architecture-requirements-specification.md` | 架构需求规格(ARS) | B/C/D | 功能/非功能/数据/应用/技术需求 + Iron Law + 追溯矩阵 |
+| `06-governance-log.md` | 治理日志 | G/H | 合规审查记录 + 原则/铁律合规状态 + ADR 流水 + 技术债看板 |
+| `07-architecture-contract.md` | 架构契约 | G | 架构委员会 vs 各 SP 合规条款 + 违约处理 + 变更管理 + 签署 |
+| `08-transition-architecture.md` | 过渡架构 | F | Baseline(M1)→TA-1(M2)→TA-2(M3)→Target + 风险矩阵 |
+
 ---
 
 ## 8. 机会与解决方案
@@ -605,6 +628,7 @@ networkPolicy: { deny-all + allow-namespace }
 | 数据湖 | Hudi / Iceberg / Delta | Iceberg | Flink+Iceberg checkpoint即提交,成熟SinkV2 | D-013 |
 | AI网关 | 自建 / LiteLLM / Kong AI | LiteLLM起步→Kong AI | Kong基准>800% LiteLLM RPS | D-018 |
 | 多租户RAG | DB-per-tenant / namespace+FGAC | namespace+FGAC | DB-per-tenant >10k不可行 | D-019 |
+| 全球部署数据库 | A仅TiDB / B仅CockroachDB / C TiDB国内+CockroachDB海外PoC | C | TiDB已验证(ESP)+HTAP+CDC链路完整; CockroachDB原生多区域SQL+PG兼容+数据驻留适合海外PIPL; PoC不阻塞MVP | ADR-T12 |
 
 ---
 
@@ -618,7 +642,7 @@ networkPolicy: { deny-all + allow-namespace }
 M0(底座,1-2月)
 ├─ SP-01 技术中台核心(网关/路由/读写分离/缓存/EDA骨架) [3/7 SDK已实现: ep-rw-java, ep-disruptor, ep-cache]
 ├─ SP-06 三端前端骨架
-└─ 基础设施复用对接(TiDB/Redis/Pulsar/Kafka/可观测)
+└─ 基础设施复用对接(TiDB/Redis/Pulsar(CDC+事件统一)/可观测)
     验收: 中台SDK可用,前端骨架可调API
 
 M1(IT后端 MVP 端到端,2-3月)  ← 第一个可演示里程碑
@@ -753,7 +777,7 @@ CI Pipeline:
 | D-013 | Flink+Iceberg湖仓一体 | Accepted | Data | EP-SPEC-001 §0 |
 | D-014 | 单元化流量纠正模式 | Accepted | Technology | EP-SPEC-001 §0 |
 | D-015 | TiDB手动user_id分表 | Accepted | Data | EP-SPEC-001 §0 |
-| D-016 | CDC=TiCDC→Kafka→Flink→Iceberg | Accepted | Data | EP-SPEC-001 §0 |
+| D-016 | CDC=TiCDC→Pulsar→Flink→Iceberg(统一消息总线,不引入Kafka) | Accepted | Data | EP-SPEC-001 §4 |
 | D-017 | Flink→Iceberg checkpoint即提交 | Accepted | Data | EP-SPEC-001 §0 |
 | D-018 | AI网关分层+成本栈 | Accepted | Application | EP-SPEC-001 §0 |
 | D-019 | RAG多租户namespace+FGAC | Accepted | Application/Data | EP-SPEC-001 §0 |
@@ -764,6 +788,11 @@ CI Pipeline:
 | D-024 | 代码查重两层MinHash+LSH | Accepted | Application | EP-SPEC-001 §0 |
 | D-025 | 评分分层沙箱pipeline | Accepted | Application | EP-SPEC-001 §0 |
 | D-026 | IT后端4子平台SAD级 | Accepted | Application | EP-SPEC-001 §0 |
+| D-027 | 全球部署数据库: TiDB国内主选+CockroachDB海外PoC | Accepted/Proposed | Technology | sp01-sad §3.12 (ADR-T12) |
+| D-039 | 虚拟线程铁律: SB4服务 spring.threads.virtual.enabled=true, synchronized→ReentrantLock | Accepted | Technology/Application | 本文档 §14 |
+| D-040 | GraalVM Native Image铁律: AOT+native-maven-plugin 0.10.4, JIT/Native双模式 | Accepted | Technology | 本文档 §14 |
+| D-041 | 多区域多活数据同步: TiDB Follower Read+Pulsar Geo-Rep+Redis CRDT+Karmada, 4 cell(hz/sz/bj/sg) | Accepted | Technology/Data | 本文档 §15 |
+| D-042 | AI智能驱动数据中台(SP-02升级, ADR-D05~D08) | Accepted | Data/Application | 本文档 §16 |
 
 ### 12.2 中台级 ADR
 
@@ -775,12 +804,13 @@ CI Pipeline:
 | ADR-T04 | 多级缓存跨语言对齐 | 技术中台 | EP-SPEC-001 §3 |
 | ADR-T05 | 探针三分离+HPA稳定窗 | 技术中台 | EP-SPEC-001 §3 |
 | ADR-T06 | 不用Seata,幂等键+乐观锁+Pulsar at-least-once | 技术中台 | sp01-sad §3.6 (ESP Seata SCA冲突) |
-| ADR-T07 | 网关选SCG非Netty手写 | 技术中台 | sp01-sad §3.7 |
+| ADR-T07 | BFF用Netty edge+Disruptor+WebMVC,禁SCG(D-032) | 技术中台 | sp01-sad §3.7 |
 | ADR-T08 | Sentinel规则走Nacos分布式,禁本地内存 | 技术中台 | sp01-sad §3.8 (ESP踩坑) |
 | ADR-T09 | Dubbo Triple禁STRICT序列化,统一Protobuf契约 | 技术中台 | sp01-sad §3.9 (ESP Dubbo STRICT跨语言踩坑) |
 | ADR-T10 | 大表强制RANGE分区(防session_turns 82M OOM) | 技术中台 | sp01-sad §3.10 (ESP session_turns 16次OOM) |
 | ADR-T11 | Pulsar 3.3.x锁定,4.x升级延迟至v2.0 | 技术中台 | sp01-sad §3.11 (ESP TODO升级评估) |
-| ADR-D01 | CDC非直连 | 数据中台 | EP-SPEC-001 §4 |
+| ADR-T12 | 全球部署数据库选型: TiDB国内主选, CockroachDB海外PoC(SP-07) | 技术中台 | sp01-sad §3.12 (用户指令新增) |
+| ADR-D01 | CDC=TiCDC→Pulsar→Flink→Iceberg(非直连,统一消息总线) | 数据中台 | sp02-sad §5 (替代原Kafka方案) |
 | ADR-D02 | Flink→Iceberg checkpoint即提交 | 数据中台 | EP-SPEC-001 §4 |
 | ADR-D03 | Feature Store在线/离线一致 | 数据中台 | EP-SPEC-001 §4 |
 | ADR-D04 | 冷热分层强制 | 数据中台 | EP-SPEC-001 §4 |
@@ -811,7 +841,7 @@ CI Pipeline:
 | G-06(50万ev/s) | ADR-T03 Disruptor+Pulsar | SP-01 | Disruptor基准 |
 | G-07(99.99%) | D-014跨区Raft/ADR-T05探针 | SP-07 | 故障注入验证 |
 | G-08(故障<30s) | D-014 AppActive模式 | SP-07 | 单元切换演练 |
-| G-09(入湖<5min) | D-016/17 Flink→Iceberg | SP-02 | checkpoint监控 |
+| G-09(入湖<5min) | D-016/17 TiCDC→Pulsar→Flink→Iceberg | SP-02 | checkpoint监控 |
 | G-10(AI P95<3s) | D-018网关+缓存+路由 | SP-04 | AI网关trace |
 
 ### 13.2 业务能力 → 子项目追溯
@@ -845,3 +875,451 @@ CI Pipeline:
 **文档结束**
 
 > 本文档是 education-platform 项目群的架构基线。所有下游子项目文档必须以本文档为架构锚点，通过 §13 追溯矩阵保持双向可追溯。任何架构变更通过 §11 流程管理，ADR 登记到 §12。
+
+---
+
+## 14. 技术架构增强 (D-039/D-040)
+
+> 本章节是对 §6 技术架构的增强补充，由 ADR D-039(虚拟线程铁律)与 D-040(GraalVM Native Image铁律)驱动。仅追加，不修改 §6 已有内容。
+
+### 14.1 虚拟线程并发模型 (ADR-D039)
+
+**铁律**：所有 Spring Boot 4.0 服务强制 `spring.threads.virtual.enabled=true`；涉及对象锁的共享可变状态由 `synchronized` 块迁移至 `java.util.concurrent.locks.ReentrantLock`，避免虚拟线程 pinning 导致载体线程阻塞。
+
+**Platform Thread vs Virtual Thread 并发模型对比**：
+
+```
+传统 Platform Thread 模型 (1 请求 1 OS 线程)
+┌──────────────────────────────────────────────────────────┐
+│  请求池 (200 threads, Tomcat worker)                      │
+│  ┌─────┬─────┬─────┬─────┬─────────────────┬─────┐       │
+│  │ T1  │ T2  │ T3  │ ... │ T200            │     │       │
+│  │ ▲   │ ▲   │ ▲   │     │ ▲               │     │       │
+│  └─┼───┴─┼───┴─┼───┴─────┴─┼───────────────┴─────┘       │
+│    │     │     │           │                              │
+│    └─────┴─────┴───────────┴── 阻塞在 IO/DB/JWT 验签       │
+│  每线程 ~1MB 栈, 200 并发即 200MB 栈空间                    │
+│  阻塞=OS 线程空闲, 上限 ~数千                               │
+└──────────────────────────────────────────────────────────┘
+
+虚拟线程模型 (JDK 21+ / Spring Boot 4, D-039)
+┌──────────────────────────────────────────────────────────┐
+│  载体线程池 (Carrier Pool, ~CPU 核数)                      │
+│  ┌────┬────┬────┬─────────────────┐                       │
+│  │ C1 │ C2 │ C3 │ ... (ForkJoinPool)│                      │
+│  └─┬──┴─┬──┴─┬──┴─────────────────┘                       │
+│    │    │    │                                            │
+│    ▼    ▼    ▼   unmount → mount (IO 阻塞时自动切换)        │
+│  ┌──────────────────────────────────────────────┐         │
+│  │  虚拟线程 (百万级, 栈在堆上, ~KB 级)            │         │
+│  │  VT1  VT2  VT3 ... VT1_000_000                │         │
+│  │  │    │    │         │                        │         │
+│  │  └────┴────┴─────────┴── IO ready 后 resume    │         │
+│  └──────────────────────────────────────────────┘         │
+│  1M 并发只需 ~MB 级堆内存, 阻塞=unmount 不占载体线程         │
+└──────────────────────────────────────────────────────────┘
+
+Pinning 风险与对策 (D-039 铁律):
+  synchronized 块内阻塞  →  VT pin 到载体线程, 阻塞其他 VT
+  对策: ReentrantLock.tryLock()/lock() 替代 synchronized
+        - 显式 lock/unlock (try-finally)
+        - 支持可中断、超时、公平模式
+        - 配合 VT 不 pin, 载体线程可继续调度其他 VT
+  检测: -Djdk.tracePinnedThreads=full 启动参数 + CI 门禁扫描
+```
+
+**配置基线 (SB4 服务)**：
+
+```yaml
+# application.yml (所有 SB4 服务强制)
+spring:
+  threads:
+    virtual:
+      enabled: true   # D-039 铁律
+```
+
+**代码规范**：
+
+| 场景 | 旧写法 (禁用) | 新写法 (D-039) |
+|------|--------------|---------------|
+| 共享缓存更新 | `synchronized(map){ map.put(k,v); }` | `lock.lock(); try { map.put(k,v); } finally { lock.unlock(); }` |
+| 资源互斥 | `synchronized(this)` | `private final ReentrantLock lock = new ReentrantLock();` |
+| 阻塞队列消费 | `synchronized` wait/notify | `ReentrantLock` + `Condition` |
+
+### 14.2 GraalVM Native Image 双模式部署 (ADR-D040)
+
+**铁律**：所有 SB4 服务采用 JIT/Native 双模式构建——JIT 模式用于快速迭代与压测调优，Native Image 模式用于生产部署以追求启动速度与内存占用。统一通过 `native-maven-plugin 0.10.4` 构建原生镜像。
+
+**双模式构建与部署流程**：
+
+```
+                       源码 (SB4 + Spring AOT)
+                              │
+                ┌─────────────┴─────────────┐
+                │                            │
+        JIT 模式 (开发/压测)         Native 模式 (生产)
+                │                            │
+        mvn spring-boot:run          mvn -Pnative package
+                │                            │
+        JVM (HotSpot, JIT)           GraalVM native-image
+        启动 ~3-8s                    启动 ~50-100ms
+        峰值吞吐高 (C2 JIT)            内存 ~1/5
+        反射/动态代理无限制            需 AOT hint (reachability)
+                │                            │
+                └─────────────┬─────────────┘
+                              │
+                    同一容器镜像仓库
+                    (双 tag: jit / native)
+                              │
+                    K8s 按场景调度:
+                    - 突发扩容 pod → native (秒级启动)
+                    - 长稳态 pod → jit (峰值吞吐)
+```
+
+**Native Image 构建约束**：
+
+| 维度 | 约束 | 对策 |
+|------|------|------|
+| 反射 | 默认不可达 | `@RegisterReflectionForBinding` + `reflect-config.json` |
+| 动态代理 | 需 AOT hint | Spring AOT 自动生成 + `proxy-config.json` |
+| 资源文件 | 需显式声明 | `resource-config.json` (application.yml/静态资源) |
+| 类初始化 | 构建期 vs 运行期 | `--initialize-at-build-time` 调优 |
+| 第三方库兼容 | 需 Native 兼容性 | SB4 Starter 自带 GraalVM metadata; Dubbo/Nacos 需验证 |
+
+**Maven 插件配置基线**：
+
+```xml
+<plugin>
+  <groupId>org.graalvm.buildtools</groupId>
+  <artifactId>native-maven-plugin</artifactId>
+  <version>0.10.4</version>   <!-- D-040 铁律 pin -->
+  <configuration>
+    <buildArgs>
+      <buildArg>-H:IncludeResources=.*</buildArg>
+      <buildArg>-march=compatibility</buildArg>
+      <buildArg>--initialize-at-build-time=org.springframework</buildArg>
+    </buildArgs>
+  </configuration>
+</plugin>
+```
+
+### 14.3 与 §6 的映射关系
+
+| §6 条目 | 增强内容 | ADR |
+|---------|---------|-----|
+| §6.1 基础设施栈 (Java 框架) | SB4 启用虚拟线程 + GraalVM 双模式 | D-039/D-040 |
+| §6.6 K8s 部署规范 | 突发扩容优先调度 native 镜像 pod | D-040 |
+| §6.4 可观测 | `-Djdk.tracePinnedThreads=full` 加入 startupProbe 前 init 探测 | D-039 |
+
+---
+
+## 15. 多区域多活部署架构 (D-041)
+
+> 本章节是对 §6.2 部署拓扑的多区域扩展，由 ADR D-041 驱动。从原"国内三角 + 海外独立"升级为 **4-cell 多活拓扑**，统一通过 Karmada 多集群调度。仅追加，不修改 §6.2 已有内容。
+
+### 15.1 4-Cell 多活拓扑 (杭州/深圳/北京/新加坡)
+
+```
+                        ┌─────────────────────────────────┐
+                        │     Karmada 控制平面 (中心调度)    │
+                        │  PropagationPolicy / OverridePolicy│
+                        │  按权重/地域/健康度调度工作负载       │
+                        └────────────────┬────────────────┘
+                                         │
+        ┌──────────────────┬─────────────┼─────────────────┬──────────────────┐
+        │                  │             │                 │                  │
+   ┌────▼─────┐      ┌─────▼────┐   ┌────▼─────┐     ┌─────▼────┐      ┌─────▼─────┐
+   │ Cell-hz  │      │ Cell-sz  │   │ Cell-bj  │     │ Cell-sg  │      │ (海外只读 │
+   │ 杭州     │      │ 深圳     │   │ 北京     │     │ 新加坡   │      │  法兰克福)│
+   │ 国内华东 │      │ 国内华南 │   │ 国内华北 │     │ 海外亚太 │      │  备份单元 │
+   └────┬─────┘      └─────┬────┘   └────┬─────┘     └─────┬────┘      └───────────┘
+        │                  │             │                 │
+   ┌────▼──────────────────▼─────────────▼─────────────────▼────┐
+   │                  数据同步层 (跨 cell)                         │
+   │                                                              │
+   │  TiDB Follower Read ── 跨区只读副本, 就近读                   │
+   │  Pulsar Geo-Replication ── 事件总线跨区双向复制               │
+   │  Redis CRDT (Active-Active) ── 缓存/会话最终一致              │
+   └──────────────────────────────────────────────────────────────┘
+
+   权重调度 (Karmada, 默认):
+     hz : sz : bj : sg = 40 : 30 : 20 : 10   (国内为主, 海外增量)
+   故障切换:
+     cell-hz 宕机 → 权重重算: sz:bj = 50:50 (国内)
+     cell-sg 宕机 → 海外切法兰克福备份单元
+
+   PIPL 合规边界:
+     cell-sg/法兰克福 数据不回流国内 (D-004 不变)
+     国内 3 cell 间可双向同步; 海外仅单向出 (白名单课程目录)
+```
+
+### 15.2 Karmada 多集群调度策略
+
+| 策略对象 | 类型 | 说明 |
+|---------|------|------|
+| PropagationPolicy | 全局 | 工作负载按权重分发到 4 cell, 副本数由 Karmada 按 `ReplicaSchedulingType=Divided` 自动切分 |
+| OverridePolicy | 区域级 | 按 cell 注入 region-aware 配置 (DB 连接串/Redis endpoint/Pulsar tenant) |
+| 健康检查重调度 | 故障 | pod 失联阈值触发 `ApplicationFailover` 自动迁移副本到健康 cell |
+| 跨 cell 亲和 | 调度 | 用户域服务 sticky 到 hash(user_id)%4 对应 cell (与 §6.3 单元化对齐) |
+
+### 15.3 跨区域数据同步策略
+
+```
+                ┌─────────── 跨 Cell 数据同步流向 ───────────┐
+                │                                            │
+   TiDB 层:     │   Cell-hz Primary  ──Follower Read──► Cell-sz/bj 只读
+                │                    ──Follower Read──► Cell-sg (海外, 仅白名单表)
+                │   写: 就近写 Primary; 跨区 Raft (Placement Rules) 保证强一致
+                │
+   Pulsar 层:   │   ns-events-hz  ──Geo-Rep──►  ns-events-sz
+                │                  ──Geo-Rep──►  ns-events-bj
+                │                  ──Geo-Rep──►  ns-events-sg (单向, 受控 topic)
+                │   跨 cell 事件最终一致, 用于跨服务解耦 (§5.3 异步事件模式)
+                │
+   Redis 层:    │   Redis CRDT (Active-Active)
+                │   key = {bu}:{svc}:{entity}:{id}
+                │   各 cell 本地写 → CRDT 合并 → 最终一致
+                │   会话/路由表/热缓存 多活可读可写
+                │
+   Iceberg 层:  │   各 cell CDC → 本地 Pulsar → 本地 Flink → 本地 Iceberg
+                │   跨区 Iceberg 通过 S3 跨区复制 (异步, T+1 近线)
+                │
+                └────────────────────────────────────────────┘
+
+   冲突与一致性矩阵:
+   ┌─────────────┬───────────────┬──────────────┬──────────────┐
+   │ 数据类型     │ 一致性级别      │ 冲突策略      │ 同步延迟      │
+   ├─────────────┼───────────────┼──────────────┼──────────────┤
+   │ TiDB 强一致  │ Strong (Raft)  │ 主从无冲突    │ <1s (同区)    │
+   │ TiDB 跨区读  │ Read-Your-Writes│ Follower Read│ <1s          │
+   │ Pulsar 事件  │ Eventual       │ topic 全序   │ 秒级          │
+   │ Redis CRDT   │ Eventual       │ CRDT 合并    │ <1s          │
+   │ Iceberg      │ Eventual (T+1) │ 分区不冲突    │ 小时级        │
+   └─────────────┴───────────────┴──────────────┴──────────────┘
+```
+
+### 15.4 与 §6.2/§6.3 的关系
+
+- §6.2 原"国内三角 + 海外独立"拓扑升级为 §15.1 的 4-cell 显式拓扑，海外由单点新加坡扩展为新加坡 + 法兰克福备份。
+- §6.3 单元化机制 (CellRouter/路由表/misroute 纠正) 不变，但 cell 数量由 2-3 扩展为 4，路由表 `hash(user_id)%4`。
+- Karmada 接管原 §6.3 中 "跨区 Raft / 就近写" 的调度职责，与 CellRouter 协同：Karmada 管工作负载分发，CellRouter 管请求路由。
+
+---
+
+## 16. AI智能驱动架构增强 (D-042)
+
+> 本章节是对 §4 数据架构 + §5 应用架构的 AI 能力增强，由 ADR D-042 驱动，对应 SP-02 数据中台升级与 ADR-D05~D08。仅追加概述，不修改 §4/§5 已有内容。
+
+### 16.1 SP-02 数据中台 AI 能力扩展概述
+
+SP-02 数据中台在原"Flink + Iceberg + CDC + Feature Store"基线上，升级为 **AI 智能驱动数据中台**，引入数据资产智能化治理、特征自动发现、数据质量 AI 预测等能力。
+
+### 16.2 新增 ADR (D05~D08)
+
+| ADR | 决策 | 域归属 | 概述 |
+|-----|------|--------|------|
+| ADR-D05 | 数据资产自动标签与血缘推断 (LLM 驱动) | Data | 用 LLM 对 Iceberg 表/字段自动打标签 + 血缘关系推断，替代人工编目 |
+| ADR-D06 | 特征自动发现与在线/离线一致性校验增强 | Data | 基于业务日志 + Flink 指标，自动候选特征；与 ADR-D03 Feature Store 对齐做一致性校验 |
+| ADR-D07 | 数据质量 AI 预测与异常根因定位 | Data | 时序模型预测数据量/延迟异常，结合 lineage 自动定位根因表 |
+| ADR-D08 | AI 驱动的数据生命周期管理 | Data | 基于访问热度预测自动执行 §4.4 冷热分层迁移 (热→温→冷→归档) |
+
+### 16.3 AI 能力与现有架构的协同
+
+```
+   SP-02 数据中台 (AI 智能驱动, D-042)
+   ┌─────────────────────────────────────────────────────┐
+   │                                                      │
+   │  原 SP-02 核心 (不变)                                 │
+   │  TiCDC → Pulsar(ns=cdc://) → Flink → Iceberg          │
+   │  Flink 实时指标 / Feature Store / Spark 离线           │
+   │                                                      │
+   │  + AI 增强层 (D05~D08, 新增)                          │
+   │    ├─ LLM 数据资产标签 + 血缘 (ADR-D05)               │
+   │    ├─ 特征自动发现 (ADR-D06)                          │
+   │    ├─ 数据质量预测 + 根因定位 (ADR-D07)                │
+   │    └─ 生命周期 AI 调度 (ADR-D08) → 联动 §4.4 冷热分层  │
+   │                                                      │
+   │  AI 中台 (SP-04) 提供 LLM/Agent 能力支撑              │
+   └─────────────────────────────────────────────────────┘
+
+   交互: AI 增强层只读消费 SP-02 数据 + 调 SP-04 AI 网关;
+        不改变原 CDC/Flink/Iceberg 主链路 (§4.3 不变)
+```
+
+### 16.4 与 §4/§5 的关系
+
+- §4.3 数据流转架构主链路 (TiCDC→Pulsar→Flink→Iceberg) 不变，AI 增强层为旁路只读消费。
+- §4.4 冷热分层策略不变，但触发逻辑由人工/规则升级为 ADR-D08 的 AI 热度预测自动触发。
+- §5 应用架构中 SP-02 与 SP-04 的调用关系新增：SP-02 AI 增强层调用 SP-04 AI 网关 (LLM/Agent)，反向不依赖。
+
+---
+
+**文档结束 (增强版 v1.1, ADR D-039~D-042)**
+
+---
+
+## §18 智能体架构 (D-046)
+
+> 2026-08-05 追加。从 TOGAF Application Architecture 视角描述 SP-04 AI 中台智能体层重构 (D-046)。
+
+### 18.1 概述
+
+D-046 将 SP-04 AI 中台智能体层重构为 7 个解耦子系统，统一由 LangGraph 1.0 编排，对应 7 条 ADR（A07~A13）。本节聚焦应用组件视角与业务能力映射。
+
+### 18.2 应用组件视图
+
+| 组件 | 职责 | 对应 ADR |
+|------|------|---------|
+| ai_mcp | 外部工具/资源/Prompt 统一接入（MCP, JSON-RPC 2.0, stdio+HTTP） | ADR-A07 |
+| ai_a2a | 跨 Agent 互操作协议（AgentCard, Task 生命周期, SSE） | ADR-A08 |
+| ai_agent/graphs | 分层多智能体图（Supervisor + 6 子图, RedisSaver） | ADR-A09 |
+| ai_agent/reflexion | 自反思循环（evaluate→reflect→retry, episodic memory） | ADR-A10 |
+| ai_harness | 执行护栏（timeout/depth/budget/sandbox/audit） | ADR-A11 |
+| ai_hermes | 事件驱动编排（EventBus, Pulsar+InMemory 降级, EventRouter） | ADR-A12 |
+| ai_plugin | 插件系统（Manifest, Permission, Sandbox, Discovery） | ADR-A13 |
+
+### 18.3 业务能力映射
+
+| 业务能力 | 主导组件 | 协同组件 |
+|---------|---------|---------|
+| 答疑问答 | ai_agent/graphs (qa) | ai_mcp, ai_harness, ai_hermes |
+| 作业批改 | ai_agent/graphs (grading) | ai_harness, ai_hermes, ai_a2a (HITL) |
+| 自动出题 | ai_agent/graphs (quiz) | ai_mcp, ai_harness |
+| 学习路径 | ai_agent/graphs (learnpath) | ai_hermes, ai_plugin |
+| 数字人 | ai_agent/graphs (digital_human) | ai_mcp (TTS/render 工具) |
+| 辩论 | ai_agent/graphs (debate) | ai_harness |
+| 跨 Agent 协作 | ai_a2a | ai_hermes, ai_agent/graphs |
+| 外部能力扩展 | ai_plugin, ai_mcp | ai_harness (沙箱) |
+
+### 18.4 关键架构约束
+
+- **多租户隔离**：所有 Redis 键含 `{tenant}` 段；Plugin tenant_whitelist；TokenBudget 按 tenant×agent×model 隔离。
+- **降级容错**：Redis→YAML（注册表）/ MemorySaver（checkpointer）；Pulsar→InMemoryBus（Hermes）；Iceberg→本地 JSONL（审计）。
+- **HITL**：Grading/Quiz/LearnPath 通过 LangGraph `interrupt_before` 暂停，A2A Task 进入 input-required，超时自动 reject。
+- **收敛保证**：Supervisor `_round_done` 防路由死循环；Reflexion max_trials=3 防反思不收敛。
+- **可观测**：AuditLogger 全量审计工具调用，Redis Stream → Iceberg，端到端延迟 P95 < 5s。
+
+### 18.5 与 §5/§16 的关系
+
+- §5 应用架构中 SP-04 智能体层由原 LangGraph 单图升级为分层多图 + 7 子系统；网关层新增 agent/a2a/tool/plugin/memory 5 组路由。
+- §16 AI 智能驱动数据中台的 SP-02 AI 增强层调用 SP-04 网关不变，但底层由重构后的 Supervisor 路由到对应子图处理。
+
+---
+
+## §19 MCP 协议合规架构 (D-047)
+
+> 2026-08-05 追加。从 TOGAF Application/Technology Architecture 视角记录 SP-07 MCP Server 实现技术选型（D-047），作为 §18 智能体架构（D-046）的 Java 侧落地补充。
+
+### 19.1 决策摘要
+
+SP-07 MCP Server 采用 **官方 MCP Java SDK（modelcontextprotocol/java-sdk v2.0.0）+ Spring AI MCP 注解（@McpTool / @McpToolParam）** 替换 D-046 中的手写 JSON-RPC dispatcher，对应 ADR-A07（MCP 协议接入）的 Java 侧实现落地。
+
+| 项 | 决策 |
+|----|------|
+| 协议实现 | 官方 MCP Java SDK v2.0.0 |
+| 装配方式 | Spring AI MCP（`spring-ai-starter-mcp-server-webmvc` + `spring-ai-mcp-annotations`） |
+| 工具注册 | `@McpTool` / `@McpToolParam` 声明式注解，Spring 容器扫描 |
+| 传输 | Streamable HTTP（MCP 2.0 spec），端点 `/mcp/v1` |
+| BOM | Spring AI 2.0.0 BOM（兼容 Spring Boot 4.0.x） |
+
+### 19.2 应用架构影响
+
+- 新增模块 `sp07-mcp-server`，作为 SP-07 对外暴露 MCP 工具的唯一入口。
+- 删除 D-046 中手写的 `McpController` / `McpRequest` / `McpResponse` / `ToolSchema` / `ToolRegistry` 五件套。
+- 工具实现收敛到 `KnowledgeTools.java`（`knowledge.search` / `submission.grade` / `quiz.generate`）。
+- 调用链：外部 MCP Client → BFF（鉴权 + tenant_id 注入）→ sp07-mcp-server `/mcp/v1` → Spring AI MCP 自动分发到 `@McpTool` 方法 → Dubbo 调用 sp07-retrieval-service / sp07-agent-service。
+
+### 19.3 技术架构影响
+
+| 维度 | 约束 | 来源 |
+|------|------|------|
+| Spring Boot 版本 | 4.0.x（铁律，不可降级） | 全局基线 |
+| Spring AI BOM | 2.0.0 | D-047 |
+| GraalVM AOT | sp07-mcp-server 仅做兼容（不强制 native）；BFF/API 仍强制 native | D-040 |
+| 传输协议 | Streamable HTTP（MCP 2.0），禁用 stdio（远程服务场景） | ADR-A07 |
+| 协议版本协商 | `MCP-Protocol-Version` header，默认 2.0，向下兼容 1.0 initialize | MCP 2.0 spec |
+| 取消语义 | `notifications/cancelled` 取消虚拟线程执行 | D-039 |
+| 多租户 | `tenant_id` 经 `ToolContext` 透传，FGAC 单点注入 | ADR-A02 |
+
+### 19.4 备选方案与拒绝理由
+
+| 备选 | 结论 | 关键拒绝理由 |
+|------|------|-------------|
+| Spring AI Alibaba (SAA) | ❌ | 稳定版 v1.1.2.2 依赖 SB 3.5（与 SB 4.0 铁律冲突）；2.0.0-M1 预发布；无 GraalVM AOT 证据 |
+| AgentScope | ❌ | Java 侧依赖 SAA StateGraph（等价直接用 SAA）；Python 侧与 LangGraph 重复；无 Pulsar 集成；v2.0 过新 |
+| 手写 JSON-RPC | ❌ | 缺协议版本协商 / Streamable HTTP / SSE / cancellation；无 conformance tests |
+| 官方 MCP Java SDK + Spring AI MCP | ✅ | 40/40 conformance；与 Spring AI 共维护；SB 4.0 兼容；GraalVM AOT 友好 |
+
+### 19.5 与 §18 / §16 的关系
+
+- §18 智能体架构（D-046）中 `ai_mcp`（Python 侧）通过 MCP/A2A 协议调用外部工具；本节补充 Java 侧（SP-07）的 MCP Server 实现选型，两侧协议契约不变（MCP 2.0 over Streamable HTTP）。
+- §16 AI 智能驱动数据中台的 SP-02 AI 增强层调用 SP-04 网关不变；SP-04 网关若需调用 SP-07 知识工具，统一经 sp07-mcp-server `/mcp/v1` 端点。
+- 本决策不变更 D-033 / D-039 / D-040 / D-041 / D-042 的任何既有约束。
+
+### 19.6 治理与合规
+
+- CI 强制执行官方 MCP conformance test 套件（40/40 通过为发布门禁）。
+- CI 静态扫描禁止 `McpController` / `McpRequest` / `McpResponse` / `ToolSchema` / `ToolRegistry` 类存在。
+- 升级 `spring-ai-bom` 或 `modelcontextprotocol/java-sdk` 主版本须走 D-047 变更评审。
+
+---
+
+## §17 多级智能记忆架构 (D-045)
+
+> 关联：D-045 多级智能记忆系统；ADR-A05（L0~L3 四级架构）；ADR-A06（Mem0 框架集成）；D-046 智能体架构（§18）；D-048 审计 P0-5；铁律 7（D-033 缓存）、铁律 8（决策对比）。
+
+### 17.1 TOGAF 对齐定位
+
+ep-memory 是 SP-04 AI 中台的独立平台级共享记忆库，在 TOGAF 企业架构中跨越数据架构与应用架构两层：
+
+| TOGAF 域 | ep-memory 对应 |
+|---------|---------------|
+| **业务架构** | 支撑"个性化学习"与"跨会话续聊"业务能力：学生画像延续、教师批改上下文、组织知识沉淀 |
+| **数据架构** | L0/L1 Redis（热）+ L2 Milvus 3.0/TiDB/NebulaGraph（温/冷）+ L3 Milvus 3.0/NebulaGraph（持久），多级存储分层 |
+| **应用架构** | MemoryManager 编排层作为 SP-04 应用组件，经 gRPC 供 Java 侧（SP-07/SP-03）调用 |
+| **技术架构** | 复用 Redis Cluster（D-033）、Milvus 3.0（ADR-INF-01 v2.0）、NebulaGraph 3.x + TiDB CTE（ADR-INF-02 v2.0, 终止Neo4j D-053）、TiDB，无新增基础设施 |
+
+### 17.2 L0~L3 在企业架构中的定位
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  应用层: D-046 智能体 (Supervisor + 5 Agent)                  │
+│     │ recall/remember 每轮调用                                │
+│     ▼                                                        │
+│  编排层: MemoryManager (自研, Python SDK + Java gRPC SDK)     │
+│     │ 分级召回 L0→L1→L2→L3 / 分级写入                         │
+│     ▼                                                        │
+│  ┌────────┬────────┬─────────────────────┬────────────┐      │
+│  │ L0 即时│ L1 工作│ L2 长期(Mem0核心)    │ L3 组织    │      │
+│  │ Redis  │ Redis  │ Milvus+TiDB+Neo4j   │ Milvus+Neo4j│     │
+│  │ 10轮   │ 摘要   │ 情景/语义/程序       │ 租户级共享  │      │
+│  │ 24h    │ 7d     │ 30d降权/90d归档      │ 永不过期    │      │
+│  └────────┴────────┴─────────────────────┴────────────┘      │
+│  数据层: Redis Cluster / Milvus / TiDB / Neo4j               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+| 级别 | 企业架构角色 | 数据治理 |
+|------|-------------|---------|
+| **L0 即时记忆** | 应用层会话状态（瞬态），对应 TOGAF 应用架构的会话管理 | TTL 24h 自动淘汰，不持久化 |
+| **L1 工作记忆** | 应用层任务上下文（短期），跨会话续聊的关键 | 7d 降级到 L2，摘要持久化 |
+| **L2 长期记忆** | 数据层个体记忆（持久），学生画像/教师偏好/实体关系 | 30d 降权/90d 归档冷存；Mem0 pipeline 提取 |
+| **L3 组织记忆** | 数据层组织知识（持久共享），租户级沉淀 | 永不自动过期；双人审核晋升/删除；显式授权访问 |
+
+### 17.3 与其他章节的关系
+
+- **§16 AI 智能驱动架构（D-042）**：SP-02 数据中台的智能特征平台可为 L2 语义记忆提供特征输入；ep-memory 的学生画像反哺数据中台。
+- **§18 智能体架构（D-046）**：MemoryManager 作为 LangGraph 节点工具注入，是智能体具备"记忆"能力的前提；Reflexion 评估同时用于 L1 摘要与 L2 提取质量保障。
+- **§19 MCP 协议合规（D-047）**：Java 侧 ep-memory-java SDK 经 gRPC 调用 Python 侧，与 MCP Server 走 Streamable HTTP 的契约驱动模式一致，符合 D-040 GraalVM AOT。
+- **§5 应用架构 / §4 数据架构**：ep-memory 复用既定的 Redis/Milvus/TiDB/Neo4j 组件，不引入新基础设施，符合铁律 8（不重复造轮子）。
+
+### 17.4 治理与合规
+
+- L3 组织记忆晋升/删除需双人审核 + 审计落 Iceberg（D-046 AuditLogger 链路）。
+- 所有记忆操作（remember/recall/forget/promote）经 AuditLogger 留痕。
+- 多租户隔离：所有记忆键含 tenant_id 段；L3 跨用户共享需显式 `mem:org:read` 授权（ADR-A02 FGAC）。
+- 铁律 8 合规：L2 框架选型经 Mem0/LangMem/全自研三方对比（ADR-A06）；L0~L3 架构经分级/单级/全自研三方对比（ADR-A05）。
+
+---
+
+**文档结束 (增强版 v1.4, ADR D-039~D-042 + D-045 + D-046 + D-047)**

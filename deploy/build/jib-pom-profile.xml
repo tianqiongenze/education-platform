@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  D-115: Shared JIB build profile for education-platform Java services.
+
+  This snippet is NOT a standalone POM. Services import the profile by copying
+  the <profile> block below into their own pom.xml <profiles> section, then
+  overriding ${jib.container.port} with the service-specific listen port.
+
+  Usage (per-service pom.xml):
+    <properties>
+      <jib.container.port>8090</jib.container.port>   (override)
+    </properties>
+    <profiles>
+      <profile>
+        <id>jib-build</id>
+        ... copy from below ...
+      </profile>
+    </profiles>
+
+  Activate:  mvn compile jib:build -Pjib-build
+  Requires:  mvn install of ep-* and sp03-*-api dependencies first.
+
+  Base image:  eclipse-temurin:21-jre-alpine  (matches Java 21 requirement)
+  Registry:    harbor.edu.internal/education-platform
+-->
+<profiles xmlns="http://maven.apache.org/POM/4.0.0">
+
+  <profile>
+    <id>jib-build</id>
+
+    <properties>
+      <!-- Default port; each service overrides via -Djib.container.port=XXXX
+           or a <properties><jib.container.port> entry in its own pom.xml. -->
+      <jib.container.port>8080</jib.container.port>
+
+      <!-- Registry + repository prefix. Final tag:
+           harbor.edu.internal/education-platform/${project.artifactId}:${project.version} -->
+      <jib.registry>harbor.edu.internal</jib.registry>
+      <jib.repository>education-platform</jib.repository>
+
+      <!-- Base image. eclipse-temurin:21-jre-alpine = Java 21 JRE on Alpine
+           (small footprint, matches the project's Java 21 requirement). -->
+      <jib.base.image>eclipse-temurin:21-jre-alpine</jib.base.image>
+
+      <!-- JVM flags: ZGC generational for low-pause GC on container memory limits,
+           MaxRAMPercentage=75 (leave 25% for off-heap/metaspace),
+           ExitOnOutOfMemoryError so K8s restarts the pod fast (铁律 1). -->
+      <jib.jvm.flags>
+        -XX:+UseZGC
+        -XX:+ZGenerational
+        -XX:MaxRAMPercentage=75.0
+        -XX:+ExitOnOutOfMemoryError
+      </jib.jvm.flags>
+
+      <!-- OCI labels. Source/revision populated from environment; maintain label
+           marks this image as GitOps-managed. -->
+      <jib.label.source>${env.GIT_URL}</jib.label.source>
+      <jib.label.revision>${env.GIT_COMMIT}</jib.label.revision>
+    </properties>
+
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>com.google.cloud.tools</groupId>
+          <artifactId>jib-maven-plugin</artifactId>
+          <version>3.4.4</version>
+
+          <configuration>
+            <!-- Image: harbor.edu.internal/education-platform/<artifactId>:<version> -->
+            <to>
+              <image>${jib.registry}/${jib.repository}/${project.artifactId}:${project.version}</image>
+            </to>
+
+            <from>
+              <image>${jib.base.image}</image>
+            </from>
+
+            <container>
+              <ports>
+                <port>${jib.container.port}</port>
+              </ports>
+              <jvmFlags>
+                <jvmFlag>-XX:+UseZGC</jvmFlag>
+                <jvmFlag>-XX:+ZGenerational</jvmFlag>
+                <jvmFlag>-XX:MaxRAMPercentage=75.0</jvmFlag>
+                <jvmFlag>-XX:+ExitOnOutOfMemoryError</jvmFlag>
+              </jvmFlags>
+              <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+              <labels>
+                <label>
+                  <key>org.opencontainers.image.source</key>
+                  <value>${jib.label.source}</value>
+                </label>
+                <label>
+                  <key>org.opencontainers.image.revision</key>
+                  <value>${jib.label.revision}</value>
+                </label>
+                <label>
+                  <key>maintained-by</key>
+                  <value>gitops</value>
+                </label>
+              </labels>
+            </container>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
+  </profile>
+
+</profiles>

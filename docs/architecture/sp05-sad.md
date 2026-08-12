@@ -35,7 +35,7 @@
 | 业务架构 | 学员/教师/教务/运维 4 角色，学习/教学/直播/作业/考试/答疑 6 业务流 | SP-05-SRS §3-§5 |
 | 数据架构 | 用户域单元化（TiDB 分片）+ 全局域共享 + 实时/湖仓（Iceberg）+ 向量库（Milvus 查重） | D-012/D-013/D-015、ADR-I03 |
 | 应用架构 | 三端→BFF→CellRouter→用户域服务+4 子平台→中台，4 子平台独立部署 | ADR-I01..I05 |
-| 技术架构 | K8s+TiDB+Redis+Pulsar+Kafka+Milvus+对象存储+CDN+Firecracker CRD+SRS+LiveKit | EP-SPEC §3 |
+| 技术架构 | K8s+TiDB+Redis+Pulsar(CDC+事件统一)+Milvus+对象存储+CDN+Firecracker CRD+SRS+LiveKit | EP-SPEC §3 |
 
 ---
 
@@ -52,7 +52,7 @@
                                    │
 ┌──────────────────────────────────▼──────────────────────────────────┐
 │  BFF / API 网关层（技术中台 SP-01）                                   │
-│  Spring Cloud Gateway(Java) + Go WS 网关                             │
+│  Java(Netty edge+Disruptor+WebMVC) + Go WS 网关  ← D-032/ADR-T07(rev2)│
 │  JWT RS256+JWKS │ CellRouter │ Sentinel 限流 │ 灰度 │ BFF 按端聚合    │
 └──────────────────────────────────┬──────────────────────────────────┘
                                    │
@@ -93,7 +93,7 @@
                     │
 ┌───────────────────▼───────────────────────────────────────────────┐
 │  基础设施层（复用，不重建）                                          │
-│  TiDB/TiFlash │ Redis Cluster │ Pulsar │ Kafka(CDC) │ Milvus(查重) │
+│  TiDB/TiFlash │ Redis Cluster │ Pulsar(CDC+事件) │ Milvus(查重) │
 │  对象存储(S3/MinIO) │ K8s(Firecracker CRD) │ CDN │ SRS v7 │ LiveKit │
 │  可观测(OTel+Loki+Prom+Tempo)                                     │
 └───────────────────────────────────────────────────────────────────┘
@@ -105,7 +105,7 @@
 学员请求(JWT 含 user_id)
    │
    ▼
-[三端] → [BFF: Spring Cloud Gateway]
+[三端] → [BFF: Netty edge+Disruptor+WebMVC]  ← D-032/ADR-T07(rev2)
    │   ① 验签 JWT RS256(JWKS)
    │   ② CellRouter: cell = hash(user_id) % N（路由表外置 Nacos）
    │   ③ Sentinel 限流(网关层)
@@ -453,9 +453,9 @@ BFF 聚合层(按端):
 │  ┌────────────── K8s 集群 ──────────────────────────────────────┐     │
 │  │                                                              │     │
 │  │  ┌─ 三端前端 ─┐  ┌─ BFF ─────────┐  ┌─ CellRouter ─┐         │     │
-│  │  │ web/nginx  │  │ SCG(Java)     │  │ (Spring)     │         │     │
-│  │  │ h5/nginx   │  │ WS 网关(Go)   │  │              │         │     │
-│  │  │ 小程序发布 │  │               │  │              │         │     │
+│  │  │ web/nginx  │  │ Netty edge   │  │ (Spring)     │         │     │
+│  │  │ h5/nginx   │  │ +WebMVC(Java)│  │ CellRouter   │         │     │
+│  │  │ 小程序发布 │  │ WS网关(Go)   │  │              │         │     │
 │  │  └────────────┘  └───────────────┘  └──────────────┘         │     │
 │  │                                                              │     │
 │  │  ┌─ 用户域服务 ─┐ ┌─ 4 子平台 ──────────────────────────┐    │     │
@@ -473,7 +473,7 @@ BFF 聚合层(按端):
 │                                                                       │
 │  ┌─ 基础设施（复用）──────────────────────────────────────────┐       │
 │  │ TiDB(分片0) │ Redis Cluster(分片0) │ Pulsar(ns0)          │       │
-│  │ Kafka(CDC) │ Milvus(查重) │ 对象存储(MinIO/S3)           │       │
+│  │ Pulsar(CDC+事件) │ Milvus(查重) │ 对象存储(MinIO/S3)           │       │
 │  │ CDN(LL-HLS) │ SRS v7 origin/edge │ LiveKit SFU            │       │
 │  │ OTel+Loki+Prom+Tempo(可观测)                              │       │
 │  └────────────────────────────────────────────────────────────┘       │

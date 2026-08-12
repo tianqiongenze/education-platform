@@ -263,7 +263,7 @@ class RwIntegrationTest {
 | 场景 | 涉及组件 | 验证点 |
 |------|---------|--------|
 | 用户登录→获取课程 | AuthFilter → UCM → CMP → CacheService | JWT 验签、缓存命中、trace 链路完整 |
-| 实时课堂 WS 连接 | WS Gateway → Hub → Redis Pub/Sub | 跨 pod 广播、心跳保活 |
+| 实时课堂 WS 连接 | WS Gateway → Hub → Pulsar(跨pod广播) | 跨 pod 广播、心跳保活 |
 | 下单→支付→风控 | BFF → Order → Rust 风控 → Billing | 风控规则匹配、事件总线发布 |
 | CellRouter 流量纠正 | Gateway → CellRouter | misroute 重路由、纠正计数器 |
 | Failover 写挂起 | CellRouter → WriteHoldRegistry | 写请求 503 + Retry-After |

@@ -1,0 +1,75 @@
+.ep-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+
+  // Variants
+  &--primary {
+    background-color: var(--color-primary);
+    color: #fff;
+    &:hover {
+      background-color: var(--color-primary-hover);
+    }
+  }
+
+  &--secondary {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border-color: var(--color-border);
+  }
+
+  &--ghost {
+    background-color: transparent;
+    color: var(--color-primary);
+  }
+
+  &--danger {
+    background-color: var(--color-error);
+    color: #fff;
+  }
+
+  &--link {
+    background-color: transparent;
+    color: var(--color-primary);
+    border: none;
+    padding: 0;
+  }
+
+  // Sizes
+  &--xs {
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+
+  &--sm {
+    padding: 4px 12px;
+    font-size: 14px;
+  }
+
+  &--md {
+    padding: 6px 16px;
+    font-size: 14px;
+  }
+
+  &--lg {
+    padding: 8px 24px;
+    font-size: 16px;
+  }
+
+  &--block {
+    display: flex;
+    width: 100%;
+  }
+
+  &--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

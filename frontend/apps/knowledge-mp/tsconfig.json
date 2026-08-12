@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["@tarojs/taro"]
+  },
+  "include": ["src/**/*", "config/**/*", "global.d.ts"],
+  "exclude": ["dist", "node_modules"]
+}

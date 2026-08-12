@@ -1,0 +1,71 @@
+{
+  "Name": "cancelOrderSaga",
+  "Comment": "D-113: Saga state machine for explicit order cancellation.\n\nForward path:\n  1) cancelOrder     - mark the order CANCELLED (state transition PAID/PENDING -> CANCELLED).\n  2) releaseStock    - return reserved units to inventory.\n  3) refundPayment   - instruct the OPM Payment middle platform to refund.\n\nThis is a one-directional cancellation flow; the forward path itself is the\ncompensation of the original create-order saga. No further compensation is\nregistered for these steps (the operators reconcile any partial failure\nout-of-band, mirroring the existing best-effort semantics in refundOrder).",
+  "StartState": "CancelOrder",
+  "States": [
+    {
+      "Name": "CancelOrder",
+      "Comment": "Forward step 1: flip the order row to CANCELLED.",
+      "Type": "ServiceTask",
+      "ServiceName": "orderCompensableAction",
+      "ServiceMethod": "cancelOrder",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "reason", "expression": "$.[reason]" }
+      ],
+      "Output": {
+        "cancelOrderResult": "$.#root"
+      },
+      "Status": {
+        "#root": "FA"
+      },
+      "Catch": [
+        {
+          "Exceptions": [
+            "java.lang.IllegalStateException"
+          ],
+          "Next": "Fail"
+        }
+      ],
+      "Next": "ReleaseStock"
+    },
+    {
+      "Name": "ReleaseStock",
+      "Comment": "Forward step 2: release the reserved units back to inventory.",
+      "Type": "ServiceTask",
+      "ServiceName": "stockCompensableAction",
+      "ServiceMethod": "compensateReserveStock",
+      "Input": [
+        { "name": "courseId", "expression": "$.[courseId]" },
+        { "name": "stockUnits", "expression": "$.[stockUnits]" }
+      ],
+      "Status": {
+        "#root": "FA"
+      },
+      "Next": "RefundPayment"
+    },
+    {
+      "Name": "RefundPayment",
+      "Comment": "Forward step 3 (final): instruct the OPM Payment middle platform to refund.",
+      "Type": "ServiceTask",
+      "ServiceName": "paymentCompensableAction",
+      "ServiceMethod": "compensateCreatePayment",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "amount", "expression": "$.[amount]" }
+      ],
+      "Status": {
+        "#root": "FA"
+      },
+      "Next": "Succeed"
+    },
+    {
+      "Name": "Succeed",
+      "Type": "Succeed"
+    },
+    {
+      "Name": "Fail",
+      "Type": "Fail"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+#!/Users/joelgong/claude-Projects/education-platform/services/sp04-ai/.venv/bin/python3.12
+import sys
+from a2a.a2a_db_cli import run_migrations
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(run_migrations())

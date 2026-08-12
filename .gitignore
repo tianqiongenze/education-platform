@@ -25,6 +25,14 @@ logs/
 *.key
 .env
 .env.local
+# D-117: JWT RS256 signing keys & env files — externalized to K8s Secrets.
+# jwt-* catches jwt-rs256-private.pem / jwt-rs256-public.pem / jwt-rs256.env /
+# jwt-keys.example.env is whitelisted below.
+jwt-*
+!jwt-keys.example.env
+# All env files except the example template
+*.env
+!jwt-keys.example.env
 
 # superpowers SDD workspace (scratch, per-plan)
 .superpowers/sdd/

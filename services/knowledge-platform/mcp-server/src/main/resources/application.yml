@@ -1,0 +1,71 @@
+server:
+  port: 8090   # SP-07 MCP Server HTTP endpoint
+
+spring:
+  application:
+    name: mcp-server
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  threads:
+    virtual:
+      enabled: true   # D-039: virtual threads iron law
+  aot:
+    enabled: true     # D-040: GraalVM AOT
+  # D-047: MCP Server configuration (official MCP Java SDK + Spring AI MCP starter)
+  # Streamable HTTP transport — the conformance-tested, spec-recommended transport
+  # for MCP 2.0. Replaces the hand-rolled JSON-RPC dispatcher.
+  ai:
+    mcp:
+      server:
+        name: mcp-server
+        version: 1.0.0
+        type: SYNC
+        protocol: STREAMABLE
+        instructions: >
+          SP-07 Knowledge Platform MCP Server. Exposes knowledge search,
+          submission grading, and quiz generation tools for the education platform.
+          All tools are multi-tenant (D-044): tenant isolation enforced per-request.
+        tool-change-notification: true
+        streamable-http:
+          mcp-endpoint: /mcp/v1           # MCP JSON-RPC endpoint
+          keep-alive-interval: 30s
+
+# Dubbo consumer: call retrieval / knowledge / tenant services
+dubbo:
+  application:
+    name: mcp-server
+  protocol:
+    name: dubbo
+    port: 20890
+  registry:
+    address: nacos://nacos:8848
+  scan:
+    base-packages: com.ep.sp07.mcp
+  consumer:
+    check: false   # don't fail-fast if a provider isn't up yet
+    timeout: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# P2-10: Resilience4j RateLimiter (opt-in via @RateLimiter annotation)
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

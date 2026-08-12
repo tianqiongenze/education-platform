@@ -1,0 +1,134 @@
+{
+  "Name": "createOrderSaga",
+  "Comment": "D-113: Saga state machine for the order -> stock -> payment long-running flow.\n\nForward path (happy path):\n  1) reserveStock  - deduct inventory (or reserve) for the course.\n  2) createPayment - instruct the OPM Payment middle platform to record a Payment.\n  3) confirmOrder  - flip the order row from PENDING to PAID/CONFIRMED.\n\nCompensation path (triggered when any forward step fails, replayed LIFO):\n  - releaseStock   - compensate reserveStock (return reserved units).\n  - refundPayment  - compensate createPayment (issue refund via OPM).\n  - cancelOrder    - compensate confirmOrder (mark order CANCELLED).\n\nAT mode is retained for short single-service transactions (see OrderServiceImpl).\nSaga is preferred here because AT holds global locks for the entire long-running\nflow; Saga releases each branch's local lock as soon as the branch commits and\nonly retains the (much cheaper) compensation contract.",
+  "StartState": "ReserveStock",
+  "States": [
+    {
+      "Name": "ReserveStock",
+      "Comment": "Forward step 1: reserve stock for the course via the InventoryService.",
+      "Type": "ServiceTask",
+      "ServiceName": "stockCompensableAction",
+      "ServiceMethod": "reserveStock",
+      "CompensateState": "ReleaseStock",
+      "Input": [
+        { "name": "courseId", "expression": "$.[courseId]" },
+        { "name": "stockUnits", "expression": "$.[stockUnits]" },
+        { "name": "tenantId", "expression": "$.[tenantId]" },
+        { "name": "businessKey", "expression": "$.[businessKey]" }
+      ],
+      "Output": {
+        "reserveStockResult": "$.#root"
+      },
+      "Status": {
+        " CompensationStatus": "S",
+        "#root": "FA"
+      },
+      "Catch": [
+        {
+          "Exceptions": [
+            "com.ep.order.api.InsufficientStockException"
+          ],
+          "Next": "CompensationTrigger"
+        }
+      ],
+      "Next": "CreatePayment"
+    },
+    {
+      "Name": "CreatePayment",
+      "Comment": "Forward step 2: instruct the OPM Payment middle platform to create a Payment.",
+      "Type": "ServiceTask",
+      "ServiceName": "paymentCompensableAction",
+      "ServiceMethod": "createPayment",
+      "CompensateState": "RefundPayment",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "amount", "expression": "$.[amount]" },
+        { "name": "payMethod", "expression": "$.[payMethod]" },
+        { "name": "tenantId", "expression": "$.[tenantId]" }
+      ],
+      "Output": {
+        "createPaymentResult": "$.#root"
+      },
+      "Status": {
+        " CompensationStatus": "S",
+        "#root": "FA"
+      },
+      "Catch": [
+        {
+          "Exceptions": [
+            "com.ep.payment.api.PaymentException"
+          ],
+          "Next": "CompensationTrigger"
+        }
+      ],
+      "Next": "ConfirmOrder"
+    },
+    {
+      "Name": "ConfirmOrder",
+      "Comment": "Forward step 3 (final): flip the order row PENDING -> PAID/CONFIRMED and publish domain events.",
+      "Type": "ServiceTask",
+      "ServiceName": "orderCompensableAction",
+      "ServiceMethod": "confirmOrder",
+      "CompensateState": "CancelOrder",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "payMethod", "expression": "$.[payMethod]" }
+      ],
+      "Output": {
+        "confirmOrderResult": "$.#root"
+      },
+      "Status": {
+        " CompensationStatus": "S",
+        "#root": "FA"
+      },
+      "Next": "Succeed"
+    },
+    {
+      "Name": "ReleaseStock",
+      "Comment": "Compensation for ReserveStock: release the reserved units back to inventory.",
+      "Type": "ServiceTask",
+      "ServiceName": "stockCompensableAction",
+      "ServiceMethod": "compensateReserveStock",
+      "Input": [
+        { "name": "courseId", "expression": "$.[courseId]" },
+        { "name": "stockUnits", "expression": "$.[stockUnits]" }
+      ]
+    },
+    {
+      "Name": "RefundPayment",
+      "Comment": "Compensation for CreatePayment: instruct the OPM Payment middle platform to refund.",
+      "Type": "ServiceTask",
+      "ServiceName": "paymentCompensableAction",
+      "ServiceMethod": "compensateCreatePayment",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "amount", "expression": "$.[amount]" }
+      ]
+    },
+    {
+      "Name": "CancelOrder",
+      "Comment": "Compensation for ConfirmOrder: mark the order CANCELLED and publish a cancel event.",
+      "Type": "ServiceTask",
+      "ServiceName": "orderCompensableAction",
+      "ServiceMethod": "cancelOrder",
+      "Input": [
+        { "name": "orderId", "expression": "$.[orderId]" },
+        { "name": "reason", "expression": "$.[reason]" }
+      ]
+    },
+    {
+      "Name": "CompensationTrigger",
+      "Comment": "Central compensation trigger: Seata Saga replays registered compensations LIFO.",
+      "Type": "CompensationTrigger",
+      "Next": "Fail"
+    },
+    {
+      "Name": "Succeed",
+      "Type": "Succeed"
+    },
+    {
+      "Name": "Fail",
+      "Type": "Fail"
+    }
+  ]
+}

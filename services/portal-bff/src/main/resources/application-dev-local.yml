@@ -1,0 +1,49 @@
+# D-108: Standalone local profile — zero external dependencies.
+# Usage: mvn spring-boot:run -Dspring-boot.run.profiles=dev-local
+# BFF is a gateway: no DB, no Redis. Consumer check=false so providers need not be up.
+spring:
+  aot:
+    enabled: false
+  autoconfigure:
+    exclude:
+      # D-076/D-108: redisson-spring-boot-starter targets SB3x classpaths; not needed locally.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      # D-076/D-108: BFF is a gateway — no direct DB access. sp03/sp05 JPA jars are on
+      # classpath transitively but BFF must not try to configure a DataSource/Hibernate.
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceInitializationAutoConfiguration
+      # D-078/D-108: no Seata TC server locally — exclude Seata auto-config.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+      # D-108: no Redis locally — exclude Spring Data Redis auto-config.
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+dubbo:
+  registry:
+    address: N/A   # consumer.check=false already set in base config
+
+seata:
+  enabled: false
+  tx-service-group: ep-bff-tx-group
+  service:
+    vgroup-mapping:
+      ep-bff-tx-group: default
+  registry:
+    type: file
+
+ep:
+  pulsar:
+    enabled: false
+  cell-router:
+    enabled: false   # D-108: no cell routing in local
+  # D-108: enable local proxy so the BFF can route requests to localhost services
+  # (order-platform 8084, core-business 8083, grading-service 8085, payment-platform 8087, knowledge-platform 8070s).
+  proxy:
+    enabled: true
+
+logging:
+  level:
+    com.ep: DEBUG
+    root: INFO

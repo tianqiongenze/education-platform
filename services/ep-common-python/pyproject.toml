@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "ep-common"
+version = "0.1.0"
+description = "Education-platform shared Python utilities (config, health, response, logging). D-110."
+authors = ["EP Team"]
+readme = "README.md"
+packages = [{include = "ep_common"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

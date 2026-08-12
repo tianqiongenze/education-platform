@@ -1,0 +1,69 @@
+name: Security Scan (Trivy)
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 5 * * *'  # Nightly at 5 AM UTC
+  workflow_dispatch:
+
+jobs:
+  trivy-fs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy on full repository
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          # Exclude build artifacts to speed up scan
+          skip-dirs: 'node_modules,target,dist,build,.turbo,coverage,__pycache__,.venv,venv'
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Trivy Summary
+        if: always()
+        run: |
+          echo "## Trivy Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "Trivy filesystem scan completed. Check Security tab for findings." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CRITICAL vulnerabilities should be addressed before merge." >> $GITHUB_STEP_SUMMARY
+
+  trivy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy on frontend (npm)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'frontend'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          skip-dirs: 'node_modules,dist,.turbo,coverage'
+
+  trivy-services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy on services (Maven + Poetry)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'services'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          skip-dirs: 'target,__pycache__,.venv,venv'

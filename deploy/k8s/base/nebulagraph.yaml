@@ -1,0 +1,224 @@
+# NebulaGraph Cluster CRD — 分布式图数据库 (3 metad + 3 storaged + 2 graphd)
+#
+# 背景: ADR-INF-02 v2.0 / D-053 决策终止 Neo4j Community（GPL v3 协议冲突 +
+# 无 HA，违反 D-041 多 Region 多活铁律），改用 NebulaGraph 3.x 承载重图负载:
+#   - SP-07 知识中台知识图谱 (课程-知识点-作业-学员关系)
+#   - SP-02 智能数据目录字段级血缘 (D-042 / OpenLineage → NebulaGraph → GraphScope GNN)
+#   - SP-04 AI 中台 Agent 协作拓扑
+# ep-memory L2 过程记忆的轻图负载 (≤5 跳有界查询) 仍走 TiDB 递归 CTE，不在本清单。
+#
+# 架构说明:
+#   metad    — 元数据服务，3 副本 Raft 强一致，管理空间/Schema/分区分配
+#   storaged — 存储服务，3 副本 Raft 强一致，shared-nothing 分片，承载万亿边
+#   graphd   — 无状态查询层，2 副本水平扩展，对外暴露 nGQL/openCypher 接口
+# 应用通过 graphd 服务 (nebulagraph-graphd-svc:9669) 访问，metad/storaged 不直接对外。
+#
+# 依赖: nebula-operator 必须先安装 CRD (apps.nebula-graph.io/v1alpha1)。
+#   CRD 安装: kubectl apply -f https://github.com/vesoft-inc/nebula-operator/...
+#   命名: kustomization namePrefix=edu- 会将实例名前缀化为 edu-education-nebula。
+#
+# 版本: NebulaGraph v3.8.0 (对齐 ADR-INF-02 v2.0 / nebula-java 客户端 3.x)。
+# 配置块: nebula-operator 要求各组件 config 为 YAML 字符串 (本文件用 block scalar)。
+#
+# 注意: 本清单为 dev/test 资源规格 (低 requests/limits)，生产环境通过 overlay
+# 覆盖 storageClassName 与 resources (见 deploy/k8s/overlays/)。
+---
+apiVersion: apps.nebula-graph.io/v1alpha1
+kind: NebulaCluster
+metadata:
+  name: education-nebula
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: nebulagraph
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: graph-database
+    # D-035 rule 6: GitOps 可追溯
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    # 强约束: 仅允许通过 GitOps 修改 replicas，禁止 kubectl edit 在线变更
+    education.io/change-policy: "gitops-only"
+    education.io/design-decisions: "D-053,ADR-INF-02,D-041,IronLaw8"
+spec:
+  # NebulaGraph 版本（镜像 tag 后缀）
+  version: v3.8.0
+
+  # PV 回收策略: Retain 保留数据 (生产安全默认值)
+  pvReclaimPolicy: Retain
+
+  # 镜像仓库地址（官方开源镜像，Apache 2.0）
+  imagePullPolicy: IfNotPresent
+
+  ###################################################################
+  # metad — 3 副本 Raft 共识 (HA 最小法定人数)
+  # 端口 9559: meta 服务；9560: Raft。管理 space/schema/partition 分配。
+  ###################################################################
+  metad:
+    replicas: 3
+    image: vesoft/nebula-metad
+    config:
+      # Raft 心跳与日志
+      heartbeat_interval_secs: 1
+      election_timeout_secs: 5
+      # 元数据存储 RocksDB 调优 (dev 规格保守)
+      rocksdb_wal_path: /data/meta/wal
+      rocksdb_data_path: /data/meta/data
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+        storage: "10Gi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    storageClassName: local-path  # dev; 生产 overlay 覆盖为 gp3 (SSD)
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-nebula
+            app.kubernetes.io/component: metad
+
+  ###################################################################
+  # storaged — 3 副本 Raft 共识 (shared-nothing 水平分片)
+  # 端口 9779: storage 服务；9780: Raft。承载点/边数据，万亿边线性扩展。
+  ###################################################################
+  storaged:
+    replicas: 3
+    image: vesoft/nebula-storaged
+    config:
+      # Raft
+      heartbeat_interval_secs: 1
+      election_timeout_secs: 5
+      # 存储路径
+      rocksdb_wal_path: /data/storage/wal
+      rocksdb_data_path: /data/storage/data
+      # 分区自动均衡
+      customize_build_threads: 4
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "1Gi"
+        storage: "10Gi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    storageClassName: local-path  # dev; 生产 overlay 覆盖为 gp3 (SSD)
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-nebula
+            app.kubernetes.io/component: storaged
+
+  ###################################################################
+  # graphd — 2 副本无状态查询层 (水平扩展)
+  # 端口 9669: nGQL/openCypher 查询入口 (对齐 configmap.yaml NEBULA_GRAPH_PORT)
+  # 端口 19669: HTTP 状态/指标
+  ###################################################################
+  graphd:
+    replicas: 2
+    image: vesoft/nebula-graphd
+    config:
+      # 查询会话与超时
+      accept_partial_success: "false"
+      session_idle_timeout_secs: 600
+      # nGQL 执行引擎
+      max_iterations_per_traverse: 10000
+      # 日志
+      minloglevel: 1  # 0=INFO 1=WARNING 2=ERROR (dev 减噪)
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    # graphd 无状态，不需持久卷
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-nebula
+            app.kubernetes.io/component: graphd
+---
+# Service: graphd 查询入口 (对齐 configmap.yaml NEBULA_GRAPH_HOST=nebulagraph-graphd-svc)
+# 注意: kustomization namePrefix=edu- 会将此 Service 命名为 edu-nebulagraph-graphd-svc
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulagraph-graphd-svc
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: nebulagraph
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: graphd
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: education-nebula
+    app.kubernetes.io/component: graphd
+  ports:
+    - name: thrift       # nGQL/openCypher 查询端口
+      port: 9669
+      targetPort: 9669
+      protocol: TCP
+    - name: http          # 状态/指标端口
+      port: 19669
+      targetPort: 19669
+      protocol: TCP
+---
+# Service: metad 元数据服务 (集群内部 Raft 通信，不直接对外)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulagraph-metad-svc
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: nebulagraph
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: metad
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: education-nebula
+    app.kubernetes.io/component: metad
+  ports:
+    - name: thrift       # meta 服务端口
+      port: 9559
+      targetPort: 9559
+      protocol: TCP
+    - name: raft          # Raft 共识端口
+      port: 9560
+      targetPort: 9560
+      protocol: TCP
+---
+# Service: storaged 存储服务 (集群内部 Raft 通信，不直接对外)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulagraph-storaged-svc
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: nebulagraph
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: storaged
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: education-nebula
+    app.kubernetes.io/component: storaged
+  ports:
+    - name: thrift       # storage 服务端口
+      port: 9779
+      targetPort: 9779
+      protocol: TCP
+    - name: raft          # Raft 共识端口
+      port: 9780
+      targetPort: 9780
+      protocol: TCP

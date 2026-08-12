@@ -1,0 +1,973 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 本地验证 overlay: 适配 Rancher Desktop 单节点 k3s 集群
+# 目的: 验证 K8s YAML 语法和基本调度能力, 非生产部署
+#
+# 覆盖策略:
+#   1. 用 nginx:1.27-alpine 占位镜像替换不存在的内部仓库镜像
+#   2. 移除 topologySpreadConstraints (单节点不适用)
+#   3. 移除 envFrom (引用的 common-config/dubbo-config 中的服务 DNS 本地不存在)
+#   4. 将 readiness/liveness/startupProbe 路径改为 / (nginx 默认返回 200)
+#   5. 副本数统一设为 1 (单节点)
+#   6. ServiceMonitor / PropagationPolicy / OverridePolicy CRD 未安装,
+#      无法 apply - 用 patch 将这些资源整体替换为 ConfigMap (空) 占位,
+#      避免在 apply 时因 CRD 缺失报错中断。
+#      (kustomize 无法按 kind+name 删除整个资源, 只能改字段)
+resources:
+  - ../../base
+
+patches:
+  # ============ portal-bff ============
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ core-business ============
+  - target:
+      kind: Deployment
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ grading-service ============
+  - target:
+      kind: Deployment
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ ai-platform ============
+  # ai-platform 用 granian (Python ASGI server) 启动, nginx 镜像中没有该可执行文件,
+  # 必须移除 command/args 让 nginx 用默认 ENTRYPOINT 启动.
+  - target:
+      kind: Deployment
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: remove
+        path: /spec/template/spec/containers/0/command
+      - op: remove
+        path: /spec/template/spec/containers/0/args
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ ws-gateway ============
+  - target:
+      kind: Deployment
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ otel-collector ============
+  # otel-collector 引用的是真实镜像但内部仓库不可达, 也替换为 nginx 占位.
+  # nginx 默认监听 :80, 但 base 的健康探针指向端口 13133 (otel health extension)
+  # 该端口在容器中未监听 -> 探针会失败. 这里把探针端口改到 80.
+  # 同时移除 otel 自定义 command/args (nginx 镜像自带 ENTRYPOINT).
+  # 另: base 中端口名 "metrics-internal" (16字符) 超过 k8s 15 字符上限,
+  # k3s 校验更严格会拒绝, 这里缩短为 "metrics-int" (Deployment + Service 都改).
+  - target:
+      kind: Deployment
+      name: otel-collector
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/containers/0/command
+      - op: remove
+        path: /spec/template/spec/containers/0/args
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/3/name
+        value: metrics-int
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+  # otel-collector Service 的 targetPort 引用 "metrics-internal" 端口名,
+  # 需同步缩短为 "metrics-int" 以匹配容器端口名.
+  - target:
+      kind: Service
+      name: otel-collector
+    patch: |-
+      - op: replace
+        path: /spec/ports/3/targetPort
+        value: metrics-int
+
+  # ============ HPA: minReplicas 全部设为 1 ============
+  # base HPA 的 minReplicas 为 2-3, 会强制 Deployment 扩容到多副本,
+  # 单节点 k3s CPU 不足 (8550m 已分配 95%) 导致 Pending. 本地验证设为 1.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+
+  # ============ D-140 Fix 4a: Ingress → traefik (k3s 自带 traefik, 无 nginx) ============
+  # 移除 ingressClassName: nginx → traefik; 移除 TLS (本地无证书); 移除 nginx 注解.
+  # host 保留 (api.edu.com / www.edu.com), 需在测试机 /etc/hosts 把它们指向 k3s IP.
+  - target:
+      kind: Ingress
+      name: unified-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+  - target:
+      kind: Ingress
+      name: unified-ws-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+  - target:
+      kind: Ingress
+      name: portal-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+
+  # ============ D-140 Fix 4b: 6 个新服务 nginx 占位 patch ============
+  # 与 core-business 同模式: nginx:1.27-alpine 替换镜像, 探针改 / 端口改 80,
+  # 移除 topologySpreadConstraints / envFrom (本地 DNS 不存在).
+  # ----- data-platform -----
+  - target:
+      kind: Deployment
+      name: data-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ----- knowledge-service (Dubbo) -----
+  - target:
+      kind: Deployment
+      name: knowledge-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ----- knowledge-bff -----
+  - target:
+      kind: Deployment
+      name: knowledge-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ----- retrieval-service -----
+  - target:
+      kind: Deployment
+      name: retrieval-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ----- agent-service -----
+  - target:
+      kind: Deployment
+      name: agent-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ----- tenant-service (Dubbo) -----
+  - target:
+      kind: Deployment
+      name: tenant-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ D-140 Fix 4c: portal-bff containerPort 8090 ============
+  # base 已在 Fix 1 修正为 8090; 此 patch 兜底确保 overlay 渲染值正确.
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8090
+
+  # ============ D-142 Fix: order-platform 缺失 patch ============
+  # base 有 3 副本 + topologySpreadConstraints(DoNotSchedule) 但 overlay 漏了
+  - target:
+      kind: Deployment
+      name: order-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+
+  # ============ D-142 Fix: payment-platform 缺失 patch ============
+  - target:
+      kind: Deployment
+      name: payment-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+
+  # ============ D-142 Fix: frontend-portal 缺失 patch ============
+  - target:
+      kind: Deployment
+      name: frontend-portal
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  # ============ D-149: senior-care (康养养老事业群) ============
+  - target:
+      kind: Deployment
+      name: senior-care
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+  # ============ D-149: boardgame-service (棋牌教育+对弈事业群) ============
+  - target:
+      kind: Deployment
+      name: boardgame-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+      - op: remove
+        path: /spec/template/spec/topologySpreadConstraints
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 80
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 64Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+
+# 配置覆盖: 用本地值替换不存在的集群内服务 DNS
+configMapGenerator:
+  # 合并 base 的 common-config, 覆盖指向不存在服务的字段
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - NACOS_SERVER_ADDR=127.0.0.1:8848
+      - PULSAR_URL=pulsar://127.0.0.1:6650
+      - PULSAR_WEB_URL=http://127.0.0.1:8080
+      - REDIS_CLUSTER_NODES=127.0.0.1:6379
+      - TIDB_JDBC_URL=jdbc:mysql://127.0.0.1:4000/education
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+      - MILVUS_HOST=127.0.0.1
+      - MILVUS_PORT=19530
+      - JETSTREAM_URL=nats://127.0.0.1:4222
+      - CELL_NAME=local
+      - CELL_REGION=local
+      - CELL_ZONE=local-a
+      - REDIS_CLUSTER_LOCAL_CELL=local
+
+  # 合并 base 的 dubbo-config, 覆盖指向不存在 nacos 的字段
+  - name: dubbo-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - DUBBO_REGISTRY_ADDRESS=nacos://127.0.0.1:8848?namespace=education-platform
+      - DUBBO_METADATA_REPORT_ADDRESS=nacos://127.0.0.1:8848?namespace=education-platform
+      - DUBBO_CONFIG_CENTER_ADDRESS=nacos://127.0.0.1:8848?namespace=education-platform

@@ -1,0 +1,73 @@
+# Kustomize overlay for cell-bj (北京, cn-north-1)
+# D-041: 多区域多活 — 北京 cell 配置
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/part-of=education-platform
+    patch: |-
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1region
+        value: cn-north-1
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1zone
+        value: bj-a
+      - op: replace
+        path: /spec/template/metadata/labels/ep.io~1cell
+        value: cell-bj
+
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+configMapGenerator:
+  # merge into base common-config, override cell-specific values (D-041)
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - CELL_NAME=cell-bj
+      - CELL_REGION=cn-north-1
+      - CELL_ZONE=bj-a
+      - TIDB_FOLLOWER_READ=true
+      - TIDB_FOLLOWER_READ_STRATEGY=follower-read
+      - PULSAR_REPLICATION_CLUSTERS=hz,sz,bj
+      - REDIS_CLUSTER_LOCAL_CELL=cell-bj
+      - REDIS_CLUSTER_CRDT_ENABLED=true

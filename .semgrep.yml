@@ -1,0 +1,88 @@
+# Semgrep configuration for education-platform
+# D-063: Security scanning tool combination (Aikido + Semgrep + Trivy + Dependabot)
+
+# Include standard rule packs
+rules:
+  # ============================================================
+  # Custom rules — supplement the built-in rule packs
+  # (p/owasp-top-ten, p/security-audit are loaded via the workflow)
+  # ============================================================
+
+  # Detect hardcoded credentials/secrets
+  - id: ep-hardcoded-password
+    patterns:
+      - pattern: |
+          password = "..."
+      - pattern-not: |
+          password = System.getenv("...")
+      - pattern-not: |
+          password = os.environ.get("...")
+    message: "Hardcoded password detected. Use environment variables or secret managers."
+    languages: [java, python]
+    severity: ERROR
+    paths:
+      - "services/**"
+
+  # Detect SQL injection (string concatenation in SQL)
+  - id: ep-sql-injection
+    pattern: |
+      String sql = "..." + $VAR + "..."
+    message: "Potential SQL injection via string concatenation. Use parameterized queries."
+    languages: [java]
+    severity: ERROR
+    paths:
+      - "services/**"
+
+  # Detect XSS in React (dangerouslySetInnerHTML)
+  - id: ep-react-xss
+    pattern: |
+      dangerouslySetInnerHTML={{ __html: $X }}
+    message: "Potential XSS via dangerouslySetInnerHTML. Sanitize HTML before rendering."
+    languages: [typescript, javascript]
+    severity: WARNING
+    paths:
+      - "frontend/**"
+
+  # Detect insecure Redis usage (no auth)
+  - id: ep-redis-no-auth
+    pattern: |
+      redis://$HOST:$PORT
+    message: "Redis connection without authentication. Use rediss:// with TLS + ACL."
+    languages: [java, python]
+    severity: WARNING
+    paths:
+      - "services/**"
+
+  # Detect debug logging of sensitive data
+  - id: ep-debug-log-secrets
+    pattern: |
+      log.debug("..." + $SENSITIVE)
+    metavariable-pattern:
+      metavariable: $SENSITIVE
+      patterns:
+        - pattern: password
+        - pattern: token
+        - pattern: secret
+        - pattern: apiKey
+    message: "Debug logging of sensitive data. Remove or redact."
+    languages: [java, python]
+    severity: WARNING
+    paths:
+      - "services/**"
+
+# Exclude paths from all rules
+paths:
+  exclude:
+    - "node_modules/**"
+    - "target/**"
+    - "dist/**"
+    - "build/**"
+    - "**/*.min.js"
+    - "**/*.min.css"
+    - "**/package-lock.json"
+    - "**/pnpm-lock.yaml"
+    - "**/.turbo/**"
+    - "**/coverage/**"
+    - "**/__pycache__/**"
+    - "**/.venv/**"
+    - "**/venv/**"

@@ -16,7 +16,7 @@
 ### 1.2 范围
 SP-02 覆盖数据中台六大职责层：
 1. 实时层（Flink SQL/CEP 实时指标、实时特征工程）
-2. CDC 总线（TiDB → TiCDC → Kafka → Flink → Iceberg）
+2. CDC 总线（TiDB → TiCDC → Pulsar(ns=cdc://) → Flink → Iceberg）
 3. 湖仓层（Apache Iceberg + S3/MinIO）
 4. 冷热分层（热 TiDB/TiFlash，温冷 Iceberg）
 5. 服务层（离线数仓、AI 训练数据、跨 BU 联邦）
@@ -28,7 +28,7 @@ SP-02 覆盖数据中台六大职责层：
 | 术语 | 含义 |
 |------|------|
 | CDC | Change Data Capture，变更数据捕获 |
-| TiCDC | TiDB 官方 CDC 组件，输出 changefeed 到 Kafka |
+| TiCDC | TiDB 官方 CDC 组件，输出 changefeed 到 Pulsar(ns=cdc://) |
 | Schema Registry | Avro schema 注册中心，支持 EVOLVE 演化 |
 | Lakehouse | 湖仓一体，对象存储 + 表格式（Iceberg）提供 ACID/Time-travel |
 | SinkV2 | Flink Iceberg Sink 第二代，checkpoint 即提交 + 链式 compaction |
@@ -38,7 +38,7 @@ SP-02 覆盖数据中台六大职责层：
 
 ### 1.4 依据
 - 顶层蓝图 EP-SPEC-001 §4 数据中台 SAD
-- ADR-D01 CDC=TiCDC→Kafka→Flink→Iceberg（非直连）
+- ADR-D01 CDC=TiCDC→Pulsar→Flink→Iceberg（非直连，统一消息总线）
 - ADR-D02 Flink→Iceberg checkpoint=commit（5min/256MB/zstd/SinkV2）
 - ADR-D03 Feature Store 在线/离线一致性
 - ADR-D04 30亿历史数据冷热分层强制
@@ -49,7 +49,7 @@ SP-02 覆盖数据中台六大职责层：
 ## 2. 总体描述
 
 ### 2.1 系统定位
-数据中台是项目群的**统一数据底座**，向上为 AI 中台提供 Feature Store 与训练数据，向事业群提供实时指标、离线数仓、跨 BU 联邦查询；向下复用技术中台的 Kafka/Pulsar/可观测，对接基础设施层的 TiDB/TiFlash、S3/MinIO。
+数据中台是项目群的**统一数据底座**，向上为 AI 中台提供 Feature Store 与训练数据，向事业群提供实时指标、离线数仓、跨 BU 联邦查询；向下复用技术中台的 Pulsar/可观测，对接基础设施层的 TiDB/TiFlash、S3/MinIO。
 
 ### 2.2 用户角色与画像
 
@@ -64,7 +64,7 @@ SP-02 覆盖数据中台六大职责层：
 ### 2.3 约束
 | ID | 约束 | 来源 |
 |----|------|------|
-| C-01 | 复用现有 TiDB（不另起 OLAP 库），复用技术中台 Kafka/Pulsar/可观测 | D-011/EP-SPEC §2 |
+| C-01 | 复用现有 TiDB（不另起 OLAP 库），复用技术中台 Pulsar/可观测 | D-011/EP-SPEC §2 |
 | C-02 | CDC 不得直连 Flink-CDC-TiDB（避免 GC safepoint 阻塞全库） | ADR-D01 |
 | C-03 | Flink→Iceberg 必须用 checkpoint=commit（不得用事务型 sink 独立提交） | ADR-D02 |
 | C-04 | 30亿历史数据强制冷热分层，在线库只留热数据 | ADR-D04 |
@@ -73,8 +73,8 @@ SP-02 覆盖数据中台六大职责层：
 | C-07 | Avro+Schema Registry 强制，禁 JSON CDC | D-016 |
 
 ### 2.4 假设与依赖
-- 假设：TiDB 8.5 LTS 已部署并开启 TiCDC(对齐 ESP v8.5.7 3-region Raft 验证)；S3/MinIO bucket 已创建；Kafka 3.x 集群可用(仅 CDC 缓冲)；K8s 1.28+ + Flink K8s Operator 1.7+ 可用。
-- 依赖：SP-01 技术中台提供 Kafka/Pulsar/可观测；业务中台 SP-03 提供领域表（订单/用户/课程）；AI 中台 SP-04 消费 Feature Store。
+- 假设：TiDB 8.5 LTS 已部署并开启 TiCDC(对齐 ESP v8.5.7 3-region Raft 验证)；S3/MinIO bucket 已创建；Pulsar 3.3.x 集群可用(CDC namespace 与事件总线共用集群)；K8s 1.28+ + Flink K8s Operator 1.7+ 可用。
+- 依赖：SP-01 技术中台提供 Pulsar/可观测；业务中台 SP-03 提供领域表（订单/用户/课程）；AI 中台 SP-04 消费 Feature Store。
 
 ---
 
@@ -97,11 +97,11 @@ SP-02 覆盖数据中台六大职责层：
 
 | ID | 需求 | 优先级 | 描述 |
 |----|------|--------|------|
-| FR-CDC-01 | TiCDC changefeed 管理 | P0 | 按表分组创建 changefeed，支持启停/过滤/路由，元数据登记到 catalog |
-| FR-CDC-02 | Avro 编码 + Schema Registry | P0 | CDC 消息 Avro 编码，schema 注册并 EVOLVE 演化，禁 JSON |
+| FR-CDC-01 | TiCDC changefeed 管理 | P0 | 按表分组创建 changefeed，输出到 Pulsar(ns=cdc://)，支持启停/过滤/路由，元数据登记到 catalog |
+| FR-CDC-02 | Avro 编码 + Schema Registry | P0 | CDC 消息 Avro 编码，schema 经 Pulsar 内置 Schema Registry 注册并 EVOLVE 演化，禁 JSON |
 | FR-CDC-03 | Flink CDC 3.x YAML pipeline | P0 | 分库分表合并（如 order_0000..order_1023 → ods_order），YAML 声明路由 |
 | FR-CDC-04 | 跨单元 changefeed 聚合 | P1 | 多 cell TiDB changefeed 聚合到统一 ODS 表，标注 source_cell |
-| FR-CDC-05 | Schema 演化通知 | P1 | 上游 DDL 变更经 Schema Registry 通知下游作业，自动 EVOLVE 或挂起人工 |
+| FR-CDC-05 | Schema 演化通知 | P1 | 上游 DDL 变更经 Pulsar 内置 Schema Registry 通知下游作业，自动 EVOLVE 或挂起人工 |
 
 ### 3.3 湖仓层（LH）
 
@@ -130,7 +130,7 @@ SP-02 覆盖数据中台六大职责层：
 | FR-SV-01 | 离线数仓 | P0 | Spark + Iceberg：留存/画像/复杂报表，T+1 调度 |
 | FR-SV-02 | AI 训练数据导出 | P0 | Iceberg → Spark/Flink → 训练 pipeline，支持 time-travel 切片 |
 | FR-SV-03 | 跨 BU 联邦 | P1 | Iceberg 统一落点，Trino 跨 BU 查询，行级权限 |
-| FR-SV-04 | 数据血缘 | P1 | 表/字段级血缘，来源 TiDB → Kafka → Iceberg → 报表 |
+| FR-SV-04 | 数据血缘 | P1 | 表/字段级血缘，来源 TiDB → Pulsar → Iceberg → 报表 |
 
 ### 3.6 查询层（QY）
 
@@ -160,6 +160,41 @@ SP-02 覆盖数据中台六大职责层：
 | FR-OPS-04 | Schema 演化流程 | P0 | DDL 提交→Schema Registry→下游作业适配→灰度 |
 | FR-OPS-05 | 数据质量监控 | P1 | Avro schema 校验 + 行数/空值/枚举漂移监控 |
 
+### 3.9 AI 智能驱动（AI-DRIVEN）
+
+> 编号规则：FR-AI-<序号>。本节描述数据中台的 AI 智能化能力，承接顶层蓝图 AI 智能驱动决策（ADR-D05/D06/D07）。
+
+#### 3.9.1 智能数据目录与元数据发现
+
+| ID | 需求 | 优先级 | 描述 |
+|----|------|--------|------|
+| FR-AI-01 | 自动元数据发现 | P1 | Flink CDC 作业捕获 schema 变更后，自动触发元数据抽取管道，识别表/字段语义、数据分布、质量画像，元数据写入 Iceberg Catalog + 搜索引擎，支持自然语言搜索 |
+| FR-AI-02 | 智能数据血缘 | P1 | 基于作业 DAG + SQL 解析自动构建数据血缘图，AI 模型推断字段级血缘（column-level lineage），准确率目标 ≥95% |
+| FR-AI-03 | 数据资产画像 | P2 | 对每张 Iceberg 表自动生成数据质量评分、访问热度、存储成本、关联推荐，形成 360° 数据资产视图 |
+
+#### 3.9.2 智能特征平台
+
+| ID | 需求 | 优先级 | 描述 |
+|----|------|--------|------|
+| FR-AI-04 | 自动特征工程 | P1 | 基于历史数据分布和下游模型反馈，自动推荐候选特征（特征重要性排序），AI 模型生成特征 DSL 草稿供数据工程师审核 |
+| FR-AI-05 | 特征漂移检测 | P1 | 在线监控 Feature Store 特征分布，PSI(Population Stability Index) > 0.2 时自动告警并触发特征重训练流水线 |
+| FR-AI-06 | 特征重要性反馈闭环 | P1 | 接收 SP-04 AI 中台的模型特征重要性反馈，自动调整 Feature Store 中特征的优先级和缓存策略 |
+
+#### 3.9.3 预测性数据运维
+
+| ID | 需求 | 优先级 | 描述 |
+|----|------|--------|------|
+| FR-AI-07 | 智能容量预测 | P1 | 基于 90 天历史数据增长趋势，LSTM 模型预测未来 30 天 Iceberg 表存储增长和 Flink 作业资源需求，提前触发扩容 |
+| FR-AI-08 | 异常检测与根因分析 | P1 | 对 CDC 延迟、Flink checkpoint 失败、Iceberg compaction 异常等指标进行实时异常检测(Isolation Forest)，自动关联事件进行根因分析 |
+| FR-AI-09 | 智能调度优化 | P2 | 基于历史作业执行画像，AI 调度器优化 Flink 作业并行度和资源分配，目标降低 15% 计算成本 |
+
+#### 3.9.4 自然语言数据查询
+
+| ID | 需求 | 优先级 | 描述 |
+|----|------|--------|------|
+| FR-AI-10 | Text-to-SQL | P1 | 用户自然语言提问，LLM(RAG+Schema 上下文)自动生成 Trino SQL 并执行，支持查询结果可视化推荐 |
+| FR-AI-11 | 智能数据问答 | P2 | 对常见分析问题(如"本周活跃学员数趋势")自动匹配最佳查询模板，支持多轮对话式数据探索 |
+
 ---
 
 ## 4. 非功能需求
@@ -167,7 +202,7 @@ SP-02 覆盖数据中台六大职责层：
 | ID | 类别 | 指标 | 目标 | 测量方法 | 关联 SLO |
 |----|------|------|------|---------|---------|
 | NFR-01 | 延迟 | CDC 入湖端到端 | <5min（P95） | Flink checkpoint→commit 时间戳 - TiDB 提交时间戳 | G-09 |
-| NFR-02 | 吞吐 | 学习事件 ingestion | ≥500,000 ev/s | Flink source throughput + Kafka lag | G-06 |
+| NFR-02 | 吞吐 | 学习事件 ingestion | ≥500,000 ev/s | Flink source throughput + Pulsar backlog | G-06 |
 | NFR-03 | 延迟 | 实时指标看板刷新 | <30s | Redis Stream 消费延迟 | — |
 | NFR-04 | 延迟 | 在线特征查询 | <5ms（P99） | Redis/TiKV 客户端计时 | — |
 | NFR-05 | 可用性 | 数据中台核心链路 | 99.9% | Prometheus up + 故障注入 | G-07 |
@@ -208,6 +243,15 @@ SP-02 覆盖数据中台六大职责层：
 - US-PE-02：作为平台工程师，我希望 compaction 自动调度且小文件数告警，以便避免读性能退化。
 - US-PE-03：作为平台工程师，我希望 Schema 演化走灰度流程（DDL→Registry→下游适配→全量），以便不破坏消费方。
 
+### 5.6 数据科学家
+- US-DS-01：作为数据科学家，我希望通过自然语言查询数据湖，而不需要编写复杂 SQL，以便快速验证假设。
+- US-DS-02：作为数据科学家，我希望系统能自动推荐有价值的特征，以便加速模型开发迭代。
+- US-DS-03：作为数据科学家，我希望实时感知特征漂移，以便及时更新模型保证预测精度。
+
+### 5.7 平台运营
+- US-OPS-AI-01：作为平台运营，我希望系统能预测存储增长和资源需求，以便提前规划扩容预算。
+- US-OPS-AI-02：作为平台运营，我希望异常发生时自动获得根因分析，以便将 MTTR 从 30min 降至 10min。
+
 ---
 
 ## 6. 验收标准
@@ -216,7 +260,7 @@ SP-02 覆盖数据中台六大职责层：
 | 验收项 | 标准 | 关联 |
 |--------|------|------|
 | 实时指标链路 | 学习/直播/交易/风控/计费 5 类指标 Flink job 全部运行，看板可见 | FR-RT-01..05 |
-| CDC 入湖 | TiDB → TiCDC → Kafka → Flink → Iceberg 全链路打通，行数一致 | FR-CDC-01..03, ADR-D01 |
+| CDC 入湖 | TiDB → TiCDC → Pulsar → Flink → Iceberg 全链路打通，行数一致 | FR-CDC-01..03, ADR-D01 |
 | Iceberg 表 | DDL 建表成功，Flink 实时写入，time-travel/schema evolution 验证通过 | FR-LH-01..06 |
 | 冷热分层 | 超 90 天数据归档 Iceberg，TiDB 在线库容量稳定 | FR-CS-01..02, ADR-D04 |
 | 离线数仓 | Spark 留存/画像报表 T+1 产出，数据准确 | FR-SV-01 |
@@ -238,6 +282,12 @@ SP-02 覆盖数据中台六大职责层：
 - 场景 C：90 天前学习记录从 TiDB 归档到 Iceberg，Trino 查询可关联冷热数据。
 - 场景 D：AI 工程师按 snapshot-id 切片训练数据，模型实验可复现。
 
+### 6.4 AI 驱动功能验收
+| 验收项 | 标准 | 关联 |
+|--------|------|------|
+| AI 驱动功能 | FR-AI-01..11 各需通过功能测试 + 精度指标验收（特征漂移检测召回率≥90%，Text-to-SQL 执行成功率≥85%，异常检测 F1≥0.85） | FR-AI-01..11 |
+| 端到端验收 | 自然语言查询 P95 响应 < 8s（含 SQL 生成+执行+返回）；特征漂移检测延迟 < 5min | FR-AI-05, FR-AI-10 |
+
 ---
 
 ## 7. 需求追溯矩阵（摘要）
@@ -248,6 +298,10 @@ SP-02 覆盖数据中台六大职责层：
 | FR-LH-02..03 | ADR-D02, D-017 | §3.3 湖仓层 | §3 Flink Job | §3 Iceberg 测试 |
 | FR-FS-01..04 | ADR-D03 | §5 Feature Store | §4 特征定义 | §4 一致性测试 |
 | FR-CS-01..02 | ADR-D04 | §4 冷热分层 | §5 归档作业 | §5 端到端 |
+| FR-AI-01..03 | ADR-D05 | §3.9.1 智能数据目录 | §6 AI 数据目录 | §6 数据目录测试 |
+| FR-AI-04..06 | ADR-D05 | §3.9.2 智能特征平台 | §6 AI 特征平台 | §6 特征平台测试 |
+| FR-AI-07..09 | ADR-D06 | §3.9.3 预测性运维 | §6 预测性运维 | §6 运维预测测试 |
+| FR-AI-10..11 | ADR-D07 | §3.9.4 自然语言查询 | §6 Text-to-SQL | §6 NL 查询测试 |
 | NFR-01 (G-09) | EP-SPEC §1.2 | §3.3 | §3 checkpoint | §5 延迟测试 |
 
 ---

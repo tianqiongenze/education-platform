@@ -1,0 +1,264 @@
+# TiDB Cluster CRD — 生产集群 (3 PD + 3 TiKV + 2 TiDB + 2 TiFlash + 2 TiCDC)
+#
+# 背景: 1M 并发压测 (D-079/D-080) 揭示单 TiKV 节点在 587 RPS 触顶 (99.88% 错误)。
+# 本清单将 TiDB/TiKV 从 K8s 外的裸金属单节点迁移至 TiDB Operator 管理的
+# 多副本分布式集群，满足 D-041 (多区域多活 Follower Read) 与
+# Iron Law 2 (读写分离: TiFlash 列存承载分析读)。
+#
+# 版本: TiDB v8.5.5 (对齐 D-027 / D-055)。
+# 依赖: TiDB Operator v1.5+ 必须先安装 CRD (pingcap.com/v1alpha1)。
+# 命名: kustomization namePrefix=edu- 会把实例名前缀化为 edu-education-tidb。
+# 配置块: TiDB Operator 要求各组件 config 为 TOML 字符串 (本文件用 block scalar)。
+---
+apiVersion: pingcap.com/v1alpha1
+kind: TidbCluster
+metadata:
+  name: education-tidb
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: education-tidb
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: database
+    # D-035 rule 6: GitOps 可追溯
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    # 强约束: 仅允许通过 GitOps 修改 replicas，禁止 kubectl edit 在线变更
+    education.io/change-policy: "gitops-only"
+    education.io/design-decisions: "D-027,D-041,D-055,D-079,D-080,IronLaw2"
+spec:
+  version: v8.5.5
+
+  # PV 复用策略: Retain 保留数据 (生产安全默认值)
+  pvReclaimPolicy: Retain
+  enablePVReclaim: false
+
+  ###################################################################
+  # PD — 3 副本 Raft 共识 (HA 最小法定人数)
+  ###################################################################
+  pd:
+    replicas: 3
+    image: pingcap/pd:v8.5.5
+    config: |
+      [schedule]
+      # 不让 PD 把 region leader 全堆到一个 store
+      max-merge-region-size = 20
+      [replication]
+      # 至少 3 副本 (与 TiKV replicas 对齐)
+      max-replicas = 3
+      [dashboard]
+      # TiDB Dashboard 内嵌于 PD
+      internal-proxy = true
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+      storage: "20Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+    storageClassName: local-path  # dev; 生产覆盖为 gp3
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: pd
+      - topologyKey: ep.io/cell
+        whenUnsatisfiable: ScheduleAnyway
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: pd
+
+  ###################################################################
+  # TiKV — 3 副本跨可用区 (突破单节点 587 RPS 瓶颈)
+  # 单节点 ~587 RPS × 3 节点 ≈ 1700+ RPS 线性扩展基线
+  ###################################################################
+  tikv:
+    replicas: 3
+    image: pingcap/tikv:v8.5.5
+    config: |
+      [rocksdb]
+      # 分离 WAL 与数据: 显著降低写放大与尾延迟
+      max-background-jobs = 8
+      [storage]
+      # 允许 range 分裂/合并自适应
+      scheduler-concurrency = 2048000
+      [server]
+      # gRPC 并发流
+      grpc-concurrency = 8
+      [raftdb]
+      max-background-jobs = 4
+    # Iron Law 2: 读写分离 — 数据存于行存 TiKV，分析读下沉到 TiFlash
+    separateRocksDBWal: true
+    resources:
+      requests:
+        cpu: "4000m"
+        memory: "16Gi"
+        storage: "500Gi"
+      limits:
+        cpu: "4000m"
+        memory: "16Gi"
+        storage: "500Gi"
+    storageClassName: local-path  # dev; 生产覆盖为 gp3 (SSD)
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tikv
+      - topologyKey: ep.io/cell
+        whenUnsatisfiable: ScheduleAnyway
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tikv
+
+  ###################################################################
+  # TiDB — 2 副本无状态 SQL 层
+  # 连接入口 tidb.edu.svc:4000 (对齐 configmap.yaml TIDB_JDBC_URL)
+  ###################################################################
+  tidb:
+    replicas: 2
+    image: pingcap/tidb:v8.5.5
+    service:
+      type: ClusterIP
+      # 对齐 configmap.yaml: jdbc:mysql://tidb.edu.svc:4000
+      exposeStatus: true
+    config: |
+      [tidb]
+      # D-041: 跨 region 读 — 允许从 follower 副本读取，降低跨 region 读延迟
+      # 应用层通过 SET tidb_replica_read = 'leader-and-follower' 启用 (见 runbook §5)
+      server-version = "v8.5.5"
+      [performance]
+      max-procs = 2
+      [log]
+      level = "info"
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tidb
+      - topologyKey: ep.io/cell
+        whenUnsatisfiable: ScheduleAnyway
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tidb
+
+  ###################################################################
+  # TiFlash — 2 副本列存引擎 (Iron Law 2 读写分离)
+  # OLTP 写走 TiKV，OLAP/分析读走 TiFlash，避免 1M 压测下的行存读饱和
+  ###################################################################
+  tiflash:
+    replicas: 2
+    image: pingcap/tiflash:v8.5.5
+    config: |
+      [storage]
+      [storage.main]
+      # 列存压缩与合并策略
+      compaction-method = "tiered"
+      [profiles.default]
+      # 内存软限，超出走磁盘
+      max_memory_usage = "12Gi"
+    resources:
+      requests:
+        cpu: "4000m"
+        memory: "16Gi"
+        storage: "500Gi"
+      limits:
+        cpu: "4000m"
+        memory: "16Gi"
+        storage: "500Gi"
+    storageClassName: local-path  # dev; 生产覆盖为 gp3 (SSD)
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tiflash
+      - topologyKey: ep.io/cell
+        whenUnsatisfiable: ScheduleAnyway
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: tiflash
+
+  ###################################################################
+  # TiCDC — 跨 region 数据复制 (D-041 多区域多活)
+  # 每个 region 独立 TiDB 集群，通过 CDC 同步变更
+  ###################################################################
+  ticdc:
+    replicas: 2
+    image: pingcap/ticdc:v8.5.5
+    config: |
+      [sorter]
+      # 内存+磁盘混合排序，应对大事务
+      sort-engine = "unified"
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+    topologySpreadConstraints:
+      - topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: ticdc
+      - topologyKey: ep.io/cell
+        whenUnsatisfiable: ScheduleAnyway
+        maxSkew: 1
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: education-tidb
+            app.kubernetes.io/component: ticdc
+---
+# Service: 为 TiDB 集群提供稳定 DNS (对齐 configmap.yaml tidb.edu.svc)
+# 注意: kustomization namePrefix=edu- 会将此 Service 命名为 edu-tidb-svc
+apiVersion: v1
+kind: Service
+metadata:
+  name: tidb-svc
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: education-tidb
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: education-tidb
+    app.kubernetes.io/component: tidb
+  ports:
+    - name: mysql
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+    - name: status
+      port: 10080
+      targetPort: 10080
+      protocol: TCP

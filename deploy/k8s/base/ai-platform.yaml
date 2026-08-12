@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-platform
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: ai
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 900  # D-035 rule 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-platform
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-platform
+        app.kubernetes.io/part-of: education-platform
+        app.kubernetes.io/component: ai
+        topology.kubernetes.io/region: cn-east-1
+        topology.kubernetes.io/zone: hz-a
+        ep.io/cell: cell-hz
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8086"
+        prometheus.io/path: "/metrics"
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-platform
+        - maxSkew: 1
+          topologyKey: ep.io/cell
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-platform
+      containers:
+        - name: ai-platform
+          image: harbor.edu.internal/education-platform/ai-platform:1.0.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - granian
+          args:
+            - ai_gateway.app:create_app
+            - --interface
+            - asgi
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8086"
+          ports:
+            - name: http
+              containerPort: 8086
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: common-config
+          env:
+            - name: LLM_MODE
+              value: "mock"
+            - name: OTEL_SERVICE_NAME
+              value: "ai-platform"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=ai-platform,service.namespace=education-platform,deployment.environment=production"
+            # D-118: OTLP gRPC exporter endpoint + sampler config. The
+            # ConfigMap provides defaults; these explicit values win.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 1Gi
+            limits:
+              cpu: 4000m
+              memory: 4Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "sleep 10"
+      terminationGracePeriodSeconds: 45
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-platform
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/part-of: education-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ai-platform
+  ports:
+    - name: http
+      port: 8086
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ai-platform
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/part-of: education-platform
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-platform
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

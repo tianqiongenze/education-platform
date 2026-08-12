@@ -1,0 +1,103 @@
+# TiDB 备份调度 — 全量 (Dumpling) + 增量 (Binlog)
+#
+# 策略:
+#   - 全量快照: 每 24h 一次 (02:00 UTC+8)，BR 工具备份到 S3
+#   - 增量备份: Binlog 每 15min 持续导出到 S3，RPO <= 15min
+# 目标端 (Sink):
+#   - dev : MinIO (s3://tidb-backup/)
+#   - prod: 云端 S3 (s3://ep-tidb-backup-{region}/)
+# 凭据通过单独的 Secret 注入 (s3-secret)，本清单不含明文凭据。
+---
+# BackupSchedule — 全量快照调度
+apiVersion: pingcap.com/v1alpha1
+kind: BackupSchedule
+metadata:
+  name: education-tidb-backup-schedule
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: education-tidb-backup
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    # 备份失败需触发 P1 告警 (runbook §10)
+    education.io/alert-on-failure: "true"
+spec:
+  # 关联集群
+  clusters:
+    - name: education-tidb
+
+  # 每天凌晨 02:00 (Asia/Shanghai = UTC+8 → 18:00 UTC 前一天)
+  schedule: "0 18 * * *"
+
+  # 全量备份模板 (BR 快照备份)
+  backupTemplate:
+    br:
+      cluster: education-tidb
+      clusterNamespace: education-platform
+      # 并发度: 4 线程平衡备份吞吐与在线负载
+      concurrency: 4
+      # 生产: rate-limit 限制对 TiKV I/O 的影响
+      rateLimit: 200
+      sendCredToTikv: false
+    s3:
+      provider: aws
+      # dev 用 MinIO; prod 用云 S3 (通过 overlay 覆盖 endpoint)
+      endpoint: http://minio.edu.svc:9000
+      bucket: tidb-backup
+      prefix: full
+      secretName: s3-secret
+
+  # 全量快照保留 7 份 (7 天滚动)
+  maxBackups: 7
+
+  # 日志级增量备份 (Binlog via TiCDC / Drainer 风格)
+  logBackups:
+    enable: true
+    # 每 15min flush 一次 → RPO <= 15min
+    flushInterval: 15m
+    s3:
+      provider: aws
+      endpoint: http://minio.edu.svc:9000
+      bucket: tidb-backup
+      prefix: log
+      secretName: s3-secret
+
+  # 备份作业资源配额
+  backupStorageClassName: local-path
+---
+# TidbInitializer — 首次部署初始化 (建库建用户)
+# 仅在空集群首次启动时生效；已存在数据时幂等跳过。
+apiVersion: pingcap.com/v1alpha1
+kind: TidbInitializer
+metadata:
+  name: education-tidb-init
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: education-tidb-init
+    app.kubernetes.io/part-of: education-platform
+    app.kubernetes.io/component: bootstrap
+    app.kubernetes.io/managed-by: argocd
+spec:
+  image: tnir/mysql:5.7
+  cluster:
+    name: education-tidb
+    namespace: education-platform
+
+  # 初始化脚本: 创建应用库 + 读写分离账号
+  initSql: |-
+    CREATE DATABASE IF NOT EXISTS education
+      DEFAULT CHARACTER SET utf8mb4
+      DEFAULT COLLATE utf8mb4_unicode_ci;
+
+    -- Iron Law 2: 读写分离账号
+    -- app_rw   : 业务 OLTP (走 TiKV 行存)
+    -- app_ro   : 分析/报表 (走 TiFlash 列存，Follower Read)
+    CREATE USER IF NOT EXISTS 'app_rw'@'%' IDENTIFIED BY '__PLACEHOLDER_RW__';
+    GRANT SELECT, INSERT, UPDATE, DELETE ON education.* TO 'app_rw'@'%';
+
+    CREATE USER IF NOT EXISTS 'app_ro'@'%' IDENTIFIED BY '__PLACEHOLDER_RO__';
+    GRANT SELECT ON education.* TO 'app_ro'@'%';
+
+  # 密码通过 Secret 注入 — GitOps 中由 External Secrets / Sealed Secrets 生成
+  passwordSecret: tidb-init-secret

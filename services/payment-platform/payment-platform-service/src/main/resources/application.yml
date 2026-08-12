@@ -1,0 +1,53 @@
+server:
+  port: 8087
+spring:
+  application:
+    name: payment-platform
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  # D-132: H2 dev-local datasource (production overrides via a profile / env vars).
+  # Mirrors the order-platform layout so the service boots standalone in dev.
+  datasource:
+    url: jdbc:h2:mem:paymentdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+dubbo:
+  application:
+    name: payment-platform
+  protocol:
+    name: dubbo
+    port: 20887
+  registry:
+    address: N/A
+ep:
+  payment:
+    dev-guard: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+# D-154 P2-10: Resilience4j rate limiter.
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

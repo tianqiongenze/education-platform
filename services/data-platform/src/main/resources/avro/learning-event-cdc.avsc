@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "LearningEventCDC",
+  "namespace": "com.ep.data.cdc",
+  "doc": "Learning event CDC envelope. event_type: 1=play 2=complete 3=submit 4=quiz.",
+  "fields": [
+    {"name": "op_type", "type": "string", "doc": "CDC operation code c/u/d/r"},
+    {"name": "ts_ms", "type": "long", "doc": "CDC event timestamp in epoch ms"},
+    {"name": "source_cell", "type": "string", "doc": "Source cell name"},
+    {"name": "table", "type": "string", "doc": "Source table name", "default": "learning_event"},
+    {"name": "event_id", "type": "long"},
+    {"name": "user_id", "type": "long"},
+    {"name": "course_id", "type": ["null", "long"], "default": null},
+    {"name": "lesson_id", "type": ["null", "long"], "default": null},
+    {"name": "event_type", "type": "int", "doc": "1=play 2=complete 3=submit 4=quiz"},
+    {"name": "duration_sec", "type": ["null", "int"], "default": null},
+    {"name": "ts", "type": ["null", "long"], "default": null, "doc": "Original event timestamp"}
+  ]
+}

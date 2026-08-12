@@ -2,12 +2,15 @@ package com.ep.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -39,5 +42,19 @@ public class CacheConfig {
         t.setValueSerializer(new GenericJackson2JsonRedisSerializer(om));
         t.afterPropertiesSet();
         return t;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.data.redis.cluster.nodes")
+    public LettuceConnectionFactory redisClusterConnectionFactory(
+            @Value("${spring.data.redis.cluster.nodes}") String clusterNodes,
+            @Value("${spring.data.redis.cluster.max-redirects:3}") int maxRedirects) {
+        RedisClusterConfiguration config = new RedisClusterConfiguration(
+                java.util.Arrays.stream(clusterNodes.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toList());
+        config.setMaxRedirects(maxRedirects);
+        return new LettuceConnectionFactory(config);
     }
 }

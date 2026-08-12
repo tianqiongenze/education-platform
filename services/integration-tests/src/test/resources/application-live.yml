@@ -1,0 +1,18 @@
+# Live integration test profile — connects to K8s port-forwarded infrastructure
+# SAFETY: All test data uses isolated schema/DB to protect shared cluster
+ep:
+  live:
+    tidb:
+      url: jdbc:mysql://127.0.0.1:4000/ep_test_integration
+      username: ${DB_USER:root}
+      password: ${DB_PASSWORD:}
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 15  # ISOLATED from production (production uses DB 0)
+    seata:
+      tc-url: http://127.0.0.1:7091
+    sp03:
+      base-url: http://localhost:8083
+    sp05:
+      base-url: http://localhost:8085

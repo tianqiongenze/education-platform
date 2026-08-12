@@ -1,0 +1,9 @@
+# D-115: .dockerignore for bff-java (JIB build context is the service dir).
+**/target/
+**/.venv/
+**/node_modules/
+**/.git/
+**/*.md
+**/test/
+**/tests/
+.gitignore

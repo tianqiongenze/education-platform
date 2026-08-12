@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "UserCDC",
+  "namespace": "com.ep.data.cdc",
+  "doc": "User dimension CDC envelope.",
+  "fields": [
+    {"name": "op_type", "type": "string", "doc": "CDC operation code c/u/d/r"},
+    {"name": "ts_ms", "type": "long", "doc": "CDC event timestamp in epoch ms"},
+    {"name": "source_cell", "type": "string", "doc": "Source cell name"},
+    {"name": "table", "type": "string", "doc": "Source table name", "default": "user"},
+    {"name": "user_id", "type": "long"},
+    {"name": "username", "type": ["null", "string"], "default": null},
+    {"name": "phone", "type": ["null", "string"], "default": null},
+    {"name": "status", "type": ["null", "int"], "default": null},
+    {"name": "tenant_id", "type": ["null", "long"], "default": null},
+    {"name": "created_at", "type": ["null", "long"], "default": null}
+  ]
+}

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardgame-service
+  labels:
+    app: boardgame-service
+    app.kubernetes.io/name: boardgame-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: education-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: boardgame-service
+  template:
+    metadata:
+      labels:
+        app: boardgame-service
+        app.kubernetes.io/name: boardgame-service
+        app.kubernetes.io/component: backend
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: boardgame-service
+      containers:
+        - name: boardgame-service
+          image: registry.local:5000/ep/boardgame-service:latest
+          ports:
+            - name: http
+              containerPort: 8089
+            - name: dubbo
+              containerPort: 20889
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: GAME_WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8089
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8089
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: boardgame-service
+  labels:
+    app: boardgame-service
+    app.kubernetes.io/name: boardgame-service
+    app.kubernetes.io/part-of: education-platform
+spec:
+  selector:
+    app: boardgame-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8089
+    - name: dubbo
+      port: 20889
+      targetPort: 20889
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boardgame-service
+  labels:
+    app: boardgame-service
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: boardgame-service
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s

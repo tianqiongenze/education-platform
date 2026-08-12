@@ -1,0 +1,19 @@
+# ep-cache default configuration (library-level)
+# Host services override these via Nacos or their own application.yml
+spring:
+  data:
+    redis:
+      cluster:
+        nodes: ${REDIS_CLUSTER_NODES:}
+        max-redirects: 3
+      timeout: 3s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+        shutdown-timeout: 200ms
+
+ep:
+  cache:
+    enabled: true

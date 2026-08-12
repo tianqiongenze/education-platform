@@ -1,0 +1,30 @@
+{
+  "name": "@ep/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./constants": "./src/constants/index.ts",
+    "./utils": "./src/utils/index.ts",
+    "./e2e-helpers": "./src/e2e-helpers.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@ep/lint-config": "workspace:*",
+    "@playwright/test": "^1.49.0",
+    "eslint": "9.18.0",
+    "typescript": "5.8.3",
+    "vitest": "2.1.9"
+  }
+}

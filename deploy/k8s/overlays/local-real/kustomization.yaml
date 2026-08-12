@@ -1,0 +1,282 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Inherit from local-verify (which has correct env vars, single-node config, etc.)
+# but we'll override images and health probes
+resources:
+  - ../local-verify
+
+# Patch all deployments to use real images + correct health probes
+patches:
+  # ===== Java services (actuator health) =====
+  - target:
+      kind: Deployment
+      name: edu-portal-bff
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-portal-bff:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8090
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8090
+
+  - target:
+      kind: Deployment
+      name: edu-data-platform
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-data-platform:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8082
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8082
+
+  - target:
+      kind: Deployment
+      name: edu-core-business
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-core-business:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8083
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8083
+
+  - target:
+      kind: Deployment
+      name: edu-order-platform
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-order-platform:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8084
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8084
+
+  - target:
+      kind: Deployment
+      name: edu-payment-platform
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-payment-platform:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8087
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8087
+
+  - target:
+      kind: Deployment
+      name: edu-grading-service
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-grading-service:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8085
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8085
+
+  - target:
+      kind: Deployment
+      name: edu-agent-service
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-agent-service:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8073
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8073
+
+  - target:
+      kind: Deployment
+      name: edu-knowledge-bff
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-knowledge-bff:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8070
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8070
+
+  - target:
+      kind: Deployment
+      name: edu-knowledge-service
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-knowledge-service:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8071
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8071
+
+  - target:
+      kind: Deployment
+      name: edu-retrieval-service
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-retrieval-service:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8072
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8072
+
+  - target:
+      kind: Deployment
+      name: edu-tenant-service
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-tenant-service:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8074
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8074
+
+  # ===== Non-Java services =====
+  - target:
+      kind: Deployment
+      name: edu-ws-gateway
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-ws-gateway:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /health
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8081
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /health
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8081
+
+  - target:
+      kind: Deployment
+      name: edu-ai-platform
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-ai-platform:1.0.0
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /health
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8086
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /health
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8086
+
+  - target:
+      kind: Deployment
+      name: edu-frontend-portal
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: esp/edu-frontend-portal:1.0.0
+      - op: replace
+        path: /spec/replicas
+        value: 1

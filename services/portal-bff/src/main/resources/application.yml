@@ -1,0 +1,138 @@
+server:
+  port: 8090
+  jetty:
+    threads:
+      max: 600       # P3: 400→600, BFF是入口层, 增加可处理并发HTTP连接数
+      min: 50
+      idle-timeout: 30000
+
+spring:
+  application:
+    name: portal-bff
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # D-069: default to dev
+  config:
+    import: "optional:file:./config/application-${spring.profiles.active}.yml"  # D-069: external override
+  main:
+    allow-bean-definition-overriding: true  # ADR-T13 ⑦: Seata webclient conflict workaround
+  jackson:
+    default-typing: false  # ADR-T04: 禁 DefaultTyping
+  threads:
+    virtual:
+      enabled: true  # D-039: 虚拟线程铁律
+  aot:
+    enabled: false  # D-069: common base — overridden to true in prod
+
+# D-032: Dubbo 3.3.6 + Nacos registry (common keys; env-specific in profile files)
+dubbo:
+  application:
+    name: portal-bff
+  protocol:
+    name: dubbo
+    port: 20880
+  consumer:
+    check: false  # BFF consumer: 启动不强依赖 provider 在线 (checkColumnTimeout 兜底)
+    timeout: 10000 # P4: 5000→10000, 1000并发下DB池竞争需更长等待, 减少级联超时
+    retries: 0     # BFF 写操作默认不重试, 避免创单/支付幂等被打破
+    # D-039: 虚拟线程兼容, 不使用 synchronized 上下文
+    threadpool: cached
+  # 按服务粒度的超时配置 (覆盖全局 consumer.timeout)
+  config-center:
+    timeout: 3000
+  # SP-03 业务服务: 查询型调用 5s, 写操作 3s (由 @DubboReference 注解细化)
+  # ep-api/HealthRpcService: 探针 2s
+
+# D-117: JWT RS256 密钥外化。
+# 生产环境密钥从 K8s SealedSecret 解密为 Secret 后挂载到 /etc/jwt/，并由
+# JWT_PRIVATE_KEY_PATH / JWT_PUBLIC_KEY_PATH 指向（见 deploy/k8s/base/portal-bff.yaml）。
+# JwtService 还支持 JWT_PRIVATE_KEY / JWT_PUBLIC_KEY（base64 内联）以及下方
+# Spring 属性（dev 向后兼容，例如本地从 jwt-rs256.env 加载单行 PEM）。
+# 仓库内禁止提交任何 .pem / .key 文件（见 .gitignore + D-117 ADR）。
+jwt:
+  rsa:
+    # 默认空字符串；生产由文件路径 env var 提供密钥，这两个属性仅 dev 兜底。
+    private-key-pem: ${JWT_RSA_PRIVATE_KEY_PEM:}
+    public-key-pem: ${JWT_RSA_PUBLIC_KEY_PEM:}
+
+ep:
+  cache:
+    enabled: true
+    l2-ttl-seconds: 300
+    empty-ttl-seconds: 30
+  pulsar:
+    enabled: false
+    service-url: pulsar://pulsar-broker:6650
+  cell-router:
+    enabled: true
+    cells: bj,sz,hz,sg
+    write-hold-ttl: 1800
+    misroute-limit: 3
+    cell-base-url-template: ""
+  ratelimit:
+    enabled: true
+  # D-106: Unified API gateway proxy routes.
+  # EP_DEV_ONLY guard: disabled by default so a dev box without the backend
+  # services running fails fast with 503 instead of hanging on timeouts.
+  proxy:
+    enabled: ${EP_PROXY_ENABLED:false}
+    timeout-ms: 10000
+    routes:
+      /proxy/data: ${EP_PROXY_DATA_HOST:http://localhost:8082}
+      /proxy/ai: ${EP_PROXY_AI_HOST:http://localhost:8086}
+      /proxy/itbackend: ${EP_PROXY_ITBACKEND_HOST:http://localhost:8085}
+      /proxy/knowledge: ${EP_PROXY_KNOWLEDGE_HOST:http://localhost:8070}
+      /proxy/order: ${EP_PROXY_ORDER_HOST:http://localhost:8084}
+      /proxy/payment: ${EP_PROXY_PAYMENT_HOST:http://localhost:8087}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true  # ADR-T05: 探针三分离
+
+# D-070 / D-107: springdoc-openapi with aggregated Swagger UI.
+# A single Swagger UI page lists every backend service by routing its
+# /v3/api-docs fetch through the D-106 proxy.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: BFF Gateway (本地)
+        url: /v3/api-docs
+      - name: SP02 Data (数据中台)
+        url: /proxy/data/v3/api-docs
+      - name: SP03 Business (课程/用户)
+        url: /proxy/itbackend/v3/api-docs
+      - name: SP03 Order (订单中台)
+        url: /proxy/order/v3/api-docs
+      - name: SP03 Payment (支付中台)
+        url: /proxy/payment/v3/api-docs
+      - name: SP04 AI (AI中台)
+        url: /proxy/ai/v3/api-docs
+      - name: SP07 Knowledge (知识中台)
+        url: /proxy/knowledge/v3/api-docs
+
+# D-154 P2-10: Resilience4j rate limiter for the BFF proxy entry point.
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default

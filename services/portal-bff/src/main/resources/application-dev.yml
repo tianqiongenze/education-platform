@@ -1,0 +1,40 @@
+# D-069: Dev profile — local port-forward to K8s. NOT for production.
+spring:
+  aot:
+    enabled: false
+  autoconfigure:
+    exclude:
+      # D-076: redisson-spring-boot-starter 3.51.0 targets Spring Boot 3.x and references
+      # the removed org.springframework.boot.autoconfigure.data.redis.RedisProperties class.
+      # ep-cache provides its own RedisTemplate/ConnectionFactory; redisson auto-config not needed in dev.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      # D-076: BFF is a gateway — no direct DB access. sp03/sp05 JPA jars are on classpath
+      # transitively but BFF must not try to configure a DataSource/Hibernate.
+      # D-077: SB4 restructured autoconfigure packages — classes moved from spring-boot-autoconfigure
+      # into dedicated spring-boot-jdbc and spring-boot-hibernate modules with new package names.
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceInitializationAutoConfiguration
+      # D-077: Seata TC server unavailable in dev (no Seata pods in K8s). BFF has no
+      # distributed transaction needs — exclude Seata auto-config to prevent startup failure.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+
+seata:
+  enabled: false
+  tx-service-group: ep-bff-tx-group
+  service:
+    vgroup-mapping:
+      ep-bff-tx-group: default
+  registry:
+    type: file
+
+dubbo:
+  registry:
+    address: nacos://127.0.0.1:8848
+
+logging:
+  level:
+    com.ep: DEBUG
+    root: INFO
+    # ADR-T14 ⑤: OTel tail-sampling 在 Collector 层配置, 应用层只发全量

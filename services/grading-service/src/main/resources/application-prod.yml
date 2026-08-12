@@ -1,0 +1,66 @@
+# D-069: Production profile — all secrets from env vars. NEVER commit real credentials.
+spring:
+  aot:
+    enabled: true
+  datasource:
+    url: ${TIDB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:50}
+      minimum-idle: 10
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+      connection-test-query: SELECT 1
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-cluster}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
+
+dubbo:
+  registry:
+    address: nacos://${NACOS_ADDR}
+
+csp:
+  sentinel:
+    transport:
+      dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+      port: 8719
+
+seata:
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+
+# D-048 P1-3: Redisson distributed lock
+redisson:
+  config: |
+    singleServerConfig:
+      address: "redis://${REDIS_HOST:redis-cluster}:${REDIS_PORT:6379}"
+      database: 0
+
+logging:
+  level:
+    root: WARN
+    com.ep.grading: INFO
+    org.apache.dubbo: WARN
+
+# ai-platform integration: enable AI grading in prod; keep graceful pending fallback.
+ep:
+  ai-grading:
+    enabled: true
+    fallback: pending

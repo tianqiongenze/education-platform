@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ep</groupId>
+    <artifactId>knowledge-platform</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>mcp-server</artifactId>
+  <name>SP-07 MCP Server</name>
+  <description>SP-07 Knowledge MCP Server exposing knowledge/retrieval/tenant tools via the Model Context Protocol (JSON-RPC 2.0).</description>
+
+  <dependencies>
+    <!-- P2-5: knowledge-api shared Dubbo contracts (RetrievalRpcService, etc.) -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>knowledge-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- D-050 P2-5: grading-api shared Dubbo contracts (GradingRpcService + DTOs)
+         so submission.grade can @DubboReference the sp05 grading provider. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>grading-api</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
+    <!-- Spring Boot Web (Jetty) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jetty</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-web-common</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.resilience4j</groupId>
+      <artifactId>resilience4j-spring-boot3</artifactId>
+      <version>2.2.0</version>
+    </dependency>
+
+    <!-- D-047: Official MCP Java SDK + Spring AI MCP Server (Streamable HTTP / WebMVC)
+         Replaces hand-rolled JSON-RPC dispatcher.
+         Spring AI 2.0.0 is GA and compatible with Spring Boot 4.0.x.
+         The official SDK (modelcontextprotocol/java-sdk v2.0.0) passes 40/40
+         conformance tests and is co-maintained with the Spring AI team. -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+    </dependency>
+    <!-- MCP annotations: @McpTool / @McpToolParam for declarative tool registration -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-mcp-annotations</artifactId>
+    </dependency>
+
+    <!-- Dubbo (Iron Law 6: business RPC stays on Dubbo) -->
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo-spring-boot-starter</artifactId>
+      <version>${dubbo.version}</version>
+    </dependency>
+
+    <!-- Nacos -->
+    <dependency>
+      <groupId>com.alibaba.nacos</groupId>
+      <artifactId>nacos-client</artifactId>
+      <version>3.1.1</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- D-050 P2-5: Mockito for unit-testing GradingRpcService consumer path -->
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>5.18.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

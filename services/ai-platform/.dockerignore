@@ -1,0 +1,15 @@
+# D-115: .dockerignore for sp04-ai
+# Keep the build context lean and avoid copying dev artifacts.
+**/target/
+**/.venv/
+**/node_modules/
+**/.git/
+**/*.md
+**/test/
+**/tests/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+.gitignore
+Dockerfile
+.dockerignore

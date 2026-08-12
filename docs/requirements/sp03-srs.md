@@ -51,7 +51,7 @@
 | C-03 | TiDB 手动 user_id 分表：AUTO_RANDOM(5)+PRE_SPLIT_REGIONS+SPLIT TABLE | D-015 |
 | C-04 | 语言栈：Java 主(重业务) + Rust(风控/计费热点) + Go(网关) | D-009 |
 | C-05 | 会话状态外化 Redis Cluster(`zcode:session:*`) | D-006 |
-| C-06 | 事件驱动走 Pulsar(跨单元 geo-rep)；CDC 走 Kafka | D-016 |
+| C-06 | 事件驱动 + CDC 统一走 Pulsar(跨单元 geo-rep, ns=event:///cdc:// 隔离) | D-016 |
 | C-07 | 海外单元独立数据隔离，不回流国内 | D-004 |
 
 ### 2.2 业务约束(ADR-B01/B02)
@@ -136,7 +136,7 @@
 | SRH-F02 | 题库搜索：知识点/难度/题型 | P0 | 与题库领域联动 |
 | SRH-F03 | 搜索建议：补全/纠错/热搜 | P1 | ES completion suggester |
 | SRH-F04 | 语义搜索(可叠 RAG)：向量召回+重排 | P2 | Milvus 向量库；混合检索 |
-| SRH-F05 | 索引同步：CDC 增量+全量重建 | P0 | TiCDC→Kafka→ES Sink |
+| SRH-F05 | 索引同步：CDC 增量+全量重建 | P0 | TiCDC→Pulsar(ns=cdc://)→ES Sink |
 | SRH-F06 | 多租户 FGAC：事业群只见本 BU 课程 | P0 | JWT 驱动 tenant_id 过滤 |
 
 ### 3.7 工单 TKT(全局域)

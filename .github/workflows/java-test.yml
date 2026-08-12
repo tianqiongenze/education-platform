@@ -1,0 +1,185 @@
+name: Java Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**/*.java'
+      - 'services/**/pom.xml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - services/data-platform
+          - services/core-business
+          - services/order-platform/order-platform-service
+          - services/payment-platform/payment-platform-service
+          - services/grading-service
+          - services/portal-bff
+          - services/knowledge-platform/retrieval-service
+          - services/knowledge-platform/agent-service
+          - services/knowledge-platform/tenant-service
+          - services/knowledge-platform/knowledge-service
+          - services/knowledge-platform/knowledge-bff
+          - services/knowledge-platform/mcp-server
+          - services/senior-care
+          - services/boardgame-service
+          - services/integration-tests
+          - services/ep-memory-java
+          - services/ep-web-common
+          - services/grading-api
+          - services/order-platform/order-platform-api
+          - services/payment-platform/payment-platform-api
+          - services/ep-cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - name: Run tests (exclude live)
+        working-directory: ${{ matrix.service }}
+        # D-119: Two matrix entries include Testcontainers tests tagged
+        # `@Tag("testcontainers")`:
+        #   - services/order-platform/order-platform-service  (MySQL container IT)
+        #   - services/payment-platform/payment-platform-service (MySQL container IT
+        #     + Spring Cloud Contract verifier tests)
+        # These run by default in CI (ubuntu-latest has Docker). To exclude
+        # them in a fast feedback job, append `-DexcludedGroups=live,testcontainers`.
+        # ai-platform (Python) has its own Testcontainers Redis IT under
+        # services/ai-platform/tests/integration/test_redis_integration.py, run by
+        # the Python CI workflow, not this Java matrix.
+        run: mvn test -B -DexcludedGroups=live
+      - name: Generate JaCoCo report
+        if: always()
+        working-directory: ${{ matrix.service }}
+        run: mvn jacoco:report -B
+        continue-on-error: true
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-${{ matrix.service }}
+          path: ${{ matrix.service }}/**/target/site/jacoco/
+          if-no-files-found: ignore
+
+  # Aggregate test results across the full matrix and produce a summary
+  # in the PR/check UI. Runs regardless of individual service failures.
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-*
+          path: coverage-reports
+          merge-multiple: false
+        continue-on-error: true
+      - name: Test result summary
+        run: |
+          echo "## Java Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Matrix conclusion: **${{ needs.test.result }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Coverage artifact |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------------------|" >> $GITHUB_STEP_SUMMARY
+          if [ -d coverage-reports ]; then
+            for dir in coverage-reports/*/; do
+              [ -d "$dir" ] && echo "| $(basename "$dir") | present |" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage gate job enforces per-service >= 50% instruction coverage (D-137)." >> $GITHUB_STEP_SUMMARY
+
+  # D-137: Hard coverage gate — 50% minimum instruction coverage enforced.
+  # Parses jacoco.xml INSTRUCTION counters. Services without a report
+  # are reported as skipped (advisory); services below 50% hard-fail the job.
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - services/data-platform
+          - services/core-business
+          - services/order-platform/order-platform-service
+          - services/payment-platform/payment-platform-service
+          - services/grading-service
+          - services/portal-bff
+          - services/knowledge-platform/retrieval-service
+          - services/knowledge-platform/agent-service
+          - services/knowledge-platform/tenant-service
+          - services/knowledge-platform/knowledge-service
+          - services/knowledge-platform/knowledge-bff
+          - services/knowledge-platform/mcp-server
+          - services/senior-care
+          - services/boardgame-service
+          - services/ep-memory-java
+          - services/ep-web-common
+          - services/grading-api
+          - services/order-platform/order-platform-api
+          - services/payment-platform/payment-platform-api
+          - services/ep-cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-${{ matrix.service }}
+          path: coverage-${{ matrix.service }}
+        continue-on-error: true
+      - name: Check coverage >= 50%
+        run: |
+          xml=$(find coverage-${{ matrix.service }} -name 'jacoco.xml' 2>/dev/null | head -1)
+          if [ -z "$xml" ]; then
+            echo "::warning::No jacoco.xml for ${{ matrix.service }} — skipping gate (advisory)."
+            exit 0
+          fi
+          echo "Using report: $xml"
+          read covered missed < <(python3 -c "
+          import xml.etree.ElementTree as ET
+          r=ET.parse('$xml').getroot()
+          c=[x for x in r.findall('.//counter') if x.attrib.get('type')=='INSTRUCTION']
+          if not c:
+              print('0 0')
+          else:
+              print(c[0].attrib['covered'], c[0].attrib['missed'])
+          ")
+          if [ "$covered" = "0" ] && [ "$missed" = "0" ]; then
+            echo "::warning::No INSTRUCTION counter for ${{ matrix.service }} — skipping gate."
+            exit 0
+          fi
+          pct=$(python3 -c "c,m=$covered,$missed; print(round(100*c/(c+m),2))")
+          echo "Coverage for ${{ matrix.service }}: ${pct}% (threshold 50%)"
+          echo "${pct}" >> coverage-${{ matrix.service }}.pct
+          # D-137: Hard gate — flip env.FAILED and record the failing service.
+          if [ $(python3 -c "print(1 if ${pct} >= 50 else 0)") -ne 1 ]; then
+            echo "::error::Coverage ${pct}% is below 50% threshold for ${{ matrix.service }}"
+            echo "FAILED=true" >> $GITHUB_ENV
+          fi
+      - name: Fail if below threshold
+        if: env.FAILED == 'true'
+        run: |
+          echo "::error::Coverage gate FAILED for ${{ matrix.service }} (below 50%)"
+          exit 1
+      - name: Upload coverage pct
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pct-${{ matrix.service }}
+          path: coverage-${{ matrix.service }}.pct
+          if-no-files-found: ignore

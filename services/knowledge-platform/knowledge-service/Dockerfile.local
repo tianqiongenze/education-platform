@@ -1,0 +1,7 @@
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY target/sp07-knowledge-service-1.0.0.jar /app/app.jar
+ENV JAVA_OPTS="-XX:+UseZGC -XX:+ZGenerational -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+ENV SERVER_PORT=8071
+EXPOSE 8071 20871
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar --server.port=$SERVER_PORT"]

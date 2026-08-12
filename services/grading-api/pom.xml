@@ -1,0 +1,76 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    D-050 P2-5: grading-api — shared Dubbo API contract module for SP-05 IT Backend.
+    Mirrors knowledge-api's role: a thin, dependency-light jar holding only Dubbo
+    interfaces + Serializable DTOs/records, consumable by BFF, mcp-server
+    and any other consumer without dragging in Spring Boot / JPA / Sentinel.
+
+    Iron Law 6 (Dubbo 3.3.6 + SCA 2025.1.0.0): only dubbo BOM is imported here;
+    no Netflix components, no Spring Boot starter.
+    Iron Law 7 (Java 21 + GraalVM AOT): records implement Serializable, no
+    reflection, runtime resource loading, or framework magic.
+  -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.7</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.ep</groupId>
+  <artifactId>grading-api</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>SP-05 API (Dubbo Interfaces &amp; DTOs)</name>
+  <description>Shared Dubbo RPC contracts for SP-05 IT Backend (GradingRpcService and DTOs).</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <dubbo.version>3.3.6</dubbo.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.apache.dubbo</groupId>
+        <artifactId>dubbo-bom</artifactId>
+        <version>${dubbo.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Dubbo annotations only (@DubboService / @DubboReference live in
+         org.apache.dubbo.config.annotation). Keeping the surface tiny so
+         consumers like mcp-server don't pull in the full runtime here. -->
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo</artifactId>
+      <version>${dubbo.version}</version>
+    </dependency>
+
+    <!-- Test only: HealthStatusTest under com.ep.api.dubbo. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

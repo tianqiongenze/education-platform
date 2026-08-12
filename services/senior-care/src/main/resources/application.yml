@@ -1,0 +1,102 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: senior-care
+  # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
+  security:
+    user:
+      name: actuator
+      password: ${EP_ACTUATOR_PASSWORD:actuator-secret}
+      roles: ACTUATOR
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: "optional:file:./config/application-${spring.profiles.active}.yml"
+  threads:
+    virtual:
+      enabled: true  # D-039: 虚拟线程铁律
+  aot:
+    enabled: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.dialect: org.hibernate.dialect.MySQLDialect  # TiDB is MySQL-compatible
+
+dubbo:
+  application:
+    name: senior-care
+  protocol:
+    name: dubbo
+    port: 20888
+    threads: 500
+    threadpool: cached
+  consumer:
+    timeout: 10000
+    retries: 0
+    check: false
+  provider:
+    timeout: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 100
+        minimum-number-of-calls: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default
+
+csp:
+  sentinel:
+    app:
+      name: senior-care
+
+seata:
+  enabled: true
+  application-id: senior-care
+  tx-service-group: ep_tx_group
+  service:
+    vgroup-mapping:
+      ep_tx_group: default
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+ep:
+  pulsar:
+    enabled: false
+    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
+    topic:
+      domain-events: persistent://public/default/senior-care-events

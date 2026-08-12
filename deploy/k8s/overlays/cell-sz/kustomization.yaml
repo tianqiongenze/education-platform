@@ -1,0 +1,75 @@
+# Kustomize overlay for cell-sz (深圳, cn-south-1)
+# D-041: 多区域多活 — 深圳 cell 配置
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # 将所有部署的 topology 标签替换为深圳 cell
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/part-of=education-platform
+    patch: |-
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1region
+        value: cn-south-1
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1zone
+        value: sz-a
+      - op: replace
+        path: /spec/template/metadata/labels/ep.io~1cell
+        value: cell-sz
+
+  # 深圳 cell 副本数 (作为备 cell, 副本略少于主 cell)
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+configMapGenerator:
+  # merge into base common-config, override cell-specific values (D-041)
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - CELL_NAME=cell-sz
+      - CELL_REGION=cn-south-1
+      - CELL_ZONE=sz-a
+      - TIDB_FOLLOWER_READ=true
+      - TIDB_FOLLOWER_READ_STRATEGY=follower-read
+      - PULSAR_REPLICATION_CLUSTERS=hz,sz,bj
+      - REDIS_CLUSTER_LOCAL_CELL=cell-sz
+      - REDIS_CLUSTER_CRDT_ENABLED=true

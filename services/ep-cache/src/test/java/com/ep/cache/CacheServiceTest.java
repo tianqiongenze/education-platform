@@ -94,11 +94,9 @@ class CacheServiceTest {
     }
 
     @Test
-    void evictRemovesFromL1AndBroadcasts() throws Exception {
+    void evictRemovesFromL1AndBroadcasts() {
         svc.getOrLoad("course:detail", "c-3", () -> "v", 300, true);
         svc.evict("course:detail", "c-3");
-        // 延迟双删异步线程等待
-        Thread.sleep(250);
         verify(broadcast).publishEvict("course:detail", "c-3");
     }
 
@@ -168,14 +166,13 @@ class CacheServiceTest {
     }
 
     @Test
-    void evictDeletesFromL2() throws Exception {
+    void evictDeletesFromL2() {
         @SuppressWarnings("unchecked")
         ValueOperations<String, Object> vops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(vops);
 
         svc.evict("course:detail", "del");
 
-        Thread.sleep(250); // wait for async double-delete
         verify(redis, atLeastOnce()).delete("course:detail:del");
     }
 
@@ -183,7 +180,6 @@ class CacheServiceTest {
     void evictToleratesRedisDeleteException() {
         when(redis.delete(anyString())).thenThrow(new RuntimeException("delete boom"));
         assertDoesNotThrow(() -> svc.evict("course:detail", "boom"));
-        try { Thread.sleep(250); } catch (InterruptedException ignored) {}
     }
 
     @Test

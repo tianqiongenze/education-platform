@@ -297,6 +297,8 @@ button{cursor:pointer;font-family:inherit;border:none;background:none}
 </nav>
 
 <script>
+'use strict';
+/* ===== 页面路由(SPA,微信小程序风格) ===== */
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target=document.getElementById('page-'+name);
@@ -306,6 +308,7 @@ function showPage(name){
     t.classList.toggle('active',t.dataset.page===name);
   });
 }
+/* ===== 直播弹幕发送 + 模拟自动回复 ===== */
 function sendLive(){
   const input=document.getElementById('live-input');
   if(input.value.trim()){
@@ -314,9 +317,113 @@ function sendLive(){
     div.style.cssText='color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)';
     div.innerHTML='<span style="color:#07c160;font-weight:600">我:</span>'+input.value;
     list.appendChild(div);
+    list.scrollTop=list.scrollHeight;
     input.value='';
+    // 模拟教师/学员回复
+    setTimeout(()=>{
+      const r=document.createElement('div');
+      r.style.cssText='color:#fff;font-size:12px;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.8)';
+      const names=['[教师]王老师','学员A','学员B','学员C'];
+      const msgs=['好的','+1','这个要重点记','明白了','TSO保证单调递增'];
+      r.innerHTML='<span style="color:'+(Math.random()<0.3?'#ffc300':'#7c5cfc')+';font-weight:600">'+names[Math.floor(Math.random()*names.length)]+':</span>'+msgs[Math.floor(Math.random()*msgs.length)];
+      list.appendChild(r);
+      list.scrollTop=list.scrollHeight;
+    },800+Math.random()*1500);
   }
 }
+/* ===== Tab 切换(课程详情) ===== */
+document.querySelectorAll('#page-coursedetail .wx-tabs .tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('#page-coursedetail .wx-tabs .tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+/* ===== 章节点击切换激活态 ===== */
+document.querySelectorAll('.wx-chapter').forEach(ch=>{
+  ch.addEventListener('click',()=>{
+    document.querySelectorAll('.wx-chapter').forEach(c=>c.classList.remove('active'));
+    ch.classList.add('active');
+  });
+});
+/* ===== 课程列表分类筛选(微信胶囊风格) ===== */
+(function(){
+  const filters=document.querySelectorAll('#page-courselist .wx-bar + div span');
+  filters.forEach((f,idx)=>{
+    f.addEventListener('click',()=>{
+      filters.forEach(x=>{x.style.background='var(--wx-bg)';x.style.color='var(--text2)';});
+      f.style.background='var(--wx-green)';f.style.color='#fff';
+      const cards=document.querySelectorAll('#page-courselist .wx-course');
+      if(idx===0){cards.forEach(c=>c.style.display='flex');}
+      else{cards.forEach((c,i)=>{c.style.display=(i%2===idx%2)?'flex':'none';});}
+    });
+  });
+})();
+/* ===== 轮播图自动切换 ===== */
+(function(){
+  const dots=document.querySelectorAll('#page-home .swiper .dots span');
+  if(dots.length===0)return;
+  let cur=0;
+  const texts=['Java高并发编程实战 · 新课上线','K8s Operator 开发实战 · 限时8折','分布式数据库 TiDB · 王老师主讲'];
+  const swiper=document.querySelector('#page-home .swiper');
+  let firstChild=swiper.firstChild;
+  setInterval(()=>{
+    dots.forEach(d=>d.classList.remove('active'));
+    cur=(cur+1)%dots.length;
+    dots[cur].classList.add('active');
+    // 替换文本节点(保留 dots)
+    if(swiper){
+      const textNode=swiper.firstChild;
+      if(textNode&&textNode.nodeType===3)textNode.textContent=texts[cur]+'  ';
+    }
+  },3000);
+})();
+/* ===== 数字动画(我的页统计) ===== */
+function animateNum(el,target,duration){
+  const t=/^[\d.]+$/.test(target)?parseFloat(target):null;
+  if(t===null)return;
+  const startT=Date.now();
+  const step=()=>{
+    const p=Math.min(1,(Date.now()-startT)/duration);
+    const v=t*p;
+    el.textContent=(t%1===0)?Math.round(v):v.toFixed(1);
+    if(p<1)requestAnimationFrame(step);
+    else el.textContent=target;
+  };
+  step();
+}
+window.addEventListener('load',()=>{
+  document.querySelectorAll('#page-profile .wx-stat-card .v').forEach(v=>{
+    animateNum(v,v.textContent,1000);
+  });
+});
+/* ===== 微信式 Toast(轻提示) ===== */
+function wxToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;z-index:999;max-width:200px;text-align:center';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),1500);
+}
+/* ===== Cell 列表项点击反馈 ===== */
+document.querySelectorAll('.wx-cell-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    const t=item.querySelector('.t')?item.querySelector('.t').textContent:'';
+    wxToast(t+' · 功能开发中');
+  });
+});
+/* ===== 宫格导航点击反馈 ===== */
+document.querySelectorAll('.grid-nav .item').forEach(it=>{
+  it.addEventListener('click',()=>{
+    const t=it.querySelector('.t')?it.querySelector('.t').textContent:'';
+    if(['作业','考试','收藏','排行','福利'].includes(t))wxToast(t+' · 即将开放');
+  });
+});
+/* ===== 胶囊按钮(模拟微信右上角) ===== */
+document.querySelectorAll('.wx-capsule .btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    wxToast(b.textContent.trim()==='···'?'菜单':'最小化');
+  });
+});
 </script>
 </body>
 </html>

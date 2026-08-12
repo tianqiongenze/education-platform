@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>知识中台 - 微信小程序</title>
+<style>
+:root{
+  --wx-green:#07c160; --wx-bg:#ededed; --wx-card:#fff;
+  --text:#1a1a1a; --text2:#888; --text3:#5c5c5c;
+  --primary:#1f6feb; --danger:#fa5151; --warning:#ffc300; --orange:#ff976a; --purple:#7c5cfc;
+  --ai-bg:#f0f9eb; --ai-text:#1a4a1a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:var(--wx-bg);color:var(--text);font-size:14px;line-height:1.5;max-width:375px;margin:0 auto;min-height:100vh;position:relative}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+/* 微信胶囊状态栏 */
+.wx-bar{height:44px;background:var(--wx-card);display:flex;align-items:center;justify-content:space-between;padding:0 16px;position:sticky;top:0;z-index:100;border-bottom:1px solid #eee}
+.wx-bar .title{font-size:16px;font-weight:600;flex:1;text-align:center}
+.wx-capsule{display:flex;align-items:center;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden}
+.wx-capsule .btn{width:40px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#333}
+.wx-capsule .divider{width:1px;height:14px;background:#e0e0e0}
+/* pages */
+.page{display:none;padding-bottom:54px;min-height:100vh}
+.page.active{display:block}
+/* 搜索 */
+.wx-search{background:var(--wx-card);padding:8px 16px;display:flex;align-items:center;gap:8px}
+.wx-search .box{flex:1;background:var(--wx-bg);border-radius:16px;padding:7px 14px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px}
+/* 轮播 */
+.swiper{margin:10px 12px;border-radius:10px;overflow:hidden;height:120px;background:linear-gradient(135deg,#07c160,#1f6feb);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:600;position:relative;text-align:center;padding:0 16px}
+.swiper .dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px}
+.swiper .dots span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.5)}
+.swiper .dots span.active{background:#fff;width:14px;border-radius:3px}
+/* 宫格 */
+.grid-nav{background:var(--wx-card);margin:10px 12px;border-radius:10px;padding:14px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid-nav .item{text-align:center}
+.grid-nav .item .icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 4px}
+.grid-nav .item .t{font-size:11px;color:var(--text3)}
+/* 卡片标题 */
+.card-title{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px}
+.card-title h3{font-size:15px;font-weight:600}
+.card-title .more{font-size:12px;color:var(--text2)}
+/* 知识库卡片 */
+.wx-kb{background:var(--wx-card);margin:0 12px 8px;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.wx-kb .top{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.wx-kb .ic{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.wx-kb .info{flex:1;min-width:0}
+.wx-kb .info .t{font-size:14px;font-weight:600;margin-bottom:1px}
+.wx-kb .info .d{font-size:11px;color:var(--text2)}
+.wx-kb .desc{font-size:12px;color:var(--text3);line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wx-kb .meta{display:flex;gap:12px;font-size:10px;color:var(--text2);margin-top:7px}
+.wx-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:5px}
+.wx-tag.hot{background:#fff0f0;color:var(--danger)}
+.wx-tag.new{background:#fff7e6;color:var(--orange)}
+.wx-tag.rec{background:#e8fff0;color:var(--wx-green)}
+/* 横向滚动 */
+.scroll-x{display:flex;gap:10px;overflow-x:auto;padding:0 12px 8px;scrollbar-width:none}
+.scroll-x::-webkit-scrollbar{display:none}
+.scroll-x .mini{min-width:120px;background:var(--wx-card);border-radius:10px;padding:11px 10px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.scroll-x .mini .ic{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:6px}
+.scroll-x .mini .t{font-size:12px;font-weight:600;margin-bottom:2px}
+.scroll-x .mini .d{font-size:10px;color:var(--text2)}
+/* ===== Chat ===== */
+.chat-area{padding:10px 12px 70px}
+.msg{display:flex;margin-bottom:12px;gap:7px}
+.msg .avatar{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.msg.user{flex-direction:row-reverse}
+.msg.user .avatar{background:linear-gradient(135deg,#1f6feb,#7c5cfc);color:#fff}
+.msg.ai .avatar{background:linear-gradient(135deg,#07c160,#1f6feb);color:#fff}
+.msg .bubble{max-width:76%;padding:9px 12px;border-radius:6px;font-size:13px;line-height:1.6;word-break:break-word}
+.msg.user .bubble{background:#95ec69;color:#1a1a1a;border-top-right-radius:2px}
+.msg.ai .bubble{background:var(--wx-card);color:var(--text);border-top-left-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.msg.ai .bubble .code{background:#1a2029;color:#9fe6b3;padding:7px;border-radius:4px;font-family:ui-monospace,monospace;font-size:11px;margin:6px 0;white-space:pre-wrap}
+.cite-tags{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+.cite-tags .cite{background:#e8fff0;border:1px solid var(--wx-green);color:var(--wx-green);padding:1px 7px;border-radius:8px;font-size:10px}
+.typing{display:inline-flex;gap:3px;padding:3px 0}
+.typing span{width:5px;height:5px;border-radius:50%;background:var(--text2);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+/* chat input */
+.chat-input{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:375px;max-width:100%;background:#f7f7f7;border-top:1px solid #ddd;padding:8px 10px;display:flex;gap:7px;align-items:flex-end;z-index:100}
+.chat-input textarea{flex:1;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:8px 11px;font-size:13px;font-family:inherit;resize:none;outline:none;max-height:90px;line-height:1.4}
+.chat-input .send{background:var(--wx-green);color:#fff;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600}
+.chat-input .send:active{background:#06ad56}
+.quick-ask{padding:0 12px 8px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.quick-ask::-webkit-scrollbar{display:none}
+.quick-ask span{white-space:nowrap;padding:5px 11px;background:var(--wx-card);border:1px solid #e0e0e0;border-radius:14px;font-size:11px;color:var(--text3);flex-shrink:0}
+/* 文档列表 */
+.wx-doc{background:var(--wx-card);margin:0 12px 7px;border-radius:8px;padding:11px 12px;display:flex;gap:9px;align-items:center}
+.wx-doc .num{width:24px;height:24px;border-radius:5px;background:var(--wx-bg);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text2);flex-shrink:0}
+.wx-doc .info{flex:1;min-width:0}
+.wx-doc .info .t{font-size:13px;font-weight:600;margin-bottom:1px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.wx-doc .info .d{font-size:10px;color:var(--text2)}
+.wx-doc .type{font-size:9px;color:var(--text2);background:var(--wx-bg);padding:1px 5px;border-radius:2px}
+/* 详情头 */
+.detail-head{background:linear-gradient(135deg,#07c160,#1f6feb);color:#fff;padding:50px 16px 18px}
+.detail-head .t{font-size:17px;font-weight:600;margin-bottom:4px}
+.detail-head .d{font-size:11px;opacity:.9;margin-bottom:9px}
+.detail-head .stats{display:flex;gap:14px;font-size:11px}
+/* 我的 */
+.wx-profile-head{background:var(--wx-card);padding:18px 16px;display:flex;align-items:center;gap:13px}
+.wx-profile-head .avatar{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#07c160,#1f6feb);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700}
+.wx-profile-head .info .n{font-size:16px;font-weight:600}
+.wx-profile-head .info .id{font-size:11px;color:var(--text2);margin-top:1px}
+.wx-stat{background:var(--wx-card);margin:10px 12px;border-radius:10px;padding:13px;display:flex}
+.wx-stat .s{flex:1;text-align:center}
+.wx-stat .s .v{font-size:17px;font-weight:700;color:var(--wx-green)}
+.wx-stat .s .l{font-size:10px;color:var(--text2);margin-top:1px}
+.wx-cell{background:var(--wx-card);margin:0 12px 10px;border-radius:10px;overflow:hidden}
+.wx-cell-item{padding:12px 15px;display:flex;align-items:center;gap:9px;border-bottom:1px solid #f5f5f5}
+.wx-cell-item:last-child{border-bottom:none}
+.wx-cell-item .icon{width:21px;text-align:center;font-size:16px}
+.wx-cell-item .t{flex:1;font-size:13px}
+.wx-cell-item .arrow{color:#ccc;font-size:13px}
+.wx-cell-item .badge{background:var(--danger);color:#fff;font-size:9px;padding:1px 5px;border-radius:7px}
+/* 底部 tabBar */
+.wx-tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:375px;max-width:100%;background:var(--wx-card);border-top:1px solid #e0e0e0;display:flex;height:52px;z-index:100}
+.wx-tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--text2);font-size:10px}
+.wx-tabbar .tab.active{color:var(--wx-green)}
+.wx-tabbar .tab .icon{font-size:19px}
+.wx-btn-primary{background:var(--wx-green);color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:600;width:100%}
+</style>
+</head>
+<body>
+
+<!-- ===== 首页 ===== -->
+<section class="page active" id="page-home">
+  <div class="wx-bar">
+    <span style="width:52px"></span>
+    <span class="title">知识中台</span>
+    <div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div>
+  </div>
+  <div class="wx-search"><div class="box" onclick="showPage('qa')">🔍 搜索文档 / 知识点</div></div>
+  <div class="swiper" id="swiper">
+    数据结构与算法 · 1,284 篇文档等你探索
+    <div class="dots"><span class="active"></span><span></span><span></span></div>
+  </div>
+  <div class="grid-nav">
+    <div class="item" onclick="showPage('kblist')"><div class="icon" style="background:#e8f3ff;color:#1f6feb">📚</div><div class="t">知识库</div></div>
+    <div class="item" onclick="showPage('qa')"><div class="icon" style="background:#e8fff0;color:#07c160">💬</div><div class="t">智能问答</div></div>
+    <div class="item" onclick="showPage('kblist')"><div class="icon" style="background:#fff7e6;color:#fa9d3b">🔍</div><div class="t">文档检索</div></div>
+    <div class="item" onclick="showPage('mine')"><div class="icon" style="background:#fff0f5;color:#fa5151">⭐</div><div class="t">我的收藏</div></div>
+    <div class="item" onclick="wxToast('考试题库')"><div class="icon" style="background:#f5f0ff;color:#7c5cfc">📋</div><div class="t">考试</div></div>
+    <div class="item" onclick="wxToast('错题本')"><div class="icon" style="background:#fff0f0;color:#fa5151">📝</div><div class="t">错题</div></div>
+    <div class="item" onclick="wxToast('学习排行')"><div class="icon" style="background:#fff7e6;color:#fa9d3b">🏆</div><div class="t">排行</div></div>
+    <div class="item" onclick="wxToast('每日福利')"><div class="icon" style="background:#e8fff0;color:#07c160">🎁</div><div class="t">福利</div></div>
+  </div>
+
+  <div class="card-title"><h3>🔥 热门知识库</h3><span class="more" onclick="showPage('kblist')">全部 ›</span></div>
+  <div class="scroll-x">
+    <div class="mini" onclick="showPage('detail')"><div class="ic" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div><div class="t">数据结构</div><div class="d">1,284 篇</div></div>
+    <div class="mini" onclick="showPage('detail')"><div class="ic" style="background:linear-gradient(135deg,#07c160,#1f6feb)">并发</div><div class="t">高并发编程</div><div class="d">892 篇</div></div>
+    <div class="mini" onclick="showPage('detail')"><div class="ic" style="background:linear-gradient(135deg,#fa9d3b,#fa5151)">申论</div><div class="t">申论范文</div><div class="d">1,860 篇</div></div>
+    <div class="mini" onclick="showPage('detail')"><div class="ic" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">政治</div><div class="t">考研政治</div><div class="d">1,420 篇</div></div>
+  </div>
+
+  <div class="card-title"><h3>📚 推荐知识库</h3><span class="more" onclick="showPage('kblist')">更多 ›</span></div>
+  <div class="wx-kb" onclick="showPage('detail')">
+    <div class="top"><div class="ic" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div><div class="info"><div class="t">数据结构与算法<span class="wx-tag hot">热门</span></div><div class="d">IT后端 · 张老师</div></div></div>
+    <div class="desc">覆盖数组、链表、树、图、动态规划等核心主题，配套高频题解与边界条件分析。</div>
+    <div class="meta"><span>📄 1,284</span><span>👁 2.4万</span><span>💬 8.6k</span></div>
+  </div>
+  <div class="wx-kb" onclick="showPage('detail')">
+    <div class="top"><div class="ic" style="background:linear-gradient(135deg,#fa9d3b,#fa5151)">申论</div><div class="info"><div class="t">申论范文库<span class="wx-tag new">新课</span></div><div class="d">考公 · 李老师</div></div></div>
+    <div class="desc">历年省考、国考申论范文，含写作结构拆解、素材积累与 AI 批改建议。</div>
+    <div class="meta"><span>📄 1,860</span><span>👁 3.1万</span><span>💬 5.2k</span></div>
+  </div>
+  <div class="wx-kb" onclick="showPage('detail')">
+    <div class="top"><div class="ic" style="background:linear-gradient(135deg,#07c160,#1f6feb)">K8s</div><div class="info"><div class="t">云原生 K8s<span class="wx-tag rec">推荐</span></div><div class="d">IT后端 · 王老师</div></div></div>
+    <div class="desc">从 Pod 到 Operator 开发，覆盖服务网格、HPA 弹性、故障排查实战。</div>
+    <div class="meta"><span>📄 648</span><span>👁 1.8万</span><span>💬 3.4k</span></div>
+  </div>
+</section>
+
+<!-- ===== 知识库列表 ===== -->
+<section class="page" id="page-kblist">
+  <div class="wx-bar"><span style="width:52px;font-size:20px;color:#07c160" onclick="showPage('home')">‹</span><span class="title">全部知识库</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div style="background:var(--wx-card);padding:10px 16px;display:flex;gap:7px;overflow-x:auto;border-bottom:1px solid #eee">
+    <span class="chip" style="white-space:nowrap;padding:4px 13px;background:var(--wx-green);color:#fff;border-radius:14px;font-size:12px">全部</span>
+    <span class="chip" style="white-space:nowrap;padding:4px 13px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">IT后端</span>
+    <span class="chip" style="white-space:nowrap;padding:4px 13px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">考公</span>
+    <span class="chip" style="white-space:nowrap;padding:4px 13px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">考研</span>
+    <span class="chip" style="white-space:nowrap;padding:4px 13px;background:var(--wx-bg);color:var(--text2);border-radius:14px;font-size:12px">前端</span>
+  </div>
+  <div class="wx-kb" onclick="showPage('detail')"><div class="top"><div class="ic" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div><div class="info"><div class="t">数据结构与算法</div><div class="d">IT后端 · 1,284 篇</div></div></div><div class="desc">数组、链表、树、图、动态规划核心主题，含边界条件分析。</div></div>
+  <div class="wx-kb" onclick="showPage('detail')"><div class="top"><div class="ic" style="background:linear-gradient(135deg,#07c160,#1f6feb)">并发</div><div class="info"><div class="t">高并发编程</div><div class="d">IT后端 · 892 篇</div></div></div><div class="desc">JMM、Disruptor、虚拟线程、CompletableFuture 异步编排。</div></div>
+  <div class="wx-kb" onclick="showPage('detail')"><div class="top"><div class="ic" style="background:linear-gradient(135deg,#fa9d3b,#fa5151)">申论</div><div class="info"><div class="t">申论范文库</div><div class="d">考公 · 1,860 篇</div></div></div><div class="desc">历年范文，写作结构拆解与素材积累，AI 批改建议。</div></div>
+  <div class="wx-kb" onclick="showPage('detail')"><div class="top"><div class="ic" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">政治</div><div class="info"><div class="t">考研政治精要</div><div class="d">考研 · 1,420 篇</div></div></div><div class="desc">马原、毛中特、史纲、思修考点精要与时政热点。</div></div>
+  <div class="wx-kb" onclick="showPage('detail')"><div class="top"><div class="ic" style="background:linear-gradient(135deg,#1f6feb,#07c160)">React</div><div class="info"><div class="t">React 生态</div><div class="d">前端 · 724 篇</div></div></div><div class="desc">Hooks、状态管理、性能优化、SSR、Server Components。</div></div>
+</section>
+
+<!-- ===== 知识库详情 ===== -->
+<section class="page" id="page-detail">
+  <div class="wx-bar" style="background:rgba(0,0,0,.25);color:#fff;border:none;position:absolute;width:100%;z-index:10"><span style="width:52px;font-size:20px;color:#fff" onclick="showPage('kblist')">‹</span><span class="title" style="color:#fff">知识库详情</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="detail-head">
+    <div class="t">数据结构与算法</div>
+    <div class="d">IT后端 · 张老师 维护 · 2026-08-08 更新</div>
+    <div class="stats"><span>📄 1,284</span><span>👁 2.4万</span><span>💬 8.6k</span></div>
+  </div>
+  <div style="background:var(--wx-card);margin:10px 12px 0;border-radius:10px;padding:13px">
+    <p style="font-size:12px;color:var(--text3);line-height:1.7">覆盖数组、链表、树、图、哈希、动态规划等核心主题，配套高频题解与边界条件分析，适合大厂面试冲刺。</p>
+  </div>
+  <div class="card-title"><h3>📑 文档目录</h3></div>
+  <div class="wx-doc" onclick="wxToast('打开文档阅读')"><div class="num">1</div><div class="info"><div class="t">二分查找的左右边界详解</div><div class="d">8分钟 · 2,840 次检索</div></div><span class="type">PDF</span></div>
+  <div class="wx-doc" onclick="wxToast('打开文档阅读')"><div class="num">2</div><div class="info"><div class="t">链表反转的迭代与递归实现</div><div class="d">6分钟 · 2,160 次检索</div></div><span class="type">DOCX</span></div>
+  <div class="wx-doc" onclick="wxToast('打开文档阅读')"><div class="num">3</div><div class="info"><div class="t">动态规划：背包问题九讲</div><div class="d">22分钟 · 1,920 次检索</div></div><span class="type">PDF</span></div>
+  <div class="wx-doc" onclick="wxToast('打开文档阅读')"><div class="num">4</div><div class="info"><div class="t">红黑树插入与删除原理</div><div class="d">15分钟 · 1,480 次检索</div></div><span class="type">PDF</span></div>
+  <div style="padding:14px 12px"><button class="wx-btn-primary" onclick="showPage('qa')">向 AI 提问</button></div>
+</section>
+
+<!-- ===== 智能问答 ===== -->
+<section class="page" id="page-qa">
+  <div class="wx-bar"><span style="width:52px;font-size:20px;color:#07c160" onclick="showPage('home')">‹</span><span class="title">智能问答</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="chat-area" id="chatArea">
+    <div class="msg ai"><div class="avatar">AI</div><div class="bubble">你好！我是知识中台 AI 助手 🤖 可以问我任何课程、知识点、作业问题，我会基于知识库给出带引用的回答。</div></div>
+    <div class="msg user"><div class="avatar">我</div><div class="bubble">二分查找的左右边界有什么区别？</div></div>
+    <div class="msg ai"><div class="avatar">AI</div><div class="bubble"><b>左边界</b>找第一个 ≥ target（lower_bound），<b>右边界</b>找最后一个 ≤ target（upper_bound-1）。
+      <div class="code">// 左边界
+while(l&lt;=r){ if(a[m]&gt;=target) r=m-1; else l=m+1; }
+// 右边界
+while(l&lt;=r){ if(a[m]&lt;=target) l=m+1; else r=m-1; }</div>
+      <div class="cite-tags"><span class="cite">📚 [1] 二分查找.pdf §3.2</span><span class="cite">📄 [2] 算法基础.docx §5.1</span></div>
+    </div></div>
+    <div class="msg user"><div class="avatar">我</div><div class="bubble">数组 [1,2,2,2,3] 找 2 的左右边界</div></div>
+    <div class="msg ai"><div class="avatar">AI</div><div class="bubble">数组 [1,2,2,2,3] 找 2：左边界=索引<b>1</b>，右边界=索引<b>3</b>，出现次数=3-1+1=<b>3次</b>。<div class="cite-tags"><span class="cite">📚 [1] 二分查找.pdf §3.4</span></div></div></div>
+  </div>
+  <div class="quick-ask">
+    <span onclick="quickAsk('虚拟线程和平台线程区别？')">虚拟线程</span>
+    <span onclick="quickAsk('申论开头怎么写？')">申论开头</span>
+    <span onclick="quickAsk('K8s Operator 是什么？')">K8s Operator</span>
+    <span onclick="quickAsk('DP 怎么入门？')">DP 入门</span>
+  </div>
+  <div class="chat-input">
+    <textarea id="chatInput" placeholder="输入问题..." rows="1"></textarea>
+    <div class="send" onclick="sendMsg()">发送</div>
+  </div>
+</section>
+
+<!-- ===== 我的 ===== -->
+<section class="page" id="page-mine">
+  <div class="wx-bar"><span style="width:52px"></span><span class="title">我的</span><div class="wx-capsule"><div class="btn">···</div><div class="divider"></div><div class="btn">○</div></div></div>
+  <div class="wx-profile-head">
+    <div class="avatar">J</div>
+    <div class="info"><div class="n">学员J</div><div class="id">ID: 88290123 · 已实名</div></div>
+  </div>
+  <div class="wx-stat">
+    <div class="s"><div class="v">12</div><div class="l">收藏</div></div>
+    <div class="s"><div class="v">86</div><div class="l">问答</div></div>
+    <div class="s"><div class="v">5</div><div class="l">知识库</div></div>
+    <div class="s"><div class="v">4.6</div><div class="l">满意度</div></div>
+  </div>
+  <div class="card-title"><h3>⭐ 最近收藏</h3></div>
+  <div class="wx-doc" onclick="wxToast('打开文档')"><div class="num" style="background:#e8fff0;color:#07c160">★</div><div class="info"><div class="t">二分查找的左右边界详解</div><div class="d">数据结构 · 08-07 收藏</div></div><span class="type">PDF</span></div>
+  <div class="wx-doc" onclick="wxToast('打开文档')"><div class="num" style="background:#e8fff0;color:#07c160">★</div><div class="info"><div class="t">Disruptor 环形缓冲区原理</div><div class="d">高并发 · 08-06 收藏</div></div><span class="type">DOCX</span></div>
+  <div class="wx-doc" onclick="wxToast('打开文档')"><div class="num" style="background:#e8fff0;color:#07c160">★</div><div class="info"><div class="t">申论开头万能模板</div><div class="d">申论范文 · 08-05 收藏</div></div><span class="type">PDF</span></div>
+  <div class="wx-cell">
+    <div class="wx-cell-item"><span class="icon">📚</span><span class="t">我的知识库</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">📝</span><span class="t">我的问答记录</span><span class="badge">86</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">📋</span><span class="t">我的错题本</span><span class="arrow">›</span></div>
+  </div>
+  <div class="wx-cell">
+    <div class="wx-cell-item"><span class="icon">🔔</span><span class="t">消息通知</span><span class="badge">3</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">📞</span><span class="t">联系客服</span><span class="arrow">›</span></div>
+    <div class="wx-cell-item"><span class="icon">⚙</span><span class="t">设置</span><span class="arrow">›</span></div>
+  </div>
+  <div style="text-align:center;padding:14px;color:var(--text2);font-size:11px">SP-07 知识中台 v1.0 · 微信小程序</div>
+</section>
+
+<!-- 底部 TabBar -->
+<nav class="wx-tabbar">
+  <div class="tab active" data-page="home" onclick="showPage('home')"><span class="icon">🏠</span>首页</div>
+  <div class="tab" data-page="qa" onclick="showPage('qa')"><span class="icon">💬</span>问答</div>
+  <div class="tab" data-page="mine" onclick="showPage('mine')"><span class="icon">👤</span>我的</div>
+</nav>
+
+<script>
+'use strict';
+/* SPA 路由 */
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const t=document.getElementById('page-'+name);
+  if(t)t.classList.add('active');
+  window.scrollTo(0,0);
+  document.querySelectorAll('.wx-tabbar .tab').forEach(x=>x.classList.toggle('active',x.dataset.page===name));
+}
+
+/* 微信 Toast */
+function wxToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);color:#fff;padding:11px 18px;border-radius:8px;font-size:13px;z-index:999;max-width:220px;text-align:center';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>t.remove(),1500);
+}
+
+/* 聊天 */
+function sendMsg(){
+  const input=document.getElementById('chatInput');
+  const v=input.value.trim();
+  if(!v)return;
+  addMsg('user',v);input.value='';input.style.height='auto';
+  const area=document.getElementById('chatArea');
+  const typing=document.createElement('div');
+  typing.className='msg ai';typing.id='typing';
+  typing.innerHTML='<div class="avatar">AI</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  area.appendChild(typing);area.scrollTop=area.scrollHeight;
+  setTimeout(()=>{
+    typing.remove();
+    const replies={
+      '虚拟线程和平台线程区别？':'<b>虚拟线程</b>（Loom, JDK21+）由 JVM 管理，单机可创建数百万；<b>平台线程</b>映射 OS 线程，成本高。IO 密集用虚拟线程，CPU 密集用平台线程+池化。',
+      '申论开头怎么写？':'推荐<b>「背景+问题+观点」</b>三段式：先点背景或政策，再引出材料问题，最后亮明观点。避免套话，可用数据、名言、对比切入。',
+      'K8s Operator 是什么？':'<b>Operator</b>=CRD+Controller，把领域专家操作编码为 reconcile 循环，实现自动部署、备份、扩缩容。如 TiDB Operator。',
+      'DP 怎么入门？':'三步：①定义状态(dp[i])；②找转移方程；③确定初始值和遍历顺序。从斐波那契、爬楼梯、背包开始。'
+    };
+    const r=replies[v]||('关于「'+v+'」，根据知识库检索：建议结合具体场景分析。<div class="cite-tags"><span class="cite">📚 [1] 相关文档 §1.0</span></div>');
+    addMsg('ai',r);
+  },900+Math.random()*500);
+}
+function quickAsk(q){document.getElementById('chatInput').value=q;sendMsg();}
+function addMsg(role,html){
+  const area=document.getElementById('chatArea');
+  const m=document.createElement('div');
+  m.className='msg '+role;
+  m.innerHTML='<div class="avatar">'+(role==='user'?'我':'AI')+'</div><div class="bubble">'+html+'</div>';
+  area.appendChild(m);area.scrollTop=area.scrollHeight;
+}
+document.getElementById('chatInput').addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,90)+'px';});
+document.getElementById('chatInput').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});
+
+/* 轮播自动切换 */
+(function(){
+  const dots=document.querySelectorAll('#swiper .dots span');
+  const texts=['数据结构与算法 · 1,284 篇文档等你探索','申论范文库 · AI 智能批改已上线','云原生 K8s · 王老师最新课程'];
+  const swiper=document.getElementById('swiper');
+  let cur=0;
+  if(dots.length){
+    setInterval(()=>{
+      dots.forEach(d=>d.classList.remove('active'));
+      cur=(cur+1)%dots.length;dots[cur].classList.add('active');
+      const tn=swiper.firstChild;
+      if(tn&&tn.nodeType===3)tn.textContent=texts[cur]+'  ';
+    },3000);
+  }
+})();
+
+/* 分类筛选 */
+document.querySelectorAll('#page-kblist .chip').forEach((c)=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#page-kblist .chip').forEach(x=>{x.style.background='var(--wx-bg)';x.style.color='var(--text2)';});
+    c.style.background='var(--wx-green)';c.style.color='#fff';
+  });
+});
+
+/* 胶囊按钮 */
+document.querySelectorAll('.wx-capsule .btn').forEach(b=>{
+  b.addEventListener('click',()=>wxToast(b.textContent.trim()==='···'?'菜单':'最小化'));
+});
+/* cell 点击 */
+document.querySelectorAll('.wx-cell-item').forEach(it=>{
+  it.addEventListener('click',()=>{const t=it.querySelector('.t');wxToast((t?t.textContent:'')+' · 即将开放');});
+});
+</script>
+</body>
+</html>

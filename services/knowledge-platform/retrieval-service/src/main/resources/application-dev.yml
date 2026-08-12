@@ -1,0 +1,30 @@
+# D-069: Dev profile — local port-forward to K8s. NOT for production.
+spring:
+  aot:
+    enabled: false
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+dubbo:
+  registry:
+    address: nacos://127.0.0.1:8848
+
+milvus:
+  host: 127.0.0.1
+  port: 19530
+  collection: knowledge_vectors
+  dimension: 1536
+
+elasticsearch:
+  host: 127.0.0.1
+  port: 9200
+  scheme: http
+  index: knowledge_docs
+
+logging:
+  level:
+    root: INFO
+    com.ep: DEBUG

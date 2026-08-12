@@ -1,0 +1,28 @@
+# D-108: Standalone local profile — zero external dependencies.
+# Usage: mvn spring-boot:run -Dspring-boot.run.profiles=dev-local
+# MCP server has no DB; it is a Dubbo consumer over the MCP (Streamable HTTP) transport.
+spring:
+  aot:
+    enabled: false
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    exclude:
+      # D-108: no Seata TC server locally — exclude Seata auto-config.
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+      # D-108: redisson-spring-boot-starter targets SB3x classpaths; not needed locally.
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+
+dubbo:
+  registry:
+    address: N/A   # consumer.check=false already set in base config
+
+seata:
+  enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.ep: DEBUG

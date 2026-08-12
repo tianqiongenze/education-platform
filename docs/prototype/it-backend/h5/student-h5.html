@@ -310,6 +310,8 @@ button{cursor:pointer;font-family:inherit;border:none;background:none}
 <div class="fab" onclick="showPage('live')">🔴</div>
 
 <script>
+'use strict';
+/* ===== 页面路由(SPA) ===== */
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target=document.getElementById('page-'+name);
@@ -319,6 +321,7 @@ function showPage(name){
     t.classList.toggle('active',t.dataset.page===name);
   });
 }
+/* ===== 直播弹幕发送 ===== */
 function sendLive(){
   const input=document.getElementById('live-input');
   if(input.value.trim()){
@@ -327,9 +330,122 @@ function sendLive(){
     div.className='msg';
     div.innerHTML='<span class="u">我:</span>'+input.value;
     list.appendChild(div);
+    list.scrollTop=list.scrollHeight;
     input.value='';
+    // 模拟自动回复
+    setTimeout(()=>{
+      const replies=['讲得好!','收到','+1','这个点很关键','能否再讲一遍?'];
+      const r=document.createElement('div');
+      r.className='msg';
+      r.innerHTML='<span class="u">学员'+(Math.floor(Math.random()*10)+1)+':</span>'+replies[Math.floor(Math.random()*replies.length)];
+      list.appendChild(r);
+      list.scrollTop=list.scrollHeight;
+    },800+Math.random()*1200);
   }
 }
+/* ===== 视频播放模拟(进度条 + 时长) ===== */
+(function(){
+  let playing=false,cur=922,total=2180,timer=null;
+  const btn=document.querySelector('#page-video .play-btn');
+  const bar=document.querySelector('#page-video .progress .bar');
+  const timeEl=document.querySelector('#page-video .controls span:nth-child(2)');
+  function fmt(s){const m=Math.floor(s/60),x=s%60;return m+':'+(x<10?'0':'')+x;}
+  function tick(){
+    cur=Math.min(total,cur+1);
+    if(bar)bar.style.width=(cur/total*100)+'%';
+    if(timeEl)timeEl.textContent=fmt(cur);
+    if(cur>=total){clearInterval(timer);playing=false;if(btn)btn.textContent='▶';}
+  }
+  if(btn){
+    btn.addEventListener('click',()=>{
+      playing=!playing;
+      btn.textContent=playing?'⏸':'▶';
+      if(playing)timer=setInterval(tick,1000);
+      else clearInterval(timer);
+    });
+  }
+})();
+/* ===== Tab 切换(课程详情) ===== */
+document.querySelectorAll('#page-coursedetail .tab-bar .tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('#page-coursedetail .tab-bar .tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+/* ===== 章节点击切换激活态 ===== */
+document.querySelectorAll('.chapter').forEach(ch=>{
+  ch.addEventListener('click',()=>{
+    document.querySelectorAll('.chapter').forEach(c=>c.classList.remove('active'));
+    ch.classList.add('active');
+  });
+});
+/* ===== 课程列表分类筛选 ===== */
+(function(){
+  const filters=document.querySelectorAll('#page-courselist .statusbar + div span');
+  const cards=document.querySelectorAll('#page-courselist .list-card');
+  filters.forEach((f,idx)=>{
+    f.addEventListener('click',()=>{
+      filters.forEach(x=>{x.style.background='var(--bg)';x.style.color='var(--text2)';});
+      f.style.background='var(--primary)';f.style.color='#fff';
+      // 简单模拟:idx===0 显示全部,其余随机隐藏
+      if(idx===0){cards.forEach(c=>c.style.display='flex');}
+      else{cards.forEach((c,i)=>{c.style.display=(i%2===idx%2)?'flex':'none';});}
+    });
+  });
+})();
+/* ===== 数字动画(个人中心统计) ===== */
+function animateNum(el,target,duration){
+  const start=0,startT=Date.now();
+  const t=/^[\d.]+$/.test(target)?parseFloat(target):null;
+  if(t===null)return; // 含字母(如 42h)跳过
+  const step=()=>{
+    const p=Math.min(1,(Date.now()-startT)/duration);
+    const v=t*p;
+    el.textContent=(t%1===0)?Math.round(v):v.toFixed(1);
+    if(p<1)requestAnimationFrame(step);
+    else el.textContent=target;
+  };
+  step();
+}
+window.addEventListener('load',()=>{
+  document.querySelectorAll('#page-profile .stat-row .v').forEach(v=>{
+    animateNum(v,v.textContent,1000);
+  });
+});
+/* ===== 下拉刷新模拟(首页 touchstart/touchmove) ===== */
+(function(){
+  let startY=0,pulling=false;
+  document.addEventListener('touchstart',e=>{
+    if(window.scrollY<=0){startY=e.touches[0].clientY;pulling=true;}
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(pulling&&e.touches[0].clientY-startY>80){
+      pulling=false;
+      const tip=document.createElement('div');
+      tip.style.cssText='position:fixed;top:0;left:0;right:0;background:var(--primary);color:#fff;text-align:center;padding:8px;font-size:12px;z-index:999';
+      tip.textContent='刷新中...';
+      document.body.appendChild(tip);
+      setTimeout(()=>{tip.textContent='已为你推荐新内容';setTimeout(()=>tip.remove(),800);},800);
+    }
+  },{passive:true});
+})();
+/* ===== Toast 提示 ===== */
+function toast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.style.opacity='1',10);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2000);
+}
+/* ===== 菜单项点击反馈 ===== */
+document.querySelectorAll('#page-profile .menu-item').forEach(m=>{
+  m.addEventListener('click',()=>toast('功能开发中,敬请期待'));
+});
+/* ===== 搜索栏点击反馈 ===== */
+document.querySelectorAll('.search-bar').forEach(s=>{
+  s.addEventListener('click',()=>toast('搜索功能开发中'));
+});
 </script>
 </body>
 </html>

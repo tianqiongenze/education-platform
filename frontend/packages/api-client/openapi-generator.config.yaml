@@ -1,0 +1,10 @@
+generatorName: typescript-fetch
+outputDir: src/generated
+inputSpec: schemas/bff-openapi.json
+npmName: '@ep/api-client'
+npmVersion: '1.0.0'
+additionalProperties:
+  supportsES6: true
+  typescriptThreePlus: true
+  withoutRuntimeChecks: false
+  useSingleRequestParameter: true

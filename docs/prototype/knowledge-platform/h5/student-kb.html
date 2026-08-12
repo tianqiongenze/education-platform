@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>知识中台 - 学员H5</title>
+<style>
+:root{
+  --bg:#f5f6f8; --bg2:#fff; --border:#ececec;
+  --text:#1a1a1a; --text2:#999; --text3:#666;
+  --primary:#1f6feb; --primary2:#0a5cd6;
+  --success:#3fb950; --warning:#d29922; --danger:#f85149;
+  --orange:#ff6b35; --purple:#7c5cfc;
+  --ai-bg:#f0f5ff; --ai-text:#1a3a8c;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;max-width:480px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+/* status bar */
+.statusbar{height:48px;background:var(--bg2);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;font-weight:600;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border)}
+.statusbar .back{font-size:22px;color:var(--primary);width:30px}
+.statusbar .t{flex:1;text-align:center;font-size:17px}
+.statusbar .right{width:30px;font-size:18px;text-align:right}
+/* pages */
+.page{display:none;padding-bottom:64px;min-height:100vh}
+.page.active{display:block}
+/* home banner */
+.banner{background:linear-gradient(135deg,var(--primary2),var(--purple));color:#fff;padding:22px 16px 18px;border-radius:0 0 16px 16px}
+.banner .greet{font-size:19px;font-weight:600;margin-bottom:6px}
+.banner .sub{font-size:12px;opacity:.9}
+.search-bar{background:#fff;border-radius:22px;padding:10px 16px;margin-top:14px;display:flex;align-items:center;gap:8px;font-size:13px;color:#bbb;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+/* recent searches */
+.recent{padding:12px 16px 4px}
+.recent .label{font-size:12px;color:var(--text2);margin-bottom:8px}
+.recent .tags{display:flex;flex-wrap:wrap;gap:8px}
+.recent .tags span{padding:5px 12px;background:var(--bg2);border-radius:14px;font-size:12px;color:var(--text3);border:1px solid var(--border)}
+.section-head{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 10px}
+.section-head h3{font-size:16px}
+.section-head .more{font-size:12px;color:var(--text2)}
+/* KB cards */
+.kb-card{margin:0 16px 10px;background:var(--bg2);border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:14px}
+.kb-card .top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.kb-card .icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0}
+.kb-card .info{flex:1;min-width:0}
+.kb-card .info .t{font-size:15px;font-weight:600;margin-bottom:2px}
+.kb-card .info .d{font-size:11px;color:var(--text2)}
+.kb-card .desc{font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kb-card .meta{display:flex;gap:14px;font-size:11px;color:var(--text2)}
+.kb-card .meta span{display:flex;align-items:center;gap:3px}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;margin-right:5px}
+.tag.hot{background:#fff0f0;color:var(--danger)}
+.tag.new{background:#fff7e6;color:var(--warning)}
+.tag.rec{background:#f0f5ff;color:var(--primary)}
+/* horizontal scroll */
+.scroll-x{display:flex;gap:10px;overflow-x:auto;padding:0 16px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.scroll-x::-webkit-scrollbar{display:none}
+.scroll-x .mini{min-width:130px;background:var(--bg2);border-radius:10px;padding:12px 10px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.scroll-x .mini .ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;margin-bottom:8px}
+.scroll-x .mini .t{font-size:13px;font-weight:600;line-height:1.3;margin-bottom:3px}
+.scroll-x .mini .d{font-size:10px;color:var(--text2)}
+/* ===== Chat Q&A ===== */
+.chat-area{padding:12px 16px 80px}
+.msg{display:flex;margin-bottom:14px;gap:8px}
+.msg .avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.msg.user{flex-direction:row-reverse}
+.msg.user .avatar{background:linear-gradient(135deg,var(--primary2),var(--purple));color:#fff}
+.msg.ai .avatar{background:linear-gradient(135deg,var(--success),var(--primary));color:#fff}
+.msg .bubble{max-width:78%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.65;word-break:break-word}
+.msg.user .bubble{background:var(--primary);color:#fff;border-top-right-radius:4px}
+.msg.ai .bubble{background:var(--ai-bg);color:var(--ai-text);border-top-left-radius:4px}
+.msg.ai .bubble .code{background:#1a2029;color:#9fe6b3;padding:8px;border-radius:6px;font-family:ui-monospace,monospace;font-size:12px;margin:8px 0;white-space:pre-wrap}
+.cite-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.cite-tags .cite{background:#fff;border:1px solid var(--primary);color:var(--primary);padding:2px 8px;border-radius:10px;font-size:10px;display:inline-flex;align-items:center;gap:3px}
+.typing{display:inline-flex;gap:3px;padding:4px 0}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--text2);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+/* chat input */
+.chat-input{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:480px;max-width:100%;background:var(--bg2);border-top:1px solid var(--border);padding:10px 12px;display:flex;gap:8px;align-items:flex-end;z-index:100}
+.chat-input textarea{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:100px;line-height:1.4}
+.chat-input .send{width:38px;height:38px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.chat-input .send:active{transform:scale(.92)}
+.quick-ask{padding:0 16px 8px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.quick-ask::-webkit-scrollbar{display:none}
+.quick-ask span{white-space:nowrap;padding:6px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;font-size:12px;color:var(--text3);flex-shrink:0}
+/* favorites */
+.fav-item{margin:0 16px 8px;background:var(--bg2);border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.fav-item .ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.fav-item .info{flex:1;min-width:0}
+.fav-item .info .t{font-size:14px;font-weight:600;margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.fav-item .info .d{font-size:11px;color:var(--text2)}
+.fav-item .star{color:var(--warning);font-size:18px}
+/* kb detail */
+.kb-detail-head{background:linear-gradient(135deg,var(--primary2),var(--purple));color:#fff;padding:24px 16px 20px}
+.kb-detail-head .t{font-size:19px;font-weight:600;margin-bottom:6px}
+.kb-detail-head .d{font-size:12px;opacity:.9;margin-bottom:12px}
+.kb-detail-head .stats{display:flex;gap:18px;font-size:12px}
+.doc-item{background:var(--bg2);margin:0 16px 8px;border-radius:10px;padding:13px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.doc-item .num{width:28px;height:28px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text2);flex-shrink:0}
+.doc-item .info{flex:1;min-width:0}
+.doc-item .info .t{font-size:14px;font-weight:600;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.doc-item .info .d{font-size:11px;color:var(--text2)}
+.doc-item .type{font-size:10px;color:var(--text2);background:var(--bg);padding:2px 6px;border-radius:3px}
+/* bottom tab */
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:480px;max-width:100%;background:var(--bg2);border-top:1px solid var(--border);display:flex;height:58px;z-index:100}
+.tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text2);font-size:10px}
+.tabbar .tab.active{color:var(--primary)}
+.tabbar .tab .icon{font-size:21px}
+.fab{position:fixed;bottom:72px;right:20px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--purple));color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 14px rgba(31,111,235,.45);z-index:50}
+</style>
+</head>
+<body>
+
+<!-- ===== 首页(知识库浏览) ===== -->
+<section class="page active" id="page-home">
+  <div class="statusbar"><span class="back" style="visibility:hidden">‹</span><span class="t">知识中台</span><span class="right">🔔</span></div>
+  <div class="banner">
+    <div class="greet">Hi, 学员J 👋</div>
+    <div class="sub">已有 48 个公开知识库 · 12,580 篇文档为你服务</div>
+    <div class="search-bar" onclick="showPage('search')">🔍 搜索文档 / 知识点 / 课程</div>
+  </div>
+
+  <div class="recent">
+    <div class="label">🔥 最近热门</div>
+    <div class="tags">
+      <span onclick="showPage('qa')">二分查找边界</span>
+      <span onclick="showPage('qa')">虚拟线程 Loom</span>
+      <span onclick="showPage('qa')">申论写作结构</span>
+      <span onclick="showPage('qa')">K8s Operator</span>
+      <span onclick="showPage('qa')">考研政治考点</span>
+    </div>
+  </div>
+
+  <div class="section-head"><h3>📚 公开知识库</h3><span class="more" onclick="showPage('kblist')">全部 ›</span></div>
+  <div class="scroll-x">
+    <div class="mini" onclick="showPage('kbdetail')">
+      <div class="ic" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div>
+      <div class="t">数据结构与算法</div><div class="d">1,284 篇 · IT后端</div>
+    </div>
+    <div class="mini" onclick="showPage('kbdetail')">
+      <div class="ic" style="background:linear-gradient(135deg,#3fb950,#1f6feb)">并发</div>
+      <div class="t">高并发编程</div><div class="d">892 篇 · IT后端</div>
+    </div>
+    <div class="mini" onclick="showPage('kbdetail')">
+      <div class="ic" style="background:linear-gradient(135deg,#d29922,#f85149)">申论</div>
+      <div class="t">申论范文库</div><div class="d">1,860 篇 · 考公</div>
+    </div>
+    <div class="mini" onclick="showPage('kbdetail')">
+      <div class="ic" style="background:linear-gradient(135deg,#f85149,#7c5cfc)">政治</div>
+      <div class="t">考研政治精要</div><div class="d">1,420 篇 · 考研</div>
+    </div>
+  </div>
+
+  <div class="section-head"><h3>⭐ 推荐知识库</h3><span class="more" onclick="showPage('kblist')">更多 ›</span></div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top">
+      <div class="icon" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div>
+      <div class="info"><div class="t">数据结构与算法</div><div class="d">IT后端 · 张老师 维护</div></div>
+      <span class="tag hot">热门</span>
+    </div>
+    <div class="desc">覆盖数组、链表、树、图、哈希、动态规划等核心主题，配套 LeetCode 高频题解与边界条件分析，适合面试冲刺。</div>
+    <div class="meta"><span>📄 1,284</span><span>👁 2.4万</span><span>💬 8.6k</span></div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top">
+      <div class="icon" style="background:linear-gradient(135deg,#d29922,#f85149)">申论</div>
+      <div class="info"><div class="t">申论范文库</div><div class="d">考公 · 李老师 维护</div></div>
+      <span class="tag new">新课</span>
+    </div>
+    <div class="desc">收录历年省考、国考申论范文，含写作结构拆解、素材积累、热点时评，配套 AI 批改建议。</div>
+    <div class="meta"><span>📄 1,860</span><span>👁 3.1万</span><span>💬 5.2k</span></div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top">
+      <div class="icon" style="background:linear-gradient(135deg,#3fb950,#1f6feb)">K8s</div>
+      <div class="info"><div class="t">云原生 Kubernetes</div><div class="d">IT后端 · 王老师 维护</div></div>
+      <span class="tag rec">推荐</span>
+    </div>
+    <div class="desc">从 Pod、Deployment 到 Operator 开发，覆盖服务网格、HPA 弹性、故障排查实战案例。</div>
+    <div class="meta"><span>📄 648</span><span>👁 1.8万</span><span>💬 3.4k</span></div>
+  </div>
+</section>
+
+<!-- ===== 知识库列表 ===== -->
+<section class="page" id="page-kblist">
+  <div class="statusbar"><span class="back" onclick="showPage('home')">‹</span><span class="t">全部知识库</span><span class="right">🔍</span></div>
+  <div style="padding:10px 16px;background:var(--bg2);display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid var(--border)">
+    <span class="chip" style="white-space:nowrap;padding:5px 13px;background:var(--primary);color:#fff;border-radius:14px;font-size:12px">全部</span>
+    <span class="chip" style="white-space:nowrap;padding:5px 13px;background:var(--bg);color:var(--text2);border-radius:14px;font-size:12px">IT后端</span>
+    <span class="chip" style="white-space:nowrap;padding:5px 13px;background:var(--bg);color:var(--text2);border-radius:14px;font-size:12px">考公</span>
+    <span class="chip" style="white-space:nowrap;padding:5px 13px;background:var(--bg);color:var(--text2);border-radius:14px;font-size:12px">考研</span>
+    <span class="chip" style="white-space:nowrap;padding:5px 13px;background:var(--bg);color:var(--text2);border-radius:14px;font-size:12px">IT前端</span>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top"><div class="icon" style="background:linear-gradient(135deg,#1f6feb,#7c5cfc)">DS</div><div class="info"><div class="t">数据结构与算法</div><div class="d">IT后端 · 1,284 篇</div></div></div>
+    <div class="desc">数组、链表、树、图、动态规划等核心主题，含边界条件分析。</div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top"><div class="icon" style="background:linear-gradient(135deg,#3fb950,#1f6feb)">并发</div><div class="info"><div class="t">高并发编程</div><div class="d">IT后端 · 892 篇</div></div></div>
+    <div class="desc">JMM、Disruptor、虚拟线程 Loom、CompletableFuture 异步编排。</div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top"><div class="icon" style="background:linear-gradient(135deg,#d29922,#f85149)">申论</div><div class="info"><div class="t">申论范文库</div><div class="d">考公 · 1,860 篇</div></div></div>
+    <div class="desc">历年省考、国考申论范文，含写作结构拆解与素材积累。</div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top"><div class="icon" style="background:linear-gradient(135deg,#f85149,#7c5cfc)">政治</div><div class="info"><div class="t">考研政治精要</div><div class="d">考研 · 1,420 篇</div></div></div>
+    <div class="desc">马原、毛中特、史纲、思修考点精要与时政热点。</div>
+  </div>
+  <div class="kb-card" onclick="showPage('kbdetail')">
+    <div class="top"><div class="icon" style="background:linear-gradient(135deg,#7c5cfc,#1f6feb)">React</div><div class="info"><div class="t">React 生态</div><div class="d">IT前端 · 724 篇</div></div></div>
+    <div class="desc">Hooks、状态管理、性能优化、SSR、React Server Components。</div>
+  </div>
+</section>
+
+<!-- ===== 知识库详情 ===== -->
+<section class="page" id="page-kbdetail">
+  <div class="statusbar" style="position:absolute;background:rgba(0,0,0,.25);color:#fff;border:none;width:100%;z-index:10"><span class="back" onclick="showPage('kblist')" style="color:#fff">‹</span><span class="t" style="color:#fff">知识库详情</span><span class="right" style="color:#fff">⭐</span></div>
+  <div class="kb-detail-head" style="padding-top:60px">
+    <div class="t">数据结构与算法</div>
+    <div class="d">IT后端 · 张老师 维护 · 更新于 2026-08-08</div>
+    <div class="stats"><span>📄 1,284 篇</span><span>👁 2.4万</span><span>💬 8.6k</span></div>
+  </div>
+  <div style="background:var(--bg2);margin:10px 16px 0;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+    <p style="font-size:13px;color:var(--text3);line-height:1.7">覆盖数组、链表、树、图、哈希、动态规划等核心主题，配套 LeetCode 高频题解与边界条件分析，适合大厂面试冲刺。</p>
+  </div>
+  <div class="section-head"><h3>📑 文档目录</h3><span class="more" onclick="toast('按相关性排序')">排序 ›</span></div>
+  <div class="doc-item" onclick="toast('打开文档阅读')">
+    <div class="num">1</div><div class="info"><div class="t">二分查找的左右边界详解</div><div class="d">8分钟阅读 · 2,840 次检索</div></div><span class="type">PDF</span>
+  </div>
+  <div class="doc-item" onclick="toast('打开文档阅读')">
+    <div class="num">2</div><div class="info"><div class="t">链表反转的迭代与递归实现</div><div class="d">6分钟阅读 · 2,160 次检索</div></div><span class="type">DOCX</span>
+  </div>
+  <div class="doc-item" onclick="toast('打开文档阅读')">
+    <div class="num">3</div><div class="info"><div class="t">动态规划：背包问题九讲</div><div class="d">22分钟阅读 · 1,920 次检索</div></div><span class="type">PDF</span>
+  </div>
+  <div class="doc-item" onclick="toast('打开文档阅读')">
+    <div class="num">4</div><div class="info"><div class="t">红黑树插入与删除原理</div><div class="d">15分钟阅读 · 1,480 次检索</div></div><span class="type">PDF</span>
+  </div>
+  <div class="doc-item" onclick="toast('打开文档阅读')">
+    <div class="num">5</div><div class="info"><div class="t">图的最短路径：Dijkstra 与 Floyd</div><div class="d">18分钟阅读 · 1,260 次检索</div></div><span class="type">MD</span>
+  </div>
+  <div style="padding:16px"><button onclick="showPage('qa')" style="width:100%;padding:11px;background:var(--primary);color:#fff;border-radius:10px;font-size:14px;font-weight:600">向 AI 提问</button></div>
+</section>
+
+<!-- ===== 智能问答(聊天) ===== -->
+<section class="page" id="page-qa">
+  <div class="statusbar"><span class="back" onclick="showPage('home')">‹</span><span class="t">智能问答</span><span class="right">⋮</span></div>
+  <div class="chat-area" id="chatArea">
+    <div class="msg ai">
+      <div class="avatar">AI</div>
+      <div class="bubble">你好！我是知识中台 AI 助手。可以问我任何关于课程、知识点、作业的问题，我会基于知识库给出带引用的回答。😊</div>
+    </div>
+    <div class="msg user">
+      <div class="avatar">J</div>
+      <div class="bubble">二分查找的左右边界有什么区别？</div>
+    </div>
+    <div class="msg ai">
+      <div class="avatar">AI</div>
+      <div class="bubble">二分查找的<b>左边界</b>用于找第一个 ≥ target 的位置（lower_bound），<b>右边界</b>用于找最后一个 ≤ target 的位置（upper_bound - 1）。核心区别在收缩区间的方向：
+        <div class="code">// 左边界: 找到 target 时收缩右边界
+while(l&lt;=r){
+  if(a[m]&gt;=target) r=m-1;
+  else l=m+1;
+}
+// 右边界: 找到 target 时收缩左边界
+while(l&lt;=r){
+  if(a[m]&lt;=target) l=m+1;
+  else r=m-1;
+}</div>
+        <div class="cite-tags">
+          <span class="cite">📚 [1] 二分查找.pdf §3.2</span>
+          <span class="cite">📄 [2] 算法基础.docx §5.1</span>
+        </div>
+      </div>
+    </div>
+    <div class="msg user">
+      <div class="avatar">J</div>
+      <div class="bubble">能举个例子吗？数组 [1,2,2,2,3] 找 2 的左右边界。</div>
+    </div>
+    <div class="msg ai">
+      <div class="avatar">AI</div>
+      <div class="bubble">数组 [1,2,2,2,3] 中找 2：<br>• 左边界（第一个 2）= 索引 <b>1</b><br>• 右边界（最后一个 2）= 索引 <b>3</b><br>所以 2 出现的次数 = 右边界 - 左边界 + 1 = <b>3 次</b>。这就是用二分解决「元素出现次数」的经典技巧。
+        <div class="cite-tags"><span class="cite">📚 [1] 二分查找.pdf §3.4</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="quick-ask">
+    <span onclick="quickAsk('虚拟线程和平台线程的区别？')">虚拟线程和平台线程？</span>
+    <span onclick="quickAsk('申论开头怎么写？')">申论开头怎么写</span>
+    <span onclick="quickAsk('K8s Operator 是什么？')">K8s Operator</span>
+    <span onclick="quickAsk('动态规划怎么入门？')">DP 入门</span>
+  </div>
+  <div class="chat-input">
+    <textarea id="chatInput" placeholder="输入你的问题..." rows="1"></textarea>
+    <div class="send" onclick="sendMessage()">➤</div>
+  </div>
+</section>
+
+<!-- ===== 搜索 ===== -->
+<section class="page" id="page-search">
+  <div class="statusbar"><span class="back" onclick="showPage('home')">‹</span><span class="t">搜索</span><span class="right"></span></div>
+  <div style="padding:10px 16px;background:var(--bg2);display:flex;gap:8px;border-bottom:1px solid var(--border)">
+    <input id="searchInput" type="search" placeholder="搜索文档 / 知识点..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:9px 14px;font-size:14px;outline:none">
+    <button onclick="doSearch()" style="background:var(--primary);color:#fff;border-radius:20px;padding:0 18px;font-size:13px">搜索</button>
+  </div>
+  <div class="recent">
+    <div class="label">🕐 最近搜索</div>
+    <div class="tags">
+      <span onclick="toast('二分查找边界')">二分查找边界</span>
+      <span onclick="toast('虚拟线程')">虚拟线程</span>
+      <span onclick="toast('申论结构')">申论结构</span>
+      <span onclick="toast('K8s HPA')">K8s HPA</span>
+    </div>
+  </div>
+  <div class="section-head"><h3>🔥 热门搜索</h3></div>
+  <div style="padding:0 16px">
+    <div class="doc-item" onclick="showPage('qa')"><div class="num" style="background:#fff0f0;color:var(--danger)">1</div><div class="info"><div class="t">二分查找边界</div><div class="d">1,884 次搜索</div></div><span class="type">🔥</span></div>
+    <div class="doc-item" onclick="showPage('qa')"><div class="num" style="background:#fff7e6;color:var(--warning)">2</div><div class="info"><div class="t">虚拟线程 Loom</div><div class="d">1,562 次搜索</div></div><span class="type">🔥</span></div>
+    <div class="doc-item" onclick="showPage('qa')"><div class="num" style="background:#fff7e6;color:var(--warning)">3</div><div class="info"><div class="t">申论写作结构</div><div class="d">1,440 次搜索</div></div><span class="type">🔥</span></div>
+    <div class="doc-item" onclick="showPage('qa')"><div class="num">4</div><div class="info"><div class="t">K8s Operator</div><div class="d">1,302 次搜索</div></div></div>
+    <div class="doc-item" onclick="showPage('qa')"><div class="num">5</div><div class="info"><div class="t">考研政治考点</div><div class="d">1,168 次搜索</div></div></div>
+  </div>
+  <div id="searchResult"></div>
+</section>
+
+<!-- ===== 我的收藏 ===== -->
+<section class="page" id="page-fav">
+  <div class="statusbar"><span class="back" onclick="showPage('home')">‹</span><span class="t">我的收藏</span><span class="right">🔍</span></div>
+  <div class="section-head"><h3>⭐ 已收藏 12 篇</h3><span class="more">编辑</span></div>
+  <div class="fav-item" onclick="toast('打开文档')">
+    <div class="ic" style="background:#f0f5ff">📄</div>
+    <div class="info"><div class="t">二分查找的左右边界详解</div><div class="d">数据结构与算法 · 收藏于 08-07</div></div>
+    <span class="star">⭐</span>
+  </div>
+  <div class="fav-item" onclick="toast('打开文档')">
+    <div class="ic" style="background:#fff7e6">📄</div>
+    <div class="info"><div class="t">Disruptor 环形缓冲区原理</div><div class="d">高并发编程 · 收藏于 08-06</div></div>
+    <span class="star">⭐</span>
+  </div>
+  <div class="fav-item" onclick="toast('打开文档')">
+    <div class="ic" style="background:#fff0f0">📄</div>
+    <div class="info"><div class="t">申论开头万能模板</div><div class="d">申论范文库 · 收藏于 08-05</div></div>
+    <span class="star">⭐</span>
+  </div>
+  <div class="fav-item" onclick="toast('打开文档')">
+    <div class="ic" style="background:#f0fff4">📄</div>
+    <div class="info"><div class="t">K8s Operator 开发实战</div><div class="d">云原生 Kubernetes · 收藏于 08-04</div></div>
+    <span class="star">⭐</span>
+  </div>
+  <div class="fav-item" onclick="toast('打开文档')">
+    <div class="ic" style="background:#f5f0ff">📄</div>
+    <div class="info"><div class="t">动态规划背包问题九讲</div><div class="d">数据结构与算法 · 收藏于 08-03</div></div>
+    <span class="star">⭐</span>
+  </div>
+  <div style="text-align:center;padding:20px;color:var(--text2);font-size:11px">SP-07 知识中台 v1.0 · H5端</div>
+</section>
+
+<!-- 底部 TabBar -->
+<nav class="tabbar">
+  <div class="tab active" data-page="home" onclick="showPage('home')"><span class="icon">🏠</span>首页</div>
+  <div class="tab" data-page="qa" onclick="showPage('qa')"><span class="icon">💬</span>问答</div>
+  <div class="tab" data-page="search" onclick="showPage('search')"><span class="icon">🔍</span>搜索</div>
+  <div class="tab" data-page="fav" onclick="showPage('fav')"><span class="icon">⭐</span>收藏</div>
+</nav>
+<div class="fab" onclick="showPage('qa')">💬</div>
+
+<script>
+'use strict';
+/* SPA 路由 */
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const t=document.getElementById('page-'+name);
+  if(t)t.classList.add('active');
+  window.scrollTo(0,0);
+  document.querySelectorAll('.tabbar .tab').forEach(x=>x.classList.toggle('active',x.dataset.page===name));
+}
+
+/* 聊天发送 */
+function sendMessage(){
+  const input=document.getElementById('chatInput');
+  const v=input.value.trim();
+  if(!v)return;
+  addMsg('user',v);
+  input.value='';
+  input.style.height='auto';
+  const area=document.getElementById('chatArea');
+  const typing=document.createElement('div');
+  typing.className='msg ai';typing.id='typing';
+  typing.innerHTML='<div class="avatar">AI</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  area.appendChild(typing);
+  area.scrollTop=area.scrollHeight;
+  setTimeout(()=>{
+    typing.remove();
+    const replies={
+      '虚拟线程和平台线程的区别？':'<b>虚拟线程</b>是 JVM 管理的轻量级线程（Loom, JDK21+），由平台线程调度，单机可创建数百万个；<b>平台线程</b>直接映射 OS 线程，创建成本高（约 1MB 栈）。虚拟线程适合 IO 密集场景，但 CPU 密集仍建议用平台线程+池化。',
+      '申论开头怎么写？':'申论开头推荐<b>「背景+问题+观点」</b>三段式：先点明时代背景或政策导向，再引出材料反映的问题，最后亮明核心观点。避免「随着社会发展」等套话，可用数据、名言、对比切入。',
+      'K8s Operator 是什么？':'<b>Operator</b>是用自定义控制器（CRD + Controller）封装运维知识的 K8s 扩展模式。它把领域专家（如 DBA）的操作编码为 reconcile 循环，实现数据库集群的自动部署、备份、扩缩容。典型如 Prometheus Operator、TiDB Operator。',
+      '动态规划怎么入门？':'DP 入门三步：①<b>定义状态</b>（dp[i] 代表什么）；②<b>找转移方程</b>（dp[i] 与 dp[i-1] 的关系）；③<b>确定初始值和遍历顺序</b>。建议从斐波那契、爬楼梯、背包问题开始，每个题先画状态转移表。',
+    };
+    const r=replies[v]||('关于「'+v+'」，根据知识库检索，这是一个很好的问题。建议结合具体场景分析，相关文档已在下方引用。<div class="cite-tags"><span class="cite">📚 [1] 相关文档 §1.0</span></div>');
+    addMsg('ai',r);
+  },900+Math.random()*600);
+}
+
+function quickAsk(q){
+  document.getElementById('chatInput').value=q;
+  sendMessage();
+}
+
+function addMsg(role,html){
+  const area=document.getElementById('chatArea');
+  const m=document.createElement('div');
+  m.className='msg '+role;
+  m.innerHTML='<div class="avatar">'+(role==='user'?'J':'AI')+'</div><div class="bubble">'+html+'</div>';
+  area.appendChild(m);
+  area.scrollTop=area.scrollHeight;
+}
+
+/* textarea 自适应高度 */
+document.getElementById('chatInput').addEventListener('input',function(){
+  this.style.height='auto';
+  this.style.height=Math.min(this.scrollHeight,100)+'px';
+});
+/* 回车发送 */
+document.getElementById('chatInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+});
+
+/* 搜索 */
+function doSearch(){
+  const q=document.getElementById('searchInput').value.trim()||'二分查找';
+  const res=document.getElementById('searchResult');
+  res.innerHTML='<div class="section-head"><h3>🔍 「'+q+'」的搜索结果</h3></div>'+
+    '<div class="doc-item" onclick="toast(\'打开文档\')"><div class="num">1</div><div class="info"><div class="t">二分查找的左右边界详解</div><div class="d">数据结构与算法 · 相关度 97%</div></div><span class="type">PDF</span></div>'+
+    '<div class="doc-item" onclick="toast(\'打开文档\')"><div class="num">2</div><div class="info"><div class="t">二分查找变体：找第一个/最后一个</div><div class="d">算法基础 · 相关度 91%</div></div><span class="type">DOCX</span></div>'+
+    '<div class="doc-item" onclick="toast(\'打开文档\')"><div class="num">3</div><div class="info"><div class="t">数组与查找：边界条件总结</div><div class="d">数据结构与算法 · 相关度 82%</div></div><span class="type">PDF</span></div>';
+  toast('找到 3 篇相关文档');
+}
+
+/* Toast */
+function toast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>t.style.opacity='1',10);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2000);
+}
+
+/* 分类筛选 */
+document.querySelectorAll('#page-kblist .chip').forEach((c,i)=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#page-kblist .chip').forEach(x=>{x.style.background='var(--bg)';x.style.color='var(--text2)';});
+    c.style.background='var(--primary)';c.style.color='#fff';
+  });
+});
+</script>
+</body>
+</html>

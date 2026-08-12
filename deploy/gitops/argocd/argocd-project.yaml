@@ -1,0 +1,88 @@
+# D-114: ArgoCD AppProject — education-platform
+#
+# Defines the project boundary for all education-platform ArgoCD applications.
+# - Constrains which source repos are allowed
+# - Constrains which destination clusters/namespaces are permitted
+# - Grants RBAC roles: admin (sync) and developer (read-only)
+#
+# AppProject is cluster-scoped and lives in the argocd namespace.
+# Reference: https://argo-cd.readthedocs.io/en/stable/user-guide/projects/
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: education-platform
+  namespace: argocd
+  annotations:
+    ep.io/decision: "D-114"
+    argocd.argoproj.io/sync-wave: "-1"   # must exist before any Application
+spec:
+  description: Education Platform multi-cluster GitOps project (D-114)
+
+  # Allowed source repositories. Replace placeholder with the real org/repo URL.
+  sourceRepos:
+    - https://github.com/edu-platform/education-platform.git
+    # - git@github.com:edu-platform/education-platform.git   # SSH variant
+
+  # Allowed destination clusters + namespaces.
+  # Cluster URLs are placeholders — register real clusters via:
+  #   argocd cluster add <context> --label ep.io/cell=cell-hz
+  destinations:
+    # 4 production cells + local verify cluster.
+    # Each entry permits the project to deploy into the given cluster/namespace.
+    - server: https://hz-cluster-api:6443
+      namespace: education-platform
+    - server: https://sz-cluster-api:6443
+      namespace: education-platform
+    - server: https://bj-cluster-api:6443
+      namespace: education-platform
+    - server: https://sg-cluster-api:6443
+      namespace: education-platform
+    # Local / control-plane cluster (Karmada host + ArgoCD control plane).
+    # ArgoCD itself runs here; the in-cluster URL is kubernetes.default.svc.
+    - server: https://kubernetes.default.svc
+      namespace: education-platform
+    # ArgoCD control-plane namespace itself (for app-of-apps bootstrap).
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+
+  # Allow namespaced + cluster-scoped resources used by the platform.
+  # Kustomize-rendered output includes CRDs (TiDB, Karmada policy, ServiceMonitor, etc.).
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: storage.k8s.io
+      kind: StorageClass
+    - group: policy.karmada.io
+      kind: PropagationPolicy
+    - group: policy.karmada.io
+      kind: OverridePolicy
+    - group: pingcap.com
+      kind: TidbCluster
+    - group: pingcap.com
+      kind: TidbMonitor
+    - group: pingcap.com
+      kind: TidbBackupSchedule
+
+  # RBAC roles.
+  roles:
+    # admin: full sync + override control. Bound to the platform SRE group.
+    - name: admin
+      description: Platform SRE — full read/sync/override on education-platform apps
+      policies:
+        - p, proj:education-platform:admin, applications, *, education-platform/*, allow
+        - p, proj:education-platform:admin, clusters, get, *, allow
+        - p, proj:education-platform:admin, repositories, get, *, allow
+        - p, proj:education-platform:admin, repositories, create, *, allow
+      groups:
+        - education-platform-sre
+        - argocd-admins
+
+    # developer: read-only. Useful for on-call inspection without blast radius.
+    - name: developer
+      description: Application developers — read-only visibility into deployments
+      policies:
+        - p, proj:education-platform:developer, applications, get, education-platform/*, allow
+        - p, proj:education-platform:developer, clusters, get, *, allow
+        - p, proj:education-platform:developer, repositories, get, *, allow
+      groups:
+        - education-platform-devs

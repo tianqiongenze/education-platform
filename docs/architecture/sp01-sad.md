@@ -33,7 +33,7 @@
 | 选课购课 | OPM 中台 | API 网关路由、读写分离、限流 |
 | 视频学习与进度跟踪 | 学习记录(单元化) | Disruptor ingest、读写分离、缓存 |
 | 代码作业提交与评测 | 作业+评分平台 | 沙箱(经 IT 后端)、事件总线 |
-| 直播学习与互动 | 直播子平台 | WS 网关、Redis Pub/Sub、事件总线 |
+| 直播学习与互动 | 直播子平台 | WS 网关、Pulsar 跨pod广播、事件总线 |
 | AI 答疑与辅导 | AI 中台 | API 网关、可观测、事件总线 |
 | 权限/审计/风控 | 平台管理 | 鉴权、审计日志、Rust 热点风控 |
 | 单元运维与流量调度 | 平台管理 | CellRouter、Nacos 路由表 |
@@ -64,7 +64,7 @@
         ▼
 ┌──── BFF / API 网关层(技术中台) ────┐
 │  JWT RS256+JWKS │ CellRouter │ Sentinel │ 灰度 │
-│  Java Spring Cloud Gateway + Go WS 网关 │
+│  Java(Netty edge + Disruptor + Spring WebMVC) + Go WS 网关 │  ← D-032 / ADR-T07(rev2)
 └────────────────┬───────────────────┘
                  │
         ┌────────┼────────┐
@@ -91,12 +91,12 @@
 | K8s 1.28+ | Deployment/HPA/PDB | 所有组件 |
 | TiDB 8.5 LTS | 读写分离目标(对齐 ESP v8.5.7 验证) | ep-rw-java |
 | Redis Cluster 8.0 | L2 缓存/会话/路由表/JWKS(真集群 3主3从→30节点, 对齐 ESP 实际 redis:8.0-alpine) | ep-cache/网关/CellRouter |
-| Pulsar 3.3.x | 事件总线(承接 ESP ADR-02, 不用 Kafka; 4.x 升级延迟至 v2.0 — ADR-T11) | ep-cache 广播/EDA |
+| Pulsar 3.3.x | 事件总线+CDC 统一消息基础设施(承接 ESP ADR-02, CDC 总线亦走 Pulsar, 彻底不引入 Kafka; 4.x 升级延迟至 v2.0 — ADR-T11) | ep-cache 广播/EDA/CDC |
 | Nacos 2.4.3 | 配置/服务发现(pin ESP 验证版, 不升 v3) | CellRouter/网关/Sentinel |
 | Dubbo 3.3.6 | Triple RPC(契约先行, 禁 STRICT 序列化 — ADR-T09, pin ESP 验证版) | 服务间 RPC |
 | Loki/Prom/Tempo | 可观测后端(承接 ESP 双层 Collector) | OTel SDK |
 | Sentinel 1.8+ | 限流降级(规则走 Nacos 分布式下发, 禁本地内存) | 网关+服务双层 |
-| Spring Cloud | 2025.1.2 + SCA 2025.1.0.0 | BFF/服务治理 |
+| Spring Cloud | 2025.1.2 + SCA 2025.1.0.0（D-032 全栈锁定 SCA+Dubbo, 禁 Spring Cloud Netflix/SCG 原生组件） | BFF/服务治理 |
 | Litestar+Granian | Python AI 服务(承接 ESP ADR-09 Rust ASGI, Granian ≥1.6.0 — ESP 实际解析 2.7.9) | AI 中台 |
 
 ---
@@ -112,7 +112,7 @@
 └───────────────────────────────────────┬─────────────────────────────────┘
                                         │ HTTPS/WSS
 ┌───────────────────────────────────────▼─────────────────────────────────┐
-│                        API 网关/BFF(Java Spring Cloud Gateway)            │
+│                        API 网关/BFF(Java Netty edge + Disruptor + Spring WebMVC) │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
 │  │AuthFilter│ │RouteFilter│ │Sentinel │ │TraceFilter│ │GrayFilter│       │
 │  │JWT RS256 │ │Nacos 动态 │ │QPS/并发 │ │OTel 注入 │ │灰度分流  │       │
@@ -131,7 +131,7 @@
 │  长连接 50万/节点      │  │  hash(user_id)%N     │  │  Triple(HTTP/2)     │
 │  fnv1a(session)%N     │  │  流量纠正(上限3)      │  │  Nacos 注册发现     │
 │  分片广播             │  │  写挂起(AppActive)   │  │  Pact 契约测试      │
-│  Redis Pub/Sub 跨pod  │  │  路由表 Nacos+Redis  │  │  超时/重试          │
+│  Pulsar 跨pod广播     │  │  路由表 Nacos+Redis  │  │  超时/重试          │
 │  JWT 握手鉴权         │  │  就近写              │  │  跨单元禁直接RPC    │
 └───────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘
             │                        │                        │
@@ -181,7 +181,7 @@
 客户端请求
     │
     ▼
-[Spring Cloud Gateway]
+[Netty edge + Disruptor ingress + Spring WebMVC]
     │
     ├─ AuthFilter: 提取 JWT → JWKS 验签 → 注入 user_id/tenant_id 到 header(覆盖任何客户端头)
     ├─ TraceFilter: 注入/传递 W3C traceparent
@@ -293,17 +293,18 @@
 | **状态** | Accepted |
 | **关联需求** | NFR-A-01 / NFR-S-01..03 |
 
-### 3.7 ADR-T07 网关选 Spring Cloud Gateway 而非 Netty 手写(ESP 验证)
+### 3.7 ADR-T07(rev2) BFF 使用自建 Netty edge + Disruptor + Spring WebMVC，禁用 Spring Cloud Gateway(D-032)
 
 | 项 | 内容 |
 |----|------|
-| **背景** | ESP 曾考虑 Netty 手写网关以追求极致性能，但发现 Filter 链（鉴权/限流/灰度/trace/CellRouter）手写维护成本高，且 SCG 底层即 Reactor Netty，性能差异 <5%，可接受。 |
-| **决策** | API 网关使用 **Spring Cloud Gateway 2025.1.2**（基于 Reactor Netty），不手写 Netty。WS/实时长连接网关使用 **Go 1.25** 独立部署（SCG 不擅长长连接）。 |
-| **理由** | SCG 的 GlobalFilter + Predicate 机制成熟，Filter 链可组合；CellRouter、Sentinel、JWKS、Trace 均以 Filter 接入；Reactor Netty 已足够支撑 10 万 QPS/网关实例。Go WS 网关独立处理长连接（10 万 CCU/实例），避免 SCG 的 WebSocket backpressure 问题。 |
-| **实现** | `docs/design/sp01-sdd.md §5 API 网关/BFF`；Go WS 网关 `gateway-go/` |
-| **依据** | ESP 架构评分 + EP-TOGAF §6.1 |
-| **状态** | Accepted |
-| **关联需求** | FR-GW-01..05 / NFR-A-01 |
+| **背景** | EP 初版 ADR-T07(已废弃) 曾沿用 SCG 2025.1.2 作为 BFF 网关，与 ESP 的 Netty edge 路线不一致。2026-08-04 用户指令(D-032/铁律6)：整个项目群必须使用 Spring Cloud Alibaba + Dubbo 及其组件/中间件，**禁用 Spring Cloud Gateway 等 Spring Cloud 原生组件**。ESP 项目已验证移除 SCG、改用自建 Netty edge 接入层 + Spring WebMVC(非 WebFlux)的可行性。 |
+| **决策** | BFF 层架构变更为：<br>① **自建 Netty edge 接入层**：替代 SCG 作为 HTTP 边缘入口，负责 SSL 终止、连接管理、协议升级；<br>② **LMAX Disruptor ingress**：Netty → Disruptor RingBuffer(65536) → batch dispatch，线程模型无锁化、零拷贝；<br>③ **Spring WebMVC**(非 WebFlux)：Filter 链(AuthFilter/JWKS/Sentinel/Trace/GrayFilter)基于 WebMVC HandlerInterceptor，对 Dubbo Triple 事务传播友好(WebFlux 响应式栈与 Dubbo 阻塞式 RPC 混用易踩坑)；<br>④ **WS/实时网关仍用 Go 1.25 独立部署**(SCG/Netty 不擅长长连接，Go goroutine 模型更适合 50 万连接/节点)。 |
+| **理由** | ① **SCG 属 Spring Cloud 原生组件**，与铁律6"禁用 Spring Cloud 原生、统一 SCA+Dubbo"冲突；SCG 依赖 spring-cloud-gateway-server 与 Reactor Netty，引入额外响应式栈依赖；<br>② **WebMVC 对 Dubbo 事务传播友好**：Dubbo Triple 是阻塞式 RPC，WebMVC 的线程模型天然兼容；WebFlux 响应式栈下 Dubbo 调用需 `.block()` 包裹，易触发 `IllegalStateException: block()/blockFirst()/blockLast() are blocking` 报错(ESP 踩坑)；<br>③ **Disruptor ingress 已在 ep-disruptor 4.0.0 验证**：65536 RingBuffer + drop-on-full + batch flush，ingest 性能远超 SCG Filter 链逐请求处理；<br>④ **Netty edge 性能 ≥ SCG**：SCG 底层即 Reactor Netty，自建 Netty edge 省去 SCG Filter 编排开销，直接掌探单连接级背压；<br>⑤ ESP 验证 Netty edge + WebMVC 可行，EP 复用其 bff-java 骨架。 |
+| **实现** | `bff-java/` 模块：Netty edge(`NettyEdgeServer`)+ Disruptor ingress(`GatewayRingBuffer`)+ WebMVC Filter 链；路由配置仍由 Nacos 动态下发(dataId=`ep-gateway-routes`)，但解析逻辑从 SCG `RouteLocator` 迁移为自建 `RouteTable`；Go WS 网关 `gateway-go/` 不变。详见 `docs/design/sp01-sdd.md §5 API 网关/BFF`。 |
+| **依据** | 用户指令 D-032(2026-08-04) + ESP `services/bff-java/pom.xml` 验证(Netty 4.1.136.Final, 无 SCG 依赖) + 铁律6 SCA+Dubbo 技术栈锁定 |
+| **状态** | Accepted (supersedes ADR-T07 rev1) |
+| **关联需求** | FR-GW-01..08 / NFR-A-01 |
+| **版本矩阵** | Netty 4.1.136.Final + Disruptor 4.0.0 + Spring WebMVC(Spring Boot 4.0.7) + SCA 2025.1.0.0 + Dubbo 3.3.6(D-032) |
 
 ### 3.8 ADR-T08 Sentinel 限流规则走 Nacos 分布式下发，禁本地内存(ESP 踩坑)
 
@@ -346,17 +347,79 @@
 
 | 项 | 内容 |
 |----|------|
-| **背景** | ESP 使用 Pulsar 3.3.x 作为事件总线（ADR-02），验证可行。Pulsar 4.0 LTS 已发布，引入 KoP 协议增强、轻量级 broker、改进的 schema registry。ESP 在升级评估中因资源限制未完成，留为 TODO。EP 需明确当前版本与升级路径。 |
-| **决策** | EP 当前**锁定 Pulsar 3.3.x**（对齐 ESP 验证版本，不冒险升 4.x），在 v2.0 大版本（预计 2027 Q1）评估升级 Pulsar 4.x LTS。升级前提：① Pulsar 4.x 至少有一个 minor release 稳定运行 6 个月；② KoP 兼容性验证通过（EP 用 Kafka 仅做 CDC，不依赖 KoP）；③ Geo-replication 行为不变。 |
+| **背景** | ESP 使用 Pulsar 3.3.x 作为事件总线（ADR-02），验证可行。Pulsar 4.0 LTS 已发布，引入轻量级 broker、改进的 schema registry、增强的 geo-replication。ESP 在升级评估中因资源限制未完成，留为 TODO。EP 已将 CDC 总线从 Kafka 统一到 Pulsar（ADR-D01），消息基础设施单一化，升级影响面更集中。EP 需明确当前版本与升级路径。 |
+| **决策** | EP 当前**锁定 Pulsar 3.3.x**（对齐 ESP 验证版本，不冒险升 4.x），在 v2.0 大版本（预计 2027 Q1）评估升级 Pulsar 4.x LTS。升级前提：① Pulsar 4.x 至少有一个 minor release 稳定运行 6 个月；② CDC sink（TiCDC→Pulsar）兼容性验证通过；③ Geo-replication 行为不变；④ 内置 Schema Registry 向后兼容（Avro/JSON）。 |
 | **理由** | 3.3.x 已被 ESP 验证，EP 复用集群基础设施不应冒险。4.x 的改进（轻量 broker）对 EP 当前规模非关键路径。升级风险 > 收益，延迟到 v2.0 降低项目初期不确定性。 |
 | **实现** | Helm chart `pulsar-3.3.x-pinned`；`upgrade-pulsar-4x.md` 路线图文档（v2.0 backlog）；CI 冒烟测试覆盖 Pulsar producer/consumer/geo-rep。 |
 | **依据** | ESP ADR-02 Pulsar 选型 + ESP TODO 升级评估 + EP-TOGAF §6.1 |
 | **状态** | Accepted（3.3.x 锁定）/ Deferred（4.x 升级） |
 | **关联需求** | FR-EDA-01 / NFR-A-01 |
 
+### 3.12 ADR-T12 全球部署数据库选型评估：TiDB 为主，CockroachDB 为海外可选替代（用户指令新增）
+
+| 项 | 内容 |
+|----|------|
+| **背景** | EP 目标 30 亿用户 / 100 万并发，国内多活（华东/华北/华南三角）+ 海外独立集群（新加坡/法兰克福，PIPL 数据不回流）。当前全球数据库策略为 TiDB 8.5 LTS（D-015 用户域 `user_id` 分表 + Placement Rules 跨区 Raft，Primary + 2 Followers 跨 2/3 区域）。用户指令要求同步评估 CockroachDB 作为全球部署数据库基础设施的可选方案。 |
+| **决策** | **国内主库继续锁定 TiDB 8.5 LTS**（已对齐 ESP v8.5.7 3-region Raft 验证，HTAP 一体化 TiFlash + TiCDC→Pulsar CDC 链路已落地）；**海外独立集群可选 CockroachDB** 作为 TiDB 的替代方案，在 SP-07（M2-M3）多区域阶段做 PoC 验证后定夺。海外集群无论选 TiDB 还是 CockroachDB，均**独立部署、数据不回流**（PIPL 合规），跨集群数据同步走 Pulsar geo-replication + Flink 聚合，**不依赖数据库层跨集群复制**。 |
+| **CockroachDB 优势** | ① **原生多区域 SQL 抽象**：`REGIONAL BY ROW` 按行归属区域、`GLOBAL` 表跨区强一致低延迟读、`SURVIVE REGION FAILURE` 生存目标，声明式管理远比 TiDB Placement Rules 简洁；② **PostgreSQL 协议兼容**：海外团队若已有 PG 技术栈，接入成本低（TiDB 兼容 MySQL 协议）；③ **Follower Reads**：就近副本读，跨区读延迟可降至 <10ms（需 `AS OF SYSTEM TIME`）；④ **Super Regions + Data Domiciling**：原生数据驻留能力，天然适配 PIPL/GDPR 合规场景；⑤ **多活写入**：multi-active 模型，任意节点可读写，无单点 Primary 瓶颈（TiDB 写入集中在 Primary Region）。 |
+| **CockroachDB 劣势/风险** | ① **无 HTAP 一体化**：无 TiFlash 等列存引擎，OLAP 分析需外挂（EP 已有 Flink+Iceberg 湖仓，影响可控但在线 HTAP 查询缺失）；② **无原生 CDC → Pulsar**：CockroachDB CDC（Changefeeds）直发 Kafka/Webhook，需适配层对接 Pulsar（增加运维复杂度）；③ **写入延迟**：跨区 Raft 写入延迟 = 2×RTT（`REGIONAL` 表）或 3×RTT（`GLOBAL` 表），`--max-offset` 限制 250ms，跨大洲写入 P99 可能 >500ms；TiDB Placement Rules 可精确控制副本位置，写入延迟更可控；④ **生态成熟度**：TiDB 在国内互联网场景验证更充分（ESP 已验证），CockroachDB 国内大规模生产案例较少；⑤ **单元化适配**：EP 混合单元化架构（D-012）以 `user_id` 分片为核心，TiDB `AUTO_RANDOM` + `PRE_SPLIT_REGIONS` + `SPLIT TABLE` 已有完整方案，CockroachDB 需重新设计 range 分裂策略。 |
+| **TiDB 保持主选的理由** | ① ESP v8.5.7 已验证 3-region Raft 强一致；② TiFlash HTAP 在线列存，SP-02 数据中台冷热分层依赖；③ TiCDC→Pulsar CDC 链路已落地（ADR-D01），换 CockroachDB 需重建 CDC；④ Placement Rules 精细副本控制适配单元化；⑤ 国内技术支持生态成熟。 |
+| **海外可选 CockroachDB 的理由** | ① 海外集群独立部署，无 HTAP 需求（分析走 Pulsar→Flink→Iceberg 统一链路）；② PG 协议兼容降低海外团队接入门槛；③ `REGIONAL BY ROW` + Super Regions 天然适配 PIPL 数据驻留；④ 多活写入适合海外多区域低延迟写入场景；⑤ PoC 验证不阻塞主线路径（M2-M3 才启动）。 |
+| **PoC 验证项（SP-07 M2-M3）** | ① CockroachDB 22.2+ LTS 部署新加坡+法兰克福双区域；② `REGIONAL BY ROW` 按 `user_id` 分片性能（对标 TiDB `AUTO_RANDOM` 分表）；③ Changefeeds → Pulsar 适配层开发与验证；④ 跨区写入 P99 延迟基准（目标 <300ms）；⑤ 100 万连接压测（对标 gateway-go 单节点 50 万连接）；⑥ PIPL 数据驻留审计验证。 |
+| **结论** | 国内主库 TiDB 8.5 LTS 不变；海外集群在 SP-07 阶段做 CockroachDB PoC，PoC 通过则海外用 CockroachDB，否则海外也用 TiDB 独立集群。**不改变 MVP（M1）单 cell TiDB 路径**。 |
+| **依据** | CockroachDB 官方文档（multi-region overview / survival goals / regional by row / super regions）+ TiDB 8.5 LTS Placement Rules + ESP v8.5.7 验证 + ADR-D01 CDC 链路 + D-012 混合单元化 + D-004 PIPL 海外隔离 |
+| **状态** | Accepted（TiDB 国内主选）/ Proposed（CockroachDB 海外 PoC，SP-07 M2-M3 验证） |
+| **关联需求** | NFR-P-01（100 万 CCU）/ NFR-P-07（99.99%）/ D-004（PIPL 海外隔离）/ D-012（混合单元化） |
+
+### 3.13 ADR-T13 Spring Boot 4.0 迁移铁律清单 + 依赖 scope 规范（ESP 7 大破坏性变更穷尽吸收）
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 从 SB3.5 迁移到 SB4.0.7 + SCA 2025.1.0.0 时实测踩过 **7 个破坏性变更**（PROGRESS.md L1108-1156 记录），每个都导致编译失败或运行时 CrashLoop。EP 从 Day 1 即用 SB4.0.7，必须预先规避所有已知坑。 |
+| **决策** | EP 全项目群 Java 模块强制遵守以下 SB4 迁移铁律清单（CI 编译检查 + 依赖 scope 检查）： |
+| **SB4 破坏性变更清单（7 项，全部从 ESP 吸收）** | |
+| ① Undertow 移除 → Jetty 12.1.10 | SB4 移除 `spring-boot-starter-undertow`，Web 容器统一 Jetty 12.1.10（Eclipse EE 10 API）。EP 全量用 `spring-boot-starter-web`（内含 Jetty），**禁引 Undertow/Starter-Undertow**。 |
+| ② `@MockBean` → `@MockitoBean` | SB4 废弃 `@MockBean`/`@SpyBean`，改用 `@MockitoBean`/`@MockitoSpyBean`（Spring Framework 6.2+ 新注解）。EP 测试代码 CI 扫描禁用 `@MockBean`，统一 `@MockitoBean`。 |
+| ③ `@WebMvcTest` 包迁移 | SB4 中 `@WebMvcTest` 等切片注解的 auto-config 类从 `org.springframework.boot.test.autoconfigure.web.servlet` 迁移到 `org.springframework.boot.test.context.SpringBootTest` 命名空间。EP 测试 import 语句 CI 检查。 |
+| ④ `aspectjweaver` 替换 | SB4 中 `spring-boot-starter-aop` 不再传递 `aspectjweaver`，需显式声明 `aspectjweaver 1.9.25.1`（或 `aspectjrt`）。EP SDK 的 `provided` scope 依赖表已显式列出。 |
+| ⑤ `DataSourceBuilder` 拆分 | SB4 中 `DataSourceBuilder` 从 `spring-boot` 拆到 `spring-boot-jdbc`，且 API 变化（`.type()` 泛型化）。EP 读写分离 SDK 用 `HikariConfig` + `HikariDataSource` 直接构建，**不用 `DataSourceBuilder`**。 |
+| ⑥ TiDBDialect 移除 → MariaDBDialect | SB4 Hibernate 6.5 移除 `TiDBDialect`（Hibernate 社区停止维护），改用 `MariaDBDialect`（TiDB 兼容 MySQL/MariaDB 协议）。EP JPA `spring.jpa.database-platform` 不设或设 `org.hibernate.dialect.MariaDBDialect`。 |
+| ⑦ Seata webclient 冲突 → `allow-bean-definition-overriding` | SCA 2025.1.0.0 → `spring-boot-webclient:4.0.0` → `CodecsAutoConfiguration` 与 SB bean 冲突。EP 不用 Seata（ADR-T06）故无此冲突；若 SCA 其他组件触发 bean 冲突，设 `spring.main.allow-bean-definition-overriding=true` 绕过。 |
+| **byte-buddy compile scope 铁律** | |
+| ⑧ byte-buddy `compile`（非 `test`）| Hibernate 6.5（SB4 传递）运行时依赖 `byte-buddy` 做代理生成，若仅 `test` scope 则运行时 `ClassNotFoundException`。EP 强制 `byte-buddy` 为 `compile`（或 `provided`，由 SB4 BOM 传递）。**CI 检查 byte-buddy 不得为 `test` scope**。 |
+| **依赖 scope 规范（SP-01 全 SDK 统一）** | |
+| 规范 | SDK 的 Spring/HikariCP/aspectj 依赖统一 `provided`（由宿主应用 BOM 传递）；测试依赖 `test`；`byte-buddy` `compile`（运行时需要）；Lombok `provided`（编译时需要，运行时不含）。CI 检查 scope 合规性。 |
+| **理由** | ESP 7 个破坏性变更每个都导致 CrashLoop 或编译失败，EP 从 Day 1 预规避成本远低于事后修复；byte-buddy scope 是隐蔽坑（编译通过但运行时 ClassNotFoundException）。 |
+| **实现** | ① sp01-sdd 依赖表统一标注 scope；② CI 规则：grep 禁 `@MockBean`/`undertow`/`DataSourceBuilder`/`TiDBDialect`；③ CI 规则：grep `byte-buddy` scope 非 test；④ JPA 配置注明 MariaDBDialect。 |
+| **依据** | ESP PROGRESS.md L1108-1156（7 个破坏性变更全修记录）+ Spring Boot 4.0 Migration Guide + Hibernate 6.5 Release Notes |
+| **状态** | Accepted |
+| **关联需求** | NFR-A-01 / D-032（SCA+Dubbo 锁） |
+
 ---
 
-## 4. 接口契约
+### 3.14 ADR-T14 K8s 部署运维铁律清单（ESP 运维经验穷尽吸收）
+
+| 项 | 内容 |
+|----|------|
+| **背景** | ESP 在 K8s 部署运维中踩过多个坑（rollout 超时、镜像拉取、PDB 阻塞、NetworkPolicy CNI 不执行等），EP 需从 Day 1 在部署文档中预设对策。 |
+| **决策** | EP 全项目群 K8s 部署强制遵守以下运维铁律： |
+| **① Java 服务 rollout timeout ≥ 900s** | SB4 Java 服务慢启动（JIT 编译 + Disruptor RingBuffer 预热 + Nacos 注册 + Dubbo Triple 连接池建立），`progressDeadlineSeconds` 默认 600s 不够。EP Deployment/Argo Rollouts 设 `progressDeadlineSeconds: 900`（15min），`strategy.rollingUpdate.maxUnavailable: 0`（先扩后缩，零中断）。 |
+| **② Docker 镜像源替代** | 海外镜像（`docker.io`/`gcr.io`/`quay.io`）在国内拉取不稳定。EP 部署策略：①优先用内网 Harbor 仓库（`harbor.ep.local/<repo>:<tag>`）；②K8s 节点配 containerd registry mirror（`/etc/containerd/certs.d/`）；③基础镜像统一 `eclipse-temurin:21-jre-alpine`（Java）/`golang:1.25-alpine`（Go 构建）/`python:3.12-slim`（Python）；④CI 构建推 Harbor，禁止直接拉公网镜像。 |
+| **③ PDB 不阻塞 drain** | 生产多节点环境 PDB `minAvailable` 正常工作；单节点 RD 环境会阻塞 drain。EP 部署文档注明"PDB 需 ≥2 副本才能 drain；单节点环境用 `maxUnavailable: 1` 替代 `minAvailable`"。 |
+| **④ NetworkPolicy 需 Calico/Cilium CNI** | K8s 默认 CNI（如 Flannel）不执行 NetworkPolicy，`default-deny` 实际不生效。EP 部署文档注明"NetworkPolicy 需 Calico 或 Cilium CNI 才生效；生产环境强制 Calico/Cilium，RD 环境降级为不依赖 NetworkPolicy"。 |
+| **⑤ OTel tail-sampling 防 Tempo OOM** | ESP 曾因全量 trace 打爆 Tempo（OOM 3 次）。EP OTel 双层 Collector：DaemonSet 层 tail-sampling 10%（按 `http.status_code>=500` 或 `latency>1s` 采样），Gateway 层聚合后发 Tempo。**禁全量 trace 进 Tempo**。 |
+| **⑥ ConfigMap 必须 in manifest** | ESP 曾用 `kubectl create configmap` 临时创建，重装集群后丢失 → CrashLoop。EP 所有 ConfigMap 必须在 GitOps 仓库（ArgoCD manifest）中声明，**禁止 kubectl 临时创建**。 |
+| **⑦ 混沌脚本 env 恢复验证** | ESP Chaos Mesh 脚本曾有 `${Dur}` typo 导致 `REDIS_HOST` 环境变量残留，Pod 卡死。EP 混沌 Runbook 注明"每次混沌实验结束后必须验证 Pod env 恢复（`kubectl exec -- env | grep` 关键变量）"。 |
+| **⑧ Go 依赖 vendor 策略** | 网络受限环境 `go mod tidy` 可能因 `go.sum` 不一致失败。EP Go 服务（gateway-go）部署文档注明"CI 构建时 `go mod vendor`，镜像内含 vendor 目录，不依赖运行时下载"。 |
+| **理由** | ESP 8 个运维坑每个都导致生产事故或部署失败，EP 在 Day 1 预设对策避免重蹈覆辙。 |
+| **实现** | ① sp01-deploy K8s manifest 注释 + Argo Rollouts 配置；② CI 检查 ConfigMap 是否在 GitOps 仓库；③ 混沌 Runbook 模板含 env 恢复验证步骤。 |
+| **依据** | ESP PROGRESS.md 运维经验 + Chaos Mesh 教训 + Argo Rollouts 文档 |
+| **状态** | Accepted |
+| **关联需求** | NFR-A-01 / NFR-M-03 / NFR-O-02 |
+
+---
+
+
 
 ### 4.1 JWT RS256 契约
 
@@ -405,28 +468,28 @@ Signature: RS256(header + "." + payload, private_key)
 
 ### 4.2 API 网关路由契约
 
+> **D-032/ADR-T07(rev2) 变更**：网关从 Spring Cloud Gateway 迁移到自建 Netty edge + Spring WebMVC。路由配置不再使用 SCG 的 `spring.cloud.gateway.routes` 格式，改为自建 `RouteTable` JSON schema，仍由 Nacos 动态下发(dataId=`ep-gateway-routes`)，变更秒级生效不重启。
+
 ```yaml
-# Nacos 路由配置(dataId: ep-gateway-routes)
-spring.cloud.gateway.routes:
+# Nacos 路由配置(dataId: ep-gateway-routes) — 自建 Netty edge RouteTable 格式
+# 替代 SCG spring.cloud.gateway.routes(D-032 禁用 SCG)
+routes:
   - id: ucm-service
-    uri: lb://ucm-service
-    predicates:
-      - Path=/api/ucm/**
+    uri: dubbo://ucm-service        # Dubbo Triple 服务发现(Nacos)
+    path: /api/ucm/**
+    stripPrefix: 2
     filters:
-      - StripPrefix=2
-      - name: AuthFilter
-      - name: SentinelFilter
-        args:
+      - AuthFilter
+      - SentinelFilter:
           resource: ucm-api
           qps: 5000
   - id: live-room
-    uri: lb://live-room
-    predicates:
-      - Path=/api/live/**
+    uri: dubbo://live-room
+    path: /api/live/**
+    stripPrefix: 2
     filters:
-      - StripPrefix=2
-      - name: AuthFilter
-      - name: CellRouteFilter   # 用户域请求经 CellRouter
+      - AuthFilter
+      - CellRouteFilter              # 用户域请求经 CellRouter
 ```
 
 ### 4.3 CellRouter 路由表契约
@@ -734,6 +797,69 @@ public class AuthFilter implements GlobalFilter, Ordered {
 | Disruptor 丢弃率 | drop_rate > 1% 持续 5min | P2 |
 | 缓存命中率 | hit_rate < 80% 持续 10min | P3 |
 | pod 重启 | restart_total > 3 in 10min | P1 |
+
+### 7.5 app_logs 表设计（TiDB 应用日志表，对齐 ADR-T10 / ADR-T14 ⑤ / PIPL）
+
+> **背景**：ADR-T14 ⑤ 已解决 OTel tail-sampling 防 Tempo OOM，但应用级结构化日志在 TiDB 中可查询的表设计此前缺失。`app_logs` 表用于落库 OTel Collector 采集的应用日志，支持 Grafana Loki 数据源 + TiDB SQL 双路径检索，并与 Tempo 链路通过 `trace_id` 交叉关联。
+
+#### 7.5.1 DDL
+
+```sql
+CREATE TABLE `app_logs` (
+  `id`         BIGINT       NOT NULL AUTO_RANDOM(5)  COMMENT '主键，TiDB 自动分片避免写热点',
+  `ts`         TIMESTAMP(3) NOT NULL                 COMMENT '日志时间戳（毫秒精度）',
+  `level`      ENUM('TRACE','DEBUG','INFO','WARN','ERROR','FATAL') NOT NULL COMMENT '日志级别',
+  `service`    VARCHAR(64)  NOT NULL                 COMMENT '来源服务名，如 bff-java / gateway-go',
+  `trace_id`   VARCHAR(64)  NOT NULL                 COMMENT 'OTel trace ID，用于与 Tempo 链路交叉关联',
+  `span_id`    VARCHAR(32)  DEFAULT NULL             COMMENT 'OTel span ID',
+  `host`       VARCHAR(128) DEFAULT NULL             COMMENT 'Pod/主机名',
+  `message`    TEXT         DEFAULT NULL             COMMENT '日志正文',
+  `attrs`      JSON         DEFAULT NULL             COMMENT '结构化属性键值对；禁止含 PII 字段（见 7.5.4）',
+  `created_at` TIMESTAMP    DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_trace_id`   (`trace_id`),
+  KEY `idx_service_ts` (`service`, `ts`),
+  KEY `idx_level_ts`   (`level`, `ts`)
+) PARTITION BY RANGE (UNIX_TIMESTAMP(`ts`)) (
+  PARTITION `p202601` VALUES LESS THAN (UNIX_TIMESTAMP('2026-02-01 00:00:00')),
+  PARTITION `p202602` VALUES LESS THAN (UNIX_TIMESTAMP('2026-03-01 00:00:00')),
+  PARTITION `p202603` VALUES LESS THAN (UNIX_TIMESTAMP('2026-04-01 00:00:00')),
+  PARTITION `p202604` VALUES LESS THAN (UNIX_TIMESTAMP('2026-05-01 00:00:00'))
+);
+```
+
+#### 7.5.2 设计依据
+
+| 维度 | 决策 | 依据 |
+|------|------|------|
+| RANGE 分区 | 按 `ts` 月分区，分区裁剪将查询限制在单分区，避免全表扫 OOM；旧分区可直接 `DROP PARTITION` 低成本清理 | ADR-T10（高频写表 Day 1 强制 RANGE 分区） |
+| `attrs` JSON 列 | 灵活承载 OTel 结构化属性，但 CI 静态检查禁止 PII 字段名（见 7.5.4），应用层日志脱敏器写入前剥离 PII | ADR-T14 ⑤ + PIPL（ADR-A02 安全分层） |
+| `trace_id` 索引 | 支撑 Tempo ↔ TiDB 链路交叉检索：Grafana 点击 Tempo span → 用 `trace_id` 反查 TiDB 落库的完整日志行 | ADR-T14 ⑤ OTel 全链路 |
+| `AUTO_RANDOM(5)` | TiDB 写入自动打散 region，避免单 region 写热点（ESP `session_turns` 自增主键热点教训） | ADR-T10 / ADR-T12 |
+| 月分区 + 90 天保留 | 默认 90 天保留，按事业群（BU）可配置；超出窗口的分区整体 `DROP`，无 GC 全表扫描压力 | ADR-T10 热分区 7d / 温分区 30d 策略对齐 |
+| 写入路径 | OTel Collector → TiDB sink（批量插入 1000 行/批，5s flush）；批量写入降低 TiDB 写放大 | ADR-T14 ⑤ Collector 双层架构 |
+| 读取路径 | ① Grafana Loki 数据源用于全文检索（access/business 双日志轨）；② TiDB SQL 用于按 `trace_id` / `service` / `level` + 时间窗的结构化查询 | §7.2 双日志轨 |
+
+#### 7.5.3 分区管理
+
+| 项 | 内容 |
+|----|------|
+| 自动分区 | 启用 `tidb_partition_management = ON`（TiDB 8.x），自动按月创建未来分区，避免人工遗漏导致写入失败 |
+| 预建窗口 | 初始预建 3 个月分区（如 `p202602/p202603/p202604`），后续按月自动延伸 |
+| 过期清理 | `tidb-partition-manager` 定时任务（对齐 ADR-T10 实现②）按 90 天默认保留期 `DROP PARTITION`；保留期按 BU 可配置（如合规审计 BU 可设 180 天） |
+| 行数监控 | 单分区行数 > 5000 万告警（对齐 ADR-T10 实现③），触发分区分裂或保留期复核 |
+
+#### 7.5.4 PIPL 合规列约束
+
+> `app_logs` 表存储应用日志，PII 泄露风险高（日志中最易误打手机号/身份证/邮箱）。此节为 PIPL 合规强约束。
+
+| 约束 | 内容 |
+|----|------|
+| 禁止字段名 | `attrs` JSON 不得包含匹配以下任一键的字段（大小写不敏感）：`phone`、`mobile`、`id_card`、`idcard`、`email`、`password`、`token`、`secret`、`key` |
+| 应用层脱敏器 | 各服务 OTel LogRecordAppender 之前强制经过 `PiiLogSanitizer`，按字段名 + 正则（手机号 11 位 / 身份证 18 位 / 邮箱）脱敏；未经过脱敏器的日志写入路径禁止上线 |
+| CI DDL 检查 | `ep-ddl-convention` CI（对齐 ADR-T10 实现①）校验：① `app_logs` DDL 必须含 `PARTITION BY RANGE`，无则编译失败；② `attrs` 列注释必须含 "禁止含 PII 字段" 字样 |
+| 安全分层 | 日志脱敏属 ADR-A02 安全分层中"数据层 - 静态脱敏"控制项；TiDB FGAC 不覆盖日志表（日志无租户隔离需求，依赖字段级脱敏） | ADR-A02 |
+| 审计 | 每月抽查 `app_logs.attrs` 采样 1000 行，扫描是否含 PII 模式；命中则触发 P1 告警 + 回溯脱敏器配置 | PIPL 第 55 条审计要求 |
 
 ---
 

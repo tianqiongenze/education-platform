@@ -1,0 +1,91 @@
+# D-114: ArgoCD ApplicationSet — 4 cell overlays
+#
+# One Application per cell overlay (cell-hz / cell-sz / cell-bj / cell-sg).
+# Each Application renders deploy/k8s/overlays/cell-<name> via kustomize and
+# applies it to the matching cell cluster.
+#
+# Sync wave 1: cell overlays reconcile AFTER base infra (wave 0) and
+# BEFORE application services (wave 2). The base layer (namespaces, configmaps,
+# CRDs, PropagationPolicy) must exist before cell-specific patches can apply.
+#
+# Two deployment topologies are supported:
+#   (A) Hub-spoke via Karmada: all 4 cell Apps target the Karmada host cluster
+#       (https://kubernetes.default.svc); Karmada PropagationPolicy fans the
+#       rendered manifests out to member cells. Use this if ArgoCD runs only
+#       on the host. See deploy/k8s/base/karmada-propagation.yaml.
+#   (B) Direct multi-cluster: each cell App targets its own cluster API.
+#       Use this when ArgoCD has direct credentials for every cell cluster
+#       (registered via `argocd cluster add`).
+# The default below uses topology (B) with placeholder cluster URLs; switch
+# to (A) by changing every `server:` to https://kubernetes.default.svc.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ep-cell-overlays
+  namespace: argocd
+  annotations:
+    ep.io/decision: "D-114"
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  generators:
+    - list:
+        elements:
+          - cell: hz
+            region: cn-east-1
+            server: https://hz-cluster-api:6443
+          - cell: sz
+            region: cn-south-1
+            server: https://sz-cluster-api:6443
+          - cell: bj
+            region: cn-north-1
+            server: https://bj-cluster-api:6443
+          - cell: sg
+            region: ap-southeast-1
+            server: https://sg-cluster-api:6443
+  template:
+    metadata:
+      name: 'ep-cell-{{cell}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/part-of: education-platform
+        app.kubernetes.io/managed-by: argocd
+        ep.io/layer: cell
+        ep.io/cell: 'cell-{{cell}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+    spec:
+      project: education-platform
+      source:
+        repoURL: https://github.com/edu-platform/education-platform.git
+        targetRevision: HEAD
+        path: 'deploy/k8s/overlays/cell-{{cell}}'
+      destination:
+        server: '{{server}}'
+        namespace: education-platform
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      # HPA owns replica count; never self-heal replicas or status.
+      ignoreDifferences:
+        - group: autoscaling
+          kind: HorizontalPodAutoscaler
+          jsonPointers:
+            - /status
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas

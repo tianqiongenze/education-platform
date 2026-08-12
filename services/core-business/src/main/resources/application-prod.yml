@@ -1,0 +1,58 @@
+# D-069: Production profile — all secrets from environment variables. NEVER commit real credentials.
+spring:
+  aot:
+    enabled: true
+  datasource:
+    url: ${TIDB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:50}
+      minimum-idle: 10
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+      connection-test-query: SELECT 1
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-cluster}
+      port: ${REDIS_PORT:6379}
+      database: 0
+
+dubbo:
+  registry:
+    address: nacos://${NACOS_ADDR}
+
+csp:
+  sentinel:
+    transport:
+      dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+
+seata:
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+
+logging:
+  level:
+    root: WARN
+    com.ep: INFO
+
+# D-066: Pulsar domain-event publishing enabled in prod.
+ep:
+  pulsar:
+    enabled: true
+    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
+    topic:
+      domain-events: persistent://public/default/sp03-domain-events

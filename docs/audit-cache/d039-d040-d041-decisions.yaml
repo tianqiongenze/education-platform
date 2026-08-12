@@ -1,0 +1,75 @@
+# D-039/D-040/D-041 决策缓存文件
+# Iron Law 7 (D-033): 审计/调研结果缓存Redis+本地兜底
+# 本文件为本地兜底缓存, 当 Redis Cluster 不可用时从此恢复
+# 生成时间: 2026-08-05T09:55:00+08:00
+# 模块: education-platform / 多区域多活+虚拟线程+GraalVM 重构
+---
+decision_id: D-039
+title: 虚拟线程铁律
+date: 2026-08-05
+status: active
+summary: >
+  所有 Spring Boot 4 Java 服务必须开启虚拟线程 (spring.threads.virtual.enabled=true)。
+  synchronized 块会导致虚拟线程 pinning, 必须替换为 ReentrantLock。
+  裸 new Thread() 必须替换为 Thread.startVirtualThread()。
+impact_files:
+  - services/sp03-business/src/main/java/com/ep/business/order/OrderServiceImpl.java
+  - services/sp03-business/src/main/java/com/ep/business/user/UserServiceImpl.java
+  - services/sp03-business/src/main/java/com/ep/business/course/CourseServiceImpl.java
+  - services/ep-cache/src/main/java/com/ep/cache/CacheService.java
+test_result: "sp03-business 38 tests pass, ep-cache 31 tests pass"
+---
+decision_id: D-040
+title: GraalVM Native Image 铁律
+date: 2026-08-05
+status: active
+summary: >
+  所有 Spring Boot 4 Java 服务必须支持 GraalVM Native Image。
+  pom.xml 添加 org.graalvm.buildtools:native-maven-plugin:0.10.4 (buildArgs 无execution绑定, 手动 mvn -Pnative native:compile)。
+  application.yml 开启 spring.aot.enabled=true。
+  双模式: JIT (开发) + Native (生产), 通过 Maven profile 切换。
+impact_files:
+  - services/bff-java/pom.xml
+  - services/sp03-business/pom.xml
+  - services/sp05-itbackend/pom.xml
+  - services/integration-tests/pom.xml
+  - services/bff-java/src/main/resources/application.yml
+  - services/sp03-business/src/main/resources/application.yml
+  - services/sp05-itbackend/src/main/resources/application.yml
+  - services/integration-tests/src/test/resources/application-test.yml
+---
+decision_id: D-041
+title: 多区域多活数据同步铁律
+date: 2026-08-05
+status: active
+summary: >
+  底层基础设施 (TiDB/Pulsar/Redis Cluster) 已升级为真正的多区域多活部署。
+  TiDB: 通过 tidb_replica_read=follower JDBC 参数实现跨 cell follower read。
+  Pulsar: Geo-Replication 国内 hz/sz/bj 全互联, 海外 sg 单向元数据同步。
+  Redis Cluster: CRDT 跨 cell 异步合并, 支持多活缓存。
+  K8s: Karmada PropagationPolicy 按 40/30/20/10 权重调度到 4 个 cell。
+  Per-cell Kustomize overlays (cell-hz/cell-sz/cell-bj/cell-sg) 差异化配置。
+  海外 cell-sg 启用数据隔离 (DATA_RESIDENCY=overseas, GDPR_COMPLIANCE=true)。
+impact_files:
+  - services/ep-rw-java/src/main/java/com/ep/rw/DataSourceType.java
+  - services/ep-rw-java/src/main/java/com/ep/rw/DataSource.java
+  - services/ep-rw-java/src/main/java/com/ep/rw/DataSourceAspect.java
+  - services/ep-rw-java/src/main/java/com/ep/rw/DataSourceConfig.java
+  - services/ep-rw-java/src/test/java/com/ep/rw/DataSourceTypeTest.java
+  - services/ep-cache/src/main/java/com/ep/cache/CacheConfig.java
+  - services/ep-cache/src/main/resources/application.yml
+  - deploy/k8s/configmap.yaml
+  - deploy/k8s/bff-java.yaml
+  - deploy/k8s/sp03-business.yaml
+  - deploy/k8s/sp05-itbackend.yaml
+  - deploy/k8s/sp04-ai.yaml
+  - deploy/k8s/gateway-go.yaml
+  - deploy/k8s/overlays/cell-hz/kustomization.yaml
+  - deploy/k8s/overlays/cell-sz/kustomization.yaml
+  - deploy/k8s/overlays/cell-bj/kustomization.yaml
+  - deploy/k8s/overlays/cell-sg/kustomization.yaml
+  - deploy/k8s/karmada-propagation.yaml
+  - deploy/k8s/kustomization.yaml
+  - docs/deployment/multi-active-verification.md
+test_result: "ep-rw-java 11 tests pass, integration-tests 18 tests pass"
+yaml_validation: "all 18 K8s YAML files validated OK (ruby YAML parser)"

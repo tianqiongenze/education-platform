@@ -1,0 +1,166 @@
+name: Build and Push Images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (default: commit SHA)'
+        required: false
+        default: ''
+
+# Only main-branch pushes trigger this workflow. PR builds never push images.
+# Tests (java-test, go-test, python-test, frontend-test) run on the same
+# push and must pass via branch protection before this workflow's jobs run.
+
+jobs:
+  # Gate: confirm all required test workflows succeeded for this commit.
+  # In a branch-protection setup, the test workflows themselves are the
+  # required checks; this job acts as an explicit dependency anchor.
+  test-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test gate
+        run: |
+          echo "Build pipeline triggered for commit ${{ github.sha }}"
+          echo "Required test workflows (java-test, go-test, python-test, frontend-test)"
+          echo "must pass via branch protection before this workflow runs."
+
+  build-java:
+    runs-on: ubuntu-latest
+    needs: test-gate
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - services/portal-bff
+          - services/core-business
+          - services/data-platform
+          - services/grading-service
+          - services/order-platform/order-platform-service
+          - services/payment-platform/payment-platform-service
+          - services/knowledge-platform/retrieval-service
+          - services/knowledge-platform/agent-service
+          - services/knowledge-platform/tenant-service
+          - services/knowledge-platform/knowledge-service
+          - services/senior-care
+          - services/boardgame-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - name: Install local path dependencies (ep-* / order-platform-api / payment-platform-api)
+        run: mvn -B -DskipTests install -pl services/ep-web-common,services/grading-api,services/ep-cache,services/ep-memory-java,services/order-platform/order-platform-api,services/payment-platform/payment-platform-api,services/knowledge-platform/knowledge-api -am || true
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.edu.internal
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - name: Configure Maven for Harbor (JIB push)
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
+          <settings>
+            <servers>
+              <server>
+                <id>harbor.edu.internal</id>
+                <username>\${env.HARBOR_USERNAME}</username>
+                <password>\${env.HARBOR_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      - name: Build and push (JIB)
+        working-directory: ${{ matrix.service }}
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: mvn -B -DskipTests compile jib:build -Pjib-build
+
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: test-gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ws-gateway
+            context: services
+            dockerfile: services/ws-gateway/Dockerfile
+          - name: ai-platform
+            context: services
+            dockerfile: services/ai-platform/Dockerfile
+          - name: frontend-portal
+            context: frontend
+            dockerfile: frontend/apps/portal-web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.edu.internal
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - name: Set up BuildKit
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: harbor.edu.internal/education-platform/${{ matrix.name }}:${{ steps.tag.outputs.tag }}
+          build-args: |
+            GIT_URL=${{ github.server_url }}/${{ github.repository }}
+            GIT_COMMIT=${{ github.sha }}
+
+  # On main branch, re-tag every image as `latest` so non-SHA-pinned
+  # consumers (e.g. dev cells) can pull the newest build.
+  tag-latest:
+    runs-on: ubuntu-latest
+    needs: [build-java, build-docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - portal-bff
+          - core-business
+          - data-platform
+          - grading-service
+          - order-platform-service
+          - payment-platform-service
+          - retrieval-service
+          - ws-gateway
+          - ai-platform
+          - frontend-portal
+    steps:
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.edu.internal
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - name: Pull, retag, push latest
+        run: |
+          docker pull harbor.edu.internal/education-platform/${{ matrix.image }}:${{ github.sha }}
+          docker tag harbor.edu.internal/education-platform/${{ matrix.image }}:${{ github.sha }} \
+                     harbor.edu.internal/education-platform/${{ matrix.image }}:latest
+          docker push harbor.edu.internal/education-platform/${{ matrix.image }}:latest

@@ -18,7 +18,7 @@
 │  ├─ admin-console (Nginx 静态托管)                      │
 │  └─ cron-eval (CronJob 评测回归)                        │
 │ 依赖: Milvus cluster / Redis Cluster / pgvector pool    │
-│       / Iceberg(数据中台湖) / Feature Store(Kafka)      │
+│       / Iceberg(数据中台湖) / Feature Store(Pulsar)      │
 └─────────────────────────────────────────────────────────┘
 ┌──────────── 海外独立集群(PIPL) ────────────┐
 │ 同构, 独立 LLM provider, 数据不出境        │
@@ -89,7 +89,7 @@ spec:
 | ai-proxy | 多 provider 路由 | providers: [openai, azure, qwen] |
 | ai-rate-limiting | 限流 | dimension: {tenant, agent, model}, window: 60s |
 | ai-semantic-cache | LangCache | redis: {cluster}, ttl: 3600, similarity: 0.92 |
-| ai-token-meter | 计费 | sink: kafka `ai.billing` |
+| ai-token-meter | 计费 | sink: pulsar `persistent://public/event/ai.billing` |
 | ai-prompt-template | 模板 | per-agent 模板 |
 | request-transformer | 注入 X-Tenant-Id | 来自 JWT claim tid |
 
@@ -257,3 +257,239 @@ prod:
 ---
 
 （全文完，约 250 行有效内容）
+
+---
+
+## D-046: 智能体架构部署配置
+
+### 1. 新增环境变量
+
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| MCP_ENABLED | true | 启用 MCP 协议接入 |
+| A2A_ENABLED | true | 启用 A2A 协议与 AgentCard 端点 |
+| HERMES_ENABLED | true | 启用 Hermes 事件总线 |
+| PULSAR_ENABLED | false | Pulsar 主路径开关；false 时降级 InMemoryBus |
+| REFLEXION_MAX_TRIALS | 3 | Reflexion 最大重试次数 |
+| REFLEXION_THRESHOLD | 0.7 | evaluate 通过阈值 |
+| REDIS_CHECKPOINTER_URL | redis://redis-cluster:6379/0 | LangGraph RedisSaver 连接串 |
+| AUDIT_REDIS_STREAM | audit:agent:events | 审计 Redis Stream 名 |
+
+### 2. Pulsar Topic 预配
+
+| Topic | 用途 | 分区 | 保留 |
+|-------|------|------|------|
+| `persistent://public/a2a/task-events` | A2A Task 状态变更通知 | 6 | 7d |
+| `persistent://public/hermes/agent-events` | Hermes 智能体事件链 | 6 | 7d |
+| `persistent://public/hermes/dlq` | Hermes 死信队列 | 3 | 30d |
+
+预配命令示例：
+```bash
+bin/pulsar-admin topics create persistent://public/a2a/task-events -p 6
+bin/pulsar-admin topics create persistent://public/hermes/agent-events -p 6
+bin/pulsar-admin topics create persistent://public/hermes/dlq -p 3
+bin/pulsar-admin namespaces set-retention public -r 7d -s 10G
+```
+
+### 3. Redis 键命名空间表
+
+| 键模式 | 类型 | TTL | 用途 |
+|--------|------|-----|------|
+| `mcp:servers:{tenant}` | Hash | — | MCP Server 注册表 |
+| `a2a:agents:{tenant}` | Hash | — | A2A Agent 注册表 |
+| `a2a:task:{id}` | String(JSON) | 7d | A2A Task 状态 |
+| `plugin:registry:{tenant}` | Hash | — | Plugin 注册表 |
+| `budget:{tenant}:{agent}:{model}` | ZSET | 24h 滚动 | Token 预算 |
+| `audit:agent:events` | Stream | — | 审计事件流（异步落 Iceberg） |
+| `hermes:routes` | String(JSON) | — | 事件路由规则热更新 |
+| `mem:episodic:{tenant}:{agent}:{user}` | List | 30d | Reflexion episodic memory |
+| `langgraph:checkpoint:{thread_id}` | Hash | 7d | LangGraph 状态检查点 |
+
+### 4. LangGraph 1.0 Checkpointer 配置
+
+```yaml
+langgraph:
+  checkpointer:
+    type: redis
+    url: ${REDIS_CHECKPOINTER_URL}
+    ttl: 7d
+    fallback: memory  # Redis 故障降级为 MemorySaver
+```
+
+依赖升级（pyproject.toml 已对齐）：
+- `langgraph ^0.2 → ^1.0`
+- 新增 `mcp ^1.0`、`langchain-mcp-adapters ^0.1`、`langgraph-sdk ^1.0`、`mem0ai ^0.1`
+
+### 5. K8s 部署补充
+
+sp04-ai Deployment 新增环境变量（通过 ConfigMap `sp04-ai-config` 注入）：
+
+```yaml
+env:
+  - name: MCP_ENABLED
+    valueFrom: { configMapKeyRef: { name: sp04-ai-config, key: mcp_enabled } }
+  - name: A2A_ENABLED
+    valueFrom: { configMapKeyRef: { name: sp04-ai-config, key: a2a_enabled } }
+  - name: HERMES_ENABLED
+    valueFrom: { configMapKeyRef: { name: sp04-ai-config, key: hermes_enabled } }
+  - name: PULSAR_ENABLED
+    valueFrom: { configMapKeyRef: { name: sp04-ai-config, key: pulsar_enabled } }
+  - name: REFLEXION_MAX_TRIALS
+    value: "3"
+  - name: REFLEXION_THRESHOLD
+    value: "0.7"
+  - name: REDIS_CHECKPOINTER_URL
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: redis_url } }
+  - name: AUDIT_REDIS_STREAM
+    value: "audit:agent:events"
+```
+
+### 6. 审计落湖配置
+
+AuditLogger 消费 `audit:agent:events` Stream 批写 Iceberg 表 `audit.agent_events`。消费组 `audit-iceberg-sink`，批次大小 500，提交间隔 10s。Redis 写失败回退 `/tmp/ep_audit_fallback.jsonl`，由 sidecar `audit-replay` 容器重放。
+
+### 7. 降级矩阵
+
+| 故障 | 降级路径 | 告警 |
+|------|---------|------|
+| Redis 不可用 | MCP/Plugin 注册表→YAML；Checkpointer→MemorySaver；TokenBudget→本地限流 | CRITICAL |
+| Pulsar 不可用 | Hermes→InMemoryBus | WARNING |
+| Iceberg 不可用 | AuditLogger→本地 JSONL，待重放 | WARNING |
+| Milvus 不可用 | PluginDiscovery→跳过向量检索 | WARNING |
+
+---
+
+（D-046 章节完）
+
+---
+
+## §ep-memory 部署配置 (D-045)
+
+> 关联：ADR-A05；ADR-A06；D-048 审计 P0-5。
+
+### 1. Mem0 依赖
+
+Python 侧 `sp04-ai/requirements.txt` 追加：
+
+```
+mem0ai==0.1.30
+pymilvus==2.4.6
+neo4j==5.24.0
+tidb-vector==0.0.4
+```
+
+### 2. Milvus collection 配置
+
+`mem_episodic`（L2 情景记忆）：
+
+```python
+from pymilvus import CollectionSchema, FieldSchema, DataType
+
+fields = [
+    FieldSchema("memory_id", DataType.VARCHAR, max_length=32, is_primary=True),
+    FieldSchema("tenant_id", DataType.VARCHAR, max_length=64, is_partition_key=True),
+    FieldSchema("user_id", DataType.VARCHAR, max_length=64),
+    FieldSchema("embedding", DataType.FLOAT_VECTOR, dim=1536),
+    FieldSchema("content", DataType.VARCHAR, max_length=4096),
+    FieldSchema("archive", DataType.BOOL, default=False),
+    FieldSchema("created_at", DataType.INT64),  # epoch ms
+]
+schema = CollectionSchema(fields, enable_dynamic_field=True)
+# index: HNSW on embedding, M=16, efConstruction=200
+# partition_key=tenant_id (千级租户走 partition_key 隔离)
+```
+
+`mem_org`（L3 组织记忆）：同构，`tenant_id` partition_key 隔离。
+
+### 3. Neo4j graph 配置
+
+`mem_procedural`（L2 程序记忆）与 `mem_org_graph`（L3）：
+
+```cypher
+// 节点标签
+// :User, :Course, :Skill, :Goal, :OrgKnowledge
+// 关系类型
+// :LEARNS(User->Course), :MASTERS(User->Skill), :TARGETS(User->Goal), :BELONGS_TO(*->OrgKnowledge)
+
+// 边权重衰减 (遗忘机制)
+// weight 属性默认 1.0, 30d ×0.5, 90d 归档(archive=true)
+```
+
+### 4. Redis key 命名空间
+
+| 级别 | key 模式 | 类型 | TTL |
+|------|---------|------|-----|
+| L0 即时 | `mem:imm:{tenant}:{user}:{session}` | LIST | 24h |
+| L1 工作 | `mem:work:{tenant}:{user}` | HASH | 7d |
+| L3 授权 | `mem:org:auth:{tenant}:{user}` | SET（授权的 org_memory_id） | — |
+
+### 5. TiDB 表
+
+`mem_semantic`（L2 语义记忆）建表 SQL 见 SDD §4 数据模型。索引 `idx_tenant_user(tenant_id, user_id, status)` 支撑召回查询。
+
+### 6. 环境变量
+
+```yaml
+env:
+  - name: MEM0_CONFIG_PATH
+    value: "/app/config/mem0_config.yaml"
+  - name: MILVUS_COLLECTION_MEM
+    value: "mem_episodic"
+  - name: MILVUS_COLLECTION_ORG
+    value: "mem_org"
+  - name: NEO4J_GRAPH_MEM
+    value: "mem_procedural"
+  - name: NEO4J_GRAPH_ORG
+    value: "mem_org_graph"
+  - name: EP_MEMORY_GRPC_PORT
+    value: "50057"
+  - name: TIDB_DSN
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: tidb_dsn } }
+  - name: MILVUS_URI
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: milvus_uri } }
+  - name: NEO4J_URI
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: neo4j_uri } }
+  - name: NEO4J_USER
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: neo4j_user } }
+  - name: NEO4J_PASSWORD
+    valueFrom: { secretKeyRef: { name: sp04-ai-secret, key: neo4j_password } }
+  - name: AI_GATEWAY_URL
+    valueFrom: { configMapKeyRef: { name: sp04-ai-config, key: ai_gateway_url } }
+```
+
+### 7. 遗忘 CronJob
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mem-forget-job
+  namespace: sp04-ai
+spec:
+  schedule: "0 2 * * *"   # 每日 02:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: mem-forget
+            image: sp04-ai:latest
+            command: ["python", "-m", "sp04_ai.memory.forget_job"]
+          restartPolicy: OnFailure
+```
+
+`forget_job` 执行：L1 7d 降级扫描 + L2 30d 降权 + L2 90d 归档标记。
+
+### 8. 降级矩阵（增补）
+
+| 故障 | 降级路径 | 告警 |
+|------|---------|------|
+| Redis Cluster 不可用 | L0/L1 → MemorySaver 兜底当前会话；L2 直接召回 | CRITICAL |
+| Milvus 不可用 | L2 情景跳过；L1 摘要兜底 | WARNING |
+| Neo4j 不可用 | L2 程序跳过；情景/语义兜底 | WARNING |
+| TiDB 不可用 | L2 语义跳过；情景兜底 | WARNING |
+| Mem0 服务不可用 | L2 提取暂停（消息入 Pulsar DLQ 待重放）；L0/L1 不受影响 | WARNING |
+
+---
+
+（D-045 章节完）

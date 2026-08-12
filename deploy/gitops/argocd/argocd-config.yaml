@@ -1,0 +1,103 @@
+# D-114: ArgoCD configuration customizations
+#
+# Applied to the argocd-cm / argocd-rbac-cm ConfigMaps OR installed as part
+# of the ArgoCD Helm values (data block). These settings harden the
+# education-platform GitOps flow:
+#   1. resource.customizations.ignoreDifferences — stop selfHeal from fighting
+#      HPA-managed replica counts and TiDB Operator-managed status fields.
+#   2. resource.customizations.health.lua — declare TiDB CRDs healthy only
+#      when TidbCluster.status.cluster.tidb === 'Running'.
+#   3. resource.exclusions — never sync ArgoCD's own Application/Project
+#      objects as if they were workload (prevents accidental recursion).
+#   4. repository.credentials — template so adding a new repo does not require
+#      per-repo secret wiring.
+#
+# Two install paths:
+#   (A) Plain kubectl install of ArgoCD: `kubectl apply -f` this file
+#       (patches argocd-cm via server-side apply).
+#   (B) Helm install: mirror the `data` block under `server.config` in your
+#       values.yaml.
+# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/config/
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: "D-114"
+  annotations:
+    # server-side apply so we only touch the keys we own
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  # --- ignoreDifferences: HPA / TiDB status drift ---
+  resource.customizations.ignoreDifferences.autoscaling_HorizontalPodAutoscaler: |
+    jsonPointers:
+      - /status
+      - /spec/metrics
+  resource.customizations.ignoreDifferences.apps_Deployment: |
+    jsonPointers:
+      - /spec/replicas
+  resource.customizations.ignoreDifferences.pingcap.com_TidbCluster: |
+    jsonPointers:
+      - /status
+      - /spec/tidb/replicas
+      - /spec/tikv/replicas
+      - /spec/pd/replicas
+  resource.customizations.ignoreDifferences.policy.karmada.io_PropagationPolicy: |
+    jsonPointers:
+      - /status
+
+  # --- health checks for TiDB CRDs ---
+  resource.customizations.health.pingcap.com_TidbCluster: |
+    hs = {}
+    if obj.status ~= nil and obj.status.cluster ~= nil then
+      if obj.status.cluster.tidb == "Running" and obj.status.cluster.tikv == "Running" and obj.status.cluster.pd == "Running" then
+        hs.status = "Healthy"
+        hs.message = "TidbCluster is running"
+        return hs
+      end
+      hs.status = "Progressing"
+      hs.message = "TidbCluster reconciling"
+      return hs
+    end
+    hs.status = "Progressing"
+    hs.message = "Waiting for TidbCluster status"
+    return hs
+
+  # --- resource.exclusions: prevent ArgoCD from adopting its own control plane ---
+  resource.exclusions: |
+    - apiGroups:
+        - argoproj.io
+      kinds:
+        - Application
+        - ApplicationSet
+        - AppProject
+      clusters:
+        - https://kubernetes.default.svc
+    - apiGroups:
+        - ""
+      kinds:
+        - Secret
+      clusters:
+        - "*"
+      annotations:
+        - argocd.argoproj.io/secret-type
+
+  # --- sync policy defaults ---
+  application.instanceLabelKey: app.kubernetes.io/instance
+  # Treat server-side diff for kubectl-managed fields leniently.
+  diff.normal.ignoreAggregatedRoles: "true"
+
+  # --- repository credential template ---
+  # ArgoCD auto-attaches these credentials to any repo URL matching the URL
+  # prefix. Create the secret once:
+  #   kubectl create secret generic repo-creds-ssh -n argocd \
+  #     --from-file=sshPrivateKey=~/path/to/deploy_key \
+  #     --label argocd.argoproj.io/secret-type=repository
+  # (For HTTPS, use a secret of type repository with username/password instead.)
+  repositories: |
+    - url: https://github.com/edu-platform/education-platform.git
+      type: git
+      name: education-platform

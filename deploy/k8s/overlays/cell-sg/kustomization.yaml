@@ -1,0 +1,79 @@
+# Kustomize overlay for cell-sg (新加坡, ap-southeast-1)
+# D-041: 多区域多活 — 海外新加坡 cell, 数据隔离模式
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/part-of=education-platform
+    patch: |-
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1region
+        value: ap-southeast-1
+      - op: replace
+        path: /spec/template/metadata/labels/topology.kubernetes.io~1zone
+        value: sg-a
+      - op: replace
+        path: /spec/template/metadata/labels/ep.io~1cell
+        value: cell-sg
+
+  # 海外 cell 副本数 (初期小规模部署)
+  - target:
+      kind: Deployment
+      name: portal-bff
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: core-business
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: grading-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: ai-platform
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: ws-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+configMapGenerator:
+  # merge into base common-config, override cell-specific values (D-041)
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - CELL_NAME=cell-sg
+      - CELL_REGION=ap-southeast-1
+      - CELL_ZONE=sg-a
+      - TIDB_FOLLOWER_READ=true
+      - TIDB_FOLLOWER_READ_STRATEGY=follower-read
+      # 海外 cell: 仅同步必要的元数据, 业务数据隔离
+      - PULSAR_REPLICATION_CLUSTERS=sg
+      - PULSAR_GLOBAL_TOPIC=persistent://ep/global-events
+      - REDIS_CLUSTER_LOCAL_CELL=cell-sg
+      - REDIS_CLUSTER_CRDT_ENABLED=true
+      # 海外数据合规: GDPR/PDPA 隔离标记
+      - DATA_RESIDENCY=overseas
+      - GDPR_COMPLIANCE=true

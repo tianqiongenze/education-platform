@@ -31,7 +31,7 @@
 | D-013 | 数据中台补强：Flink + **Apache Iceberg 湖仓一体**(流批一体Lakehouse) | 30亿历史数据不可能全压TiDB在线库；湖仓是冷热分层+AI训练数据底座标配 | 用户指令 |
 | D-014 | 单元化采用字节/阿里验证模式：流量纠正+跨单元写挂起+Local/CentralService二分 | 2025-2026 hyperscale 共识；阿里 AppActive 恢复<30s | 联网调研 |
 | D-015 | TiDB 仍需手动 user_id 分表：AUTO_RANDOM(5)+PRE_SPLIT_REGIONS+SPLIT TABLE | 分布式≠访问局部性；10B+行自动分片不保证 locality | 联网调研 |
-| D-016 | CDC 路径=TiCDC→Kafka(Avro+SchemaRegistry)→Flink→Iceberg；Flink CDC 3.x YAML pipeline 分库分表合并 | 生产标准；避免 GC safepoint 阻塞 | 联网调研 |
+| D-016 | CDC 路径=TiCDC→Pulsar(Avro+内置SchemaRegistry, ns=cdc://)→Flink→Iceberg；Flink CDC 3.x YAML pipeline 分库分表合并 | 生产标准；避免 GC safepoint 阻塞；统一消息基础设施(不引入 Kafka)便于多活+geo-rep | 联网调研 + ADR-D01 |
 | D-017 | Flink→Iceberg：checkpoint=commit(5min,target 256MB,zstd)，SinkV2 链式 compaction，保留 flink-job-id 快照 | Iceberg 官方+LakeOps 生产调优+字节 StreamShield | 联网调研 |
 | D-018 | AI网关分层：Kong AI(吞吐)/LiteLLM(起步)+语义缓存(Redis LangCache)+模型路由(RouteLLM类)+LLM_MODE=mock | Kong 基准>800% LiteLLM RPS；成本栈 cache→route→cascade→fallback | 联网调研 |
 | D-019 | RAG 多租户=namespace+pool+JWT驱动FGAC，禁 app 层拼 tenant_id | 跨租户泄漏是 #1 事故类；DB-per-tenant >10k 不可行 | 联网调研 |
@@ -42,6 +42,7 @@
 | D-024 | 代码查重两层: Tier1 MinHash+LSH(O(n)十亿级)→Tier2 Dolos/JPlag桶内pairwise; MOSS弃用 | pairwise O(n²)百万不可行;LSHBloom证明十亿级 | 联网调研 |
 | D-025 | 评分=分层沙箱pipeline(CodeGrade模式): ①IO/单元(实时)②静态③安全④Style ⑤LLM rubric(异步批,CoT+self-consistency) | LLM未达人类一致性;确定性可实时,LLM必须异步批 | 联网调研 |
 | D-026 | spec §7 IT后端补强到SAD级,4子平台(直播/在线编程/作业/评分)各含架构+ADR | 用户点名问4块是IT核心深度,原一句话带过是深度缺口 | 用户追问+spec缺口修复 |
+| D-027 | 全球部署数据库选型: 国内主库锁定 TiDB 8.5 LTS(已验证+HTAP+CDC链路); 海外独立集群可选 CockroachDB(原生多区域SQL+PG兼容+数据驻留), SP-07 M2-M3 PoC 验证后定夺 | TiDB 已验证且 CDC 链路完整; CockroachDB 多区域声明式管理+PIPL 数据驻留优势明显但无 HTAP+CDC 需适配; 海外独立部署不阻塞 MVP | 用户指令 + ADR-T12 |
 
 ---
 
@@ -89,7 +90,7 @@
 └────────────────────────────────┬────────────────────────────────┘
                                  │
 ┌────────────────────────────────▼────────────────────────────────┐
-│  BFF / API 网关层(Java/Spring Cloud Gateway + Go WS网关)          │
+│  BFF / API 网关层(Java/Netty edge+Disruptor+WebMVC + Go WS网关)      │  ← D-032/ADR-T07(rev2)
 │  JWT RS256 签发+JWKS│单元路由器(CellRouter)│Sentinel限流│灰度      │
 └────────────────────────────────┬────────────────────────────────┘
                                  │
@@ -116,7 +117,7 @@
 ┌────────────────────────────────▼────────────────────────────────┐
 │  基础设施层(复用容器集群，不重建)                                  │
 │  TiDB/TiFlash│Redis Cluster│Pulsar│图库│向量库(Milvus)│           │
-│  对象存储(S3/MinIO)│K8s│Kafka(CDC总线)│可观测(Loki/Prom/Tempo)   │
+│  对象存储(S3/MinIO)│K8s│Pulsar(CDC+事件统一)│可观测(Loki/Prom/Tempo)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -217,8 +218,8 @@
 
 | 组件 | 选型 | 语言 | 复用ESP | 说明 |
 |------|------|------|---------|------|
-| API网关/BFF | Spring Cloud Gateway | Java | ✅ bff-java | JWT RS256签发+JWKS、Sentinel限流、AuthFilter防伪造头 |
-| WS/实时网关 | 自研 hub(Go) | Go | ✅ gateway-go | 长连接、WS广播按 fnv1a(session)%N 分片、跨pod Redis Pub/Sub |
+| API网关/BFF | Netty edge+Disruptor+WebMVC(D-032,禁SCG) | Java | ✅ bff-java | JWT RS256签发+JWKS、Sentinel限流、AuthInterceptor防伪造头 |
+| WS/实时网关 | 自研 hub(Go) | Go | ✅ gateway-go | 长连接、WS广播按 fnv1a(session)%N 分片、跨pod Pulsar 广播(替代 Redis Pub/Sub, 统一消息基础设施) |
 | 单元路由器 CellRouter | 自研(Spring组件) | Java | 新增 | D-014 流量纠正+写挂起 |
 | 读写分离 | AbstractRoutingDataSource+@DataSource AOP | Java | ✅ esp-rw-java | 4模式:READ/WRITE/READ+consistent/READ+tiflash |
 | 高并发 ingest | LMAX Disruptor | Java | ✅ esp-disruptor | RingBuffer 65536,tryNext drop,batch 200/500ms flush |
@@ -278,9 +279,10 @@
 │   实时特征工程→AI中台(Feature Store)                              │
 ├─────────────────────────────────────────────────────────────────┤
 │ ② CDC总线                                                        │
-│   TiDB → TiCDC changefeed → Kafka(Avro+SchemaRegistry)           │
+│   TiDB → TiCDC changefeed → Pulsar(Avro+内置SchemaRegistry, ns=cdc://) │
 │   Flink CDC 3.x YAML pipeline 分库分表合并                        │
 │   不直连 Flink-CDC-TiDB(避免 GC safepoint 阻塞)                  │
+│   不引入 Kafka，统一消息基础设施(ADR-D01)                         │
 ├─────────────────────────────────────────────────────────────────┤
 │ ③ 湖仓层(Apache Iceberg + 对象存储 S3/MinIO)                     │
 │   Flink CDC 实时写 Iceberg(checkpoint=commit,5min,256MB,zstd)    │
@@ -305,11 +307,12 @@
 
 ### 4.3 关键 ADR
 
-**ADR-D01 CDC=TiCDC→Kafka→Flink→Iceberg(非直连)**
+**ADR-D01 CDC=TiCDC→Pulsar→Flink→Iceberg(非直连，统一消息总线)**
 - 直连 Flink-CDC-TiDB 会持 GC safefence，慢表阻塞全库
-- TiCDC→Kafka 解耦，按表分组多 changefeed
-- Avro+Schema Registry 支持演化(EVOLVE)
-- 依据：TiCDC FAQ + Flink CDC YAML pipeline
+- TiCDC→Pulsar(ns=cdc://) 解耦，按表分组多 changefeed
+- Avro+Pulsar 内置 Schema Registry 支持演化(EVOLVE)，不单独引入 Apicurio
+- 统一消息基础设施：CDC 与事件总线共用 Pulsar 集群，逻辑 namespace 隔离(cdc:// vs event://)，便于异地多活 + geo-replication
+- 依据：TiCDC 6.1+ 原生支持 Pulsar sink(8.5 LTS 成熟) + Flink CDC 3.x YAML Pulsar source + ESP ADR-02
 
 **ADR-D02 Flink→Iceberg checkpoint 即提交**
 - checkpoint interval 5min(平衡延迟与小文件)，target file 256MB
@@ -446,7 +449,7 @@
 │           SRS edge cluster(SRS edge不缓存HLS,前叠Squid/ATS)     │
 ├────────────────────────────────────────────────────────────────┤
 │ 互动层   弹幕/聊天/连麦/投票: WS网关(技术中台)+Redis(会话路由)    │
-│           +Kafka/Pulsar(削峰缓冲) → 单节点50万连接,集群百万级    │
+│           +Pulsar(削峰缓冲) → 单节点50万连接,集群百万级         │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -584,7 +587,7 @@
 M0(底座,1-2月)
 ├─ SP-01 技术中台核心(网关/路由/读写分离/缓存/EDA骨架)
 ├─ SP-06 三端前端骨架
-└─ 基础设施复用对接(TiDB/Redis/Pulsar/Kafka/可观测)
+└─ 基础设施复用对接(TiDB/Redis/Pulsar(CDC+事件统一)/可观测)
 
 M1(IT后端 MVP 端到端,2-3月)  ← 第一个可演示里程碑
 ├─ SP-05 IT后端 MVP(三端+评测+学习/作业/考试/直播)

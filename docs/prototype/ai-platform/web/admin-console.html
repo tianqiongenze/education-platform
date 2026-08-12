@@ -406,6 +406,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
+'use strict';
   // 导航切换
   const titles = {gateway:"模型网关监控", agents:"Agent 管理", rag:"RAG 知识库", tenant:"多租户管理", eval:"LLM 评测看板"};
   document.querySelectorAll('.nav-item').forEach(el=>{
@@ -472,6 +473,143 @@
       <div style="font-size:10px;color:var(--muted)">W${i+1}</div>
     </div>`;
   }).join('');
+
+  /* ===== 新增:统计卡片数字滚动动画 ===== */
+  function animateNum(el,target,duration){
+    const t=parseFloat(target);
+    if(isNaN(t))return;
+    const startT=Date.now();
+    const step=()=>{
+      const p=Math.min(1,(Date.now()-startT)/duration);
+      const v=t*p;
+      el.textContent=(t%1===0)?Math.round(v).toLocaleString():v.toFixed(2);
+      if(p<1)requestAnimationFrame(step);
+      else el.textContent=target;
+    };
+    step();
+  }
+  window.addEventListener('load',()=>{
+    document.querySelectorAll('.stat-grid .v, .stat .v').forEach(v=>{
+      const orig=v.textContent;
+      // 提取数字部分,保留前后缀(如 "12.4k" "98.7%")
+      const m=orig.match(/^([\d.]+)(.*)$/);
+      if(m){
+        const num=m[1],suffix=m[2];
+        const t=parseFloat(num);
+        if(!isNaN(t)){
+          const startT=Date.now();
+          const step=()=>{
+            const p=Math.min(1,(Date.now()-startT)/1200);
+            const v2=t*p;
+            v.textContent=((t%1===0)?Math.round(v2).toLocaleString():v2.toFixed(1))+suffix;
+            if(p<1)requestAnimationFrame(step);
+            else v.textContent=orig;
+          };
+          step();
+        }
+      }
+    });
+  });
+
+  /* ===== 新增:模型管理表格交互(搜索过滤 + 行hover + 状态切换) ===== */
+  document.addEventListener('DOMContentLoaded',()=>{
+    /* 为所有表格行添加 hover 高亮(若CSS未定义) */
+    document.querySelectorAll('table tbody tr').forEach(tr=>{
+      tr.addEventListener('mouseenter',()=>tr.style.background='var(--bg-hover,rgba(255,255,255,.04))');
+      tr.addEventListener('mouseleave',()=>tr.style.background='');
+      /* 行点击切换"启用/禁用"标签 */
+      tr.addEventListener('click',e=>{
+        const tag=tr.querySelector('.tag.green, .tag.red');
+        if(tag&&e.target===tag){
+          if(tag.classList.contains('green')){
+            tag.classList.remove('green');tag.classList.add('red');tag.textContent='已禁用';
+            toast('模型已下线');
+          }else{
+            tag.classList.remove('red');tag.classList.add('green');tag.textContent='运行中';
+            toast('模型已上线');
+          }
+        }
+      });
+    });
+
+    /* 搜索框:实时过滤表格行 */
+    const searchInput=document.querySelector('.topbar input[type="text"], .topbar input.search, input[placeholder*="搜索"]');
+    if(searchInput){
+      searchInput.addEventListener('input',()=>{
+        const kw=searchInput.value.toLowerCase().trim();
+        document.querySelectorAll('table tbody tr').forEach(tr=>{
+          tr.style.display=(!kw||tr.textContent.toLowerCase().indexOf(kw)>=0)?'':'none';
+        });
+      });
+    }
+
+    /* Tab 切换(若有 .tabs) */
+    document.querySelectorAll('.tabs .tab').forEach(tab=>{
+      tab.addEventListener('click',()=>{
+        const sib=tab.parentNode.querySelectorAll('.tab');
+        sib.forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    });
+
+    /* 下拉菜单(若有 .dropdown) */
+    document.querySelectorAll('.dropdown').forEach(dd=>{
+      const trigger=dd.querySelector('.dropdown-trigger')||dd.querySelector('button');
+      const menu=dd.querySelector('.dropdown-menu');
+      if(trigger&&menu){
+        trigger.addEventListener('click',e=>{
+          e.stopPropagation();
+          menu.style.display=menu.style.display==='block'?'none':'block';
+        });
+      }
+    });
+    document.addEventListener('click',()=>document.querySelectorAll('.dropdown-menu').forEach(m=>m.style.display='none'));
+
+    /* 模态框:为带 data-modal 的按钮绑定 */
+    document.querySelectorAll('[data-modal]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const m=document.getElementById(btn.dataset.modal);
+        if(m){m.classList.add('show');m.style.display='flex';}
+      });
+    });
+    document.querySelectorAll('.modal .close, .modal .cancel').forEach(c=>{
+      c.addEventListener('click',()=>{
+        const m=c.closest('.modal');
+        if(m){m.classList.remove('show');m.style.display='none';}
+      });
+    });
+
+    /* 分页按钮交互 */
+    document.querySelectorAll('.pagination button, .pager button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const pg=b.parentNode;
+        const active=pg.querySelector('.active');
+        if(active)active.classList.remove('active');
+        if(b.textContent.indexOf('下一页')>=0||b.textContent.indexOf('›')>=0){
+          const next=active?active.nextElementSibling:null;
+          if(next&&next.tagName==='BUTTON'){next.classList.add('active');toast('加载下一页...');}
+        }else if(b.textContent.indexOf('上一页')>=0||b.textContent.indexOf('‹')>=0){
+          const prev=active?active.previousElementSibling:null;
+          if(prev&&prev.tagName==='BUTTON'){prev.classList.add('active');toast('加载上一页...');}
+        }else{
+          b.classList.add('active');
+        }
+      });
+    });
+
+    /* 模型网关 QPS 模拟实时刷新 */
+    const qpsEl=document.querySelector('#p-gateway .stat-grid .v, #p-gateway .v');
+    if(qpsEl&&/[\d,]+/.test(qpsEl.textContent)){
+      setInterval(()=>{
+        const m=qpsEl.textContent.match(/([\d,]+)/);
+        if(m){
+          const n=parseInt(m[1].replace(/,/g,''),10);
+          const v2=n+Math.round((Math.random()-0.5)*200);
+          qpsEl.textContent=qpsEl.textContent.replace(m[1],v2.toLocaleString());
+        }
+      },3000);
+    }
+  });
 </script>
 </body>
 </html>
