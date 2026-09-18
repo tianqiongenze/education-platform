@@ -46,7 +46,14 @@ public class PaymentEntity implements Serializable {
     @Column(name = "payment_id", length = 64)
     private String paymentId;
 
-    @Column(name = "order_id", nullable = false, length = 64)
+    /**
+     * The order this payment settles. D-090: {@code unique = true} — at most one
+     * payment row per order. This is the DB-level guard that backs the
+     * {@code existsByOrderId} idempotency check in {@code PaymentServiceImpl} so a
+     * duplicate create request for the same order cannot mint a second payment
+     * even under a race.
+     */
+    @Column(name = "order_id", nullable = false, length = 64, unique = true)
     private String orderId;
 
     @Column(name = "tenant_id", nullable = false, length = 64)

@@ -230,6 +230,24 @@ func (r *Registry) Count() int {
 	return len(r.byID)
 }
 
+// CloseAll closes every active connection. P0-3: hijacked WebSocket
+// connections are invisible to http.Server.Shutdown, so the graceful shutdown
+// path must call this to unblock the per-connection read/write pumps and
+// release the underlying TCP sockets. It is safe to call concurrently with
+// Send/Close on individual connections.
+func (r *Registry) CloseAll() {
+	r.mu.RLock()
+	conns := make([]*Connection, 0, len(r.byID))
+	for _, c := range r.byID {
+		conns = append(conns, c)
+	}
+	r.mu.RUnlock()
+
+	for _, c := range conns {
+		c.Close()
+	}
+}
+
 // RoomCount returns the number of connections in a room.
 func (r *Registry) RoomCount(roomID string) int {
 	r.mu.RLock()
@@ -348,7 +366,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Read pump — read frames from the client
 	go func() {
-		defer wsConn.Close()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[panic-recovery] ws read pump panicked: %v", r)
+			}
+			wsConn.Close()
+		}()
 		readPump(rw, wsConn, h)
 	}()
 
@@ -372,9 +395,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // D-149: handles join_room, leave_room, and move messages.
 func readPump(rw interface{ Read([]byte) (int, error) }, conn *Connection, h *Handler) {
 	buf := make([]byte, 4096)
+	// D-220: per-connection anti-abuse — 64 KiB frame cap and a 10 msg/s
+	// token bucket (burst 20). Oversized or over-rate connections are closed
+	// immediately (fail-closed).
+	limiter := newTokenBucket(DefaultRateLimiterConfig())
 	for {
 		n, err := rw.Read(buf)
 		if err != nil {
+			return
+		}
+		if n > MaxFrameSize {
+			log.Printf("ws: frame too large (%d bytes) from conn %s — closing", n, conn.ID)
+			return
+		}
+		if !limiter.Allow() {
+			log.Printf("ws: message rate limit exceeded for conn %s — closing", conn.ID)
 			return
 		}
 		// Parse the WebSocket frame to extract payload

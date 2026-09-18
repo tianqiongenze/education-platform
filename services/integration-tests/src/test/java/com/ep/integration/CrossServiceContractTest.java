@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class CrossServiceContractTest {
 
     @Test
-    @DisplayName("sp03 UserController exposes /api/v1/users with expected methods")
+    @DisplayName("core-business UserController exposes /api/v1/users with expected methods")
     void test_user_controller_endpoints() {
         var mappings = extractMappings(com.ep.business.user.UserController.class);
         // Verify key endpoints exist
@@ -59,7 +59,7 @@ class CrossServiceContractTest {
     }
 
     @Test
-    @DisplayName("sp03 CourseController exposes /api/v1/courses with CRUD + publish/archive")
+    @DisplayName("core-business CourseController exposes /api/v1/courses with CRUD + publish/archive")
     void test_course_controller_endpoints() {
         var mappings = extractMappings(com.ep.business.course.CourseController.class);
         assertTrue(mappings.stream().anyMatch(m -> m.method().equals("POST") && m.path().equals("/api/v1/courses")));
@@ -78,39 +78,44 @@ class CrossServiceContractTest {
     }
 
     @Test
-    @DisplayName("portal-bff Dubbo controllers expose /api/* (System B, no v1)")
+    @DisplayName("portal-bff Dubbo controllers expose /api/v1/* (versioned REST contract, D-199)")
     void test_bff_controller_endpoints() throws ClassNotFoundException {
-        // portal-bff is a Spring Boot fat JAR (BOOT-INF/classes/), so the
-        // controller classes are NOT visible via the standard classloader in
-        // test scope. We load them via a BOOT-INF-aware classloader; if that
-        // fails, we skip the BFF assertions rather than failing the build.
+        // portal-bff Dubbo controllers are versioned under /api/v1/* following
+        // the D-199 unified REST contract. The BFF classloader handles the
+        // Spring Boot fat JAR (BOOT-INF/classes/) layout; if it cannot load,
+        // the BFF assertions are skipped rather than failing the build.
         Class<?> userDubboController = tryLoadBffClass("com.ep.bff.dubbo.UserDubboController");
         if (userDubboController == null) {
             return; // portal-bff fat JAR not loadable — skip
         }
         var userMappings = extractMappings(userDubboController);
-        assertTrue(userMappings.stream().anyMatch(m -> m.path().startsWith("/api/users")));
+        assertTrue(userMappings.stream().anyMatch(m -> m.path().startsWith("/api/v1/users")),
+            "UserDubboController must expose /api/v1/users endpoints");
 
         Class<?> courseDubboController = tryLoadBffClass("com.ep.bff.dubbo.CourseDubboController");
         if (courseDubboController != null) {
             var courseMappings = extractMappings(courseDubboController);
-            assertTrue(courseMappings.stream().anyMatch(m -> m.path().startsWith("/api/courses")));
+            assertTrue(courseMappings.stream().anyMatch(m -> m.path().startsWith("/api/v1/courses")),
+                "CourseDubboController must expose /api/v1/courses endpoints");
         }
 
         Class<?> orderDubboController = tryLoadBffClass("com.ep.bff.dubbo.OrderDubboController");
         if (orderDubboController != null) {
             var orderMappings = extractMappings(orderDubboController);
-            assertTrue(orderMappings.stream().anyMatch(m -> m.path().startsWith("/api/orders")));
+            assertTrue(orderMappings.stream().anyMatch(m -> m.path().startsWith("/api/v1/orders")),
+                "OrderDubboController must expose /api/v1/orders endpoints");
         }
     }
 
     @Test
-    @DisplayName("System A and System B path prefixes are distinct")
+    @DisplayName("core-business and portal-bff both use the /api/v1/* versioned prefix (unified D-199 REST contract)")
     void test_routing_system_separation() throws ClassNotFoundException {
-        // System A uses /api/v1/* (versioned, admin-web → core-business direct),
-        // System B uses /api/* (unversioned, student-h5/mp → portal-bff → Dubbo).
-        var sp03Mappings = extractMappings(com.ep.business.user.UserController.class);
-        assertTrue(sp03Mappings.stream().allMatch(m -> m.path().contains("/v1/")),
+        // D-199: both System A (core-business) and System B (portal-bff) now use
+        // the versioned /api/v1/* REST contract. The earlier "v1 vs no-v1"
+        // split was unified during the BOM + ArchUnit consolidation (D-199) so
+        // every public REST surface in the platform shares the same prefix.
+        var coreBusinessMappings = extractMappings(com.ep.business.user.UserController.class);
+        assertTrue(coreBusinessMappings.stream().allMatch(m -> m.path().contains("/v1/")),
             "core-business should use /api/v1/* paths");
 
         Class<?> userDubboController = tryLoadBffClass("com.ep.bff.dubbo.UserDubboController");
@@ -118,8 +123,8 @@ class CrossServiceContractTest {
             return; // portal-bff fat JAR not loadable — skip BFF assertion
         }
         var bffMappings = extractMappings(userDubboController);
-        assertTrue(bffMappings.stream().noneMatch(m -> m.path().contains("/v1/")),
-            "BFF should use /api/* paths (no v1)");
+        assertTrue(bffMappings.stream().allMatch(m -> m.path().contains("/v1/")),
+            "portal-bff Dubbo controllers must use /api/v1/* (unified D-199 REST contract)");
     }
 
     // --- Helper: load a BFF class from the fat JAR's BOOT-INF/classes/ ---

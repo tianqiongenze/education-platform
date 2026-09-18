@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * Collects column-level metadata for the Data Fabric catalog (D-074).
  *
  * <p>This is the minimal viable subset of the full 智能数据目录 designed in
- * sp02-sdd §12.1 / ADR-D05. It supports two ingestion paths:
+ * data-platform-sdd §12.1 / ADR-D05. It supports two ingestion paths:
  * <ul>
  *   <li>{@link #collectFromDdlEvent} — parse a CREATE TABLE DDL emitted by a
  *       CDC DDL event (Pulsar topic {@code persistent://public/cdc/ddl}).</li>

@@ -1,0 +1,789 @@
+openapi: 3.0.3
+info:
+  title: Data Platform API
+  description: |
+    Education Platform — Data Platform service (port 8082). Data ingestion
+    (Disruptor/CDC), metadata catalog, column-level lineage, data asset
+    profiling, NL Query (Text-to-SQL), and AIOps predictive operations.
+    Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8082
+    description: Local dev
+security:
+  - tenantAuth: []
+tags:
+  - name: ingest
+    description: CDC event ingestion (Disruptor pipeline)
+  - name: metadata
+    description: Metadata catalog query/search
+  - name: lineage
+    description: Column-level lineage & SQL parsing
+  - name: profile
+    description: Data asset 360° profiling
+  - name: nlquery
+    description: Natural-language Text-to-SQL query
+  - name: aiops
+    description: AIOps predictive operations
+
+paths:
+  /api/v1/ingest/cdc:
+    post:
+      tags: [ingest]
+      summary: Ingest a CDC event via Disruptor pipeline
+      operationId: ingestCdc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CdcEnvelope'
+      responses:
+        '202':
+          description: Event accepted by Disruptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAck'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          description: RingBuffer full — degraded to Pulsar fallback
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAck'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ingest/stats:
+    post:
+      tags: [ingest]
+      summary: Get Disruptor pipeline stats
+      operationId: ingestStats
+      responses:
+        '200':
+          description: RingBuffer stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisruptorStats'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/metadata/tables:
+    get:
+      tags: [metadata]
+      summary: List all collected table names
+      operationId: listMetadataTables
+      responses:
+        '200':
+          description: Table name list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/metadata/tables/{table}/columns:
+    get:
+      tags: [metadata]
+      summary: List columns for a table
+      operationId: listTableColumns
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Column metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ColumnMetadata'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/metadata/search:
+    get:
+      tags: [metadata]
+      summary: Search tables and columns by name
+      operationId: searchMetadata
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ''
+      responses:
+        '200':
+          description: Matching column metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ColumnMetadata'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/metadata/ddl:
+    post:
+      tags: [metadata]
+      summary: Ingest a CREATE TABLE DDL event
+      operationId: ingestDdl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DdlEventCmd'
+      responses:
+        '200':
+          description: Parsed column metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ColumnMetadata'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/tables/{table}/upstream:
+    get:
+      tags: [lineage]
+      summary: Upstream lineage (BFS) for a table
+      operationId: upstreamLineage
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: Upstream table names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/tables/{table}/downstream:
+    get:
+      tags: [lineage]
+      summary: Downstream lineage (BFS) for a table
+      operationId: downstreamLineage
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: Downstream table names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/parse:
+    post:
+      tags: [lineage]
+      summary: Parse SQL into lineage edges
+      operationId: parseLineage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseCmd'
+      responses:
+        '200':
+          description: Parsed lineage edges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LineageEdge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/gnn-infer:
+    post:
+      tags: [lineage]
+      summary: GNN-based lineage inference on parsed SQL
+      operationId: gnnInferLineage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseCmd'
+      responses:
+        '200':
+          description: GNN-inferred lineage edges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LineageEdge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/candidates:
+    get:
+      tags: [lineage]
+      summary: List candidate edges awaiting manual confirmation
+      operationId: listLineageCandidates
+      responses:
+        '200':
+          description: Candidate id → edge map
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/LineageEdge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/lineage/candidates/{id}/confirm:
+    post:
+      tags: [lineage]
+      summary: Confirm a candidate edge
+      operationId: confirmLineageCandidate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Confirmed edge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageEdge'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/profile/tables:
+    get:
+      tags: [profile]
+      summary: List all profiled tables
+      operationId: listProfileTables
+      responses:
+        '200':
+          description: Profiled table names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/profile/tables/{table}:
+    get:
+      tags: [profile]
+      summary: Get profile for a table
+      operationId: getTableProfile
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Data asset profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataAssetProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/profile/tables/{table}/refresh:
+    post:
+      tags: [profile]
+      summary: Trigger a profile refresh
+      operationId: refreshTableProfile
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Refreshed profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataAssetProfile'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/nlquery:
+    post:
+      tags: [nlquery]
+      summary: Run Text-to-SQL pipeline for a question
+      operationId: runNlQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryCmd'
+      responses:
+        '200':
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NlQueryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/nlquery/sessions/{sessionId}/history:
+    get:
+      tags: [nlquery]
+      summary: Get multi-turn conversation history
+      operationId: getNlQueryHistory
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chat turns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatTurn'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/nlquery/sessions/{sessionId}:
+    delete:
+      tags: [nlquery]
+      summary: Clear a session and its history
+      operationId: clearNlQuerySession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Session cleared
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/nlquery/audit:
+    get:
+      tags: [nlquery]
+      summary: Return dev/CI audit log
+      operationId: getNlQueryAuditLog
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/aiops/anomalies:
+    get:
+      tags: [aiops]
+      summary: Detect anomalies in recent ops metrics
+      operationId: detectAnomalies
+      responses:
+        '200':
+          description: Anomaly results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnomalyResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/aiops/capacity/forecast:
+    get:
+      tags: [aiops]
+      summary: Forecast future values for a capacity metric
+      operationId: capacityForecast
+      parameters:
+        - name: metric
+          in: query
+          required: false
+          schema:
+            type: string
+            default: storage
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Forecast result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/aiops/root-cause:
+    post:
+      tags: [aiops]
+      summary: Root-cause analysis from anomalous metrics
+      operationId: rootCauseAnalysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        '200':
+          description: Root cause report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootCauseReport'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/aiops/schedule/optimize:
+    post:
+      tags: [aiops]
+      summary: Flink job scheduling optimization suggestion
+      operationId: scheduleOptimize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlinkJobProfile'
+      responses:
+        '200':
+          description: Optimization suggestion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptimizationSuggestion'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    tenantAuth:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    CdcEnvelope:
+      type: object
+      required: [table]
+      properties:
+        table:
+          type: string
+        sourceCell:
+          type: string
+        op:
+          type: string
+        before:
+          type: object
+        after:
+          type: object
+        ts:
+          type: integer
+          format: int64
+    IngestAck:
+      type: object
+      properties:
+        status:
+          type: string
+        table:
+          type: string
+        hint:
+          type: string
+    DisruptorStats:
+      type: object
+      properties:
+        published:
+          type: integer
+          format: int64
+        dropped:
+          type: integer
+          format: int64
+        consumed:
+          type: integer
+          format: int64
+        ringBufferSize:
+          type: integer
+          format: int32
+    ColumnMetadata:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        database:
+          type: string
+        tableName:
+          type: string
+        columnName:
+          type: string
+        dataType:
+          type: string
+        comment:
+          type: string
+    DdlEventCmd:
+      type: object
+      required: [tableName, ddlSql]
+      properties:
+        tenantId:
+          type: string
+        database:
+          type: string
+        tableName:
+          type: string
+        ddlSql:
+          type: string
+    ParseCmd:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+    LineageEdge:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        sourceTable:
+          type: string
+        sourceColumn:
+          type: string
+        targetTable:
+          type: string
+        targetColumn:
+          type: string
+        inferredBy:
+          type: string
+        confidence:
+          type: number
+          format: double
+    DataAssetProfile:
+      type: object
+      properties:
+        tableName:
+          type: string
+        database:
+          type: string
+        qualityScore:
+          type: integer
+        rowCount:
+          type: integer
+          format: int64
+        nullRatio:
+          type: number
+          format: double
+        uniquenessRatio:
+          type: number
+          format: double
+        storageBytes:
+          type: integer
+          format: int64
+        queries7d:
+          type: integer
+        queries30d:
+          type: integer
+        cost:
+          type: number
+          format: double
+        updatedAt:
+          type: string
+          format: date-time
+    QueryCmd:
+      type: object
+      required: [question]
+      properties:
+        userId:
+          type: string
+        question:
+          type: string
+        sessionId:
+          type: string
+    NlQueryResult:
+      type: object
+      properties:
+        intent:
+          type: string
+        sql:
+          type: string
+        isValid:
+          type: boolean
+        rows:
+          type: array
+          items:
+            type: object
+        latencyMs:
+          type: integer
+    ChatTurn:
+      type: object
+      properties:
+        role:
+          type: string
+        content:
+          type: string
+        ts:
+          type: string
+          format: date-time
+    AnomalyResult:
+      type: object
+      properties:
+        index:
+          type: integer
+        isAnomaly:
+          type: boolean
+        score:
+          type: number
+          format: double
+    ForecastResult:
+      type: object
+      properties:
+        metric:
+          type: string
+        horizon:
+          type: integer
+        forecast:
+          type: array
+          items:
+            type: number
+            format: double
+    RootCauseReport:
+      type: object
+      properties:
+        rootCauses:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+          format: double
+    FlinkJobProfile:
+      type: object
+      properties:
+        jobId:
+          type: string
+        name:
+          type: string
+        parallelism:
+          type: integer
+        checkpointIntervalMs:
+          type: integer
+    OptimizationSuggestion:
+      type: object
+      properties:
+        jobId:
+          type: string
+        suggestedParallelism:
+          type: integer
+        reason:
+          type: string

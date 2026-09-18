@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *              → @GlobalTransactional 捕获 → TC 触发全局回滚
  *              → 分支1 的 AT undo log 回放,删除订单行
  * </pre>
- * {@code OrderServiceImpl#createOrderWithGlobalTx} (sp03) 已在生产代码中标注
+ * {@code OrderServiceImpl#createOrderWithGlobalTx} (core-business) 已在生产代码中标注
  * {@code @GlobalTransactional(name = "createOrderTx", rollbackFor = Exception.class)},
  * core-business 的 pom.xml 已声明 {@code seata-spring-boot-starter 2.0.0} +
  * {@code tx-service-group: ep_tx_group}.
@@ -81,7 +81,7 @@ class SeataGlobalTransactionTest {
     void test_global_rollback_undoes_order_on_insufficient_stock() {
         FakeGlobalTransaction gtx = new FakeGlobalTransaction();
 
-        // branch 1 — sp03 OrderService.createOrder (生产中标注 @GlobalTransactional(createOrderTx)).
+        // branch 1 — core-business OrderService.createOrder (生产中标注 @GlobalTransactional(createOrderTx)).
         final long[] idHolder = new long[1];
         gtx.branch(
                 () -> {
@@ -101,7 +101,7 @@ class SeataGlobalTransactionTest {
         RuntimeException boom = new RuntimeException("Insufficient stock for courseId=201");
         try {
             gtx.branch(
-                    () -> { throw boom; },   // 模拟 sp03 在全局事务中抛出
+                    () -> { throw boom; },   // 模拟 core-business 在全局事务中抛出
                     () -> { /* 库存分支抛出前未写入, 无 undo */ }
             );
         } catch (RuntimeException expected) {
@@ -114,7 +114,7 @@ class SeataGlobalTransactionTest {
         assertTrue(gtx.isRolledBack(), "全局事务必须标记为已回滚");
         assertFalse(gtx.isCommitted(), "回滚与提交互斥");
         assertNull(orderService.getOrderById(orderId),
-                "Seata undo 必须在回滚时删除 sp03 订单行");
+                "Seata undo 必须在回滚时删除 core-business 订单行");
     }
 
     @Test

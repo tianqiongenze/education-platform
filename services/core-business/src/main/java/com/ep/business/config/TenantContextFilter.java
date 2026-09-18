@@ -17,7 +17,7 @@ import java.io.IOException;
  * request, and always clears the ThreadLocal afterwards.
  *
  * <p>Security (D-133): enforces multi-tenant isolation for core-business,
- * closing the inconsistency where only sp07 had a TenantContextFilter. The
+ * closing the inconsistency where only mcp-server had a TenantContextFilter. The
  * ThreadLocal is read by data-access layers (MyBatis/JPA tenant interceptors,
  * Redis key prefixes, Pulsar topic routing) to scope queries to the caller's
  * tenant.

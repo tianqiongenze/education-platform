@@ -66,7 +66,7 @@ public class TextToSqlService {
     /**
      * Construct with explicit collaborators (constructor injection).
      *
-     * @param aiGatewayClient      SP-04 AI Gateway client
+     * @param aiGatewayClient      AI Gateway client
      * @param sqlValidator         SQL white-list + AST validator
      * @param conversationContext  multi-turn conversation context
      */
@@ -79,7 +79,7 @@ public class TextToSqlService {
     /**
      * Construct with all D-190 collaborators.
      *
-     * @param aiGatewayClient       SP-04 AI Gateway client
+     * @param aiGatewayClient       AI Gateway client
      * @param sqlValidator          SQL white-list + AST validator
      * @param conversationContext   multi-turn conversation context
      * @param trinoExecutorProvider Trino executor (null for dev/CI)

@@ -64,3 +64,24 @@ ep:
   ai-grading:
     enabled: true
     fallback: pending
+  # D-216: production read/write split. grading-service targets CockroachDB in the
+  # overseas deployment; read pool uses follower reads for nearest-replica latency.
+  # Set ep.data.enabled=true (or EP_DATA_ENABLED=true) to activate the dual pool;
+  # when false, the spring.datasource.* block above remains authoritative.
+  data:
+    enabled: ${EP_DATA_ENABLED:false}
+    provider: cockroachdb
+    read-replicas: true
+    follower-reads: true
+    write:
+      host: ${CRDB_PRIMARY:crdb-primary:26257}
+      database: ep_grading
+      username: ${DB_USERNAME:root}
+      password: ${DB_PASSWORD:}
+      maximum-pool-size: 10
+    read:
+      host: ${CRDB_FOLLOWER:crdb-follower:26257}
+      database: ep_grading
+      username: ${DB_USERNAME:root}
+      password: ${DB_PASSWORD:}
+      maximum-pool-size: 20

@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * no real HTTP call is made — the client returns template SQL derived from
  * keywords in the user question.
  *
- * <p>No Spring context, no running SP-04 gateway required.
+ * <p>No Spring context, no running AI gateway required.
  */
 class AiGatewayClientTest {
 

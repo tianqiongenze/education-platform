@@ -64,7 +64,7 @@ public class DisruptorIngestController {
             log.warn("[IngestController] Event degraded to Pulsar fallback — table={}", envelope.getTable());
             return ResponseEntity.status(429)
                     .body("{\"status\":\"degraded\",\"table\":\"" + envelope.getTable()
-                            + "\",\"hint\":\"RingBuffer full — event sent to Pulsar fallback\"}");
+                            + "\",\"hint\":\"RingBuffer full — event routed to fallback chain (Pulsar producer or disk spool)\"}");
         }
     }
 

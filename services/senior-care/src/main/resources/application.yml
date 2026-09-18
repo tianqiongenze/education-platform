@@ -33,7 +33,7 @@ dubbo:
     name: dubbo
     port: 20888
     threads: 500
-    threadpool: cached
+    threadpool: fixed   # D-216 P2-5: cached+500 platform threads is an anti-pattern in the virtual-thread era
   consumer:
     timeout: 10000
     retries: 0

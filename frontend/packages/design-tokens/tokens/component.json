@@ -1,0 +1,58 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Layer 3/3 — component tokens. Starting set; extend per-component as adoption grows.",
+  "button": {
+    "height": {
+      "sm": { "$value": "24px" },
+      "md": { "$value": "32px" },
+      "lg": { "$value": "40px" }
+    },
+    "padding": {
+      "sm": { "$value": "{space.2}" },
+      "md": { "$value": "{space.3}" }
+    },
+    "font": {
+      "size": {
+        "sm": { "$value": "{font.size.1}" },
+        "md": { "$value": "{font.size.2}" }
+      }
+    },
+    "border": {
+      "radius": { "$value": "{radius.2}" }
+    }
+  },
+  "card": {
+    "padding": { "$value": "{space.4}" },
+    "border": {
+      "radius": { "$value": "{radius.md}" }
+    },
+    "shadow": { "$value": "{shadow.card}" }
+  },
+  "input": {
+    "height": { "md": { "$value": "32px" } },
+    "border": {
+      "radius": { "$value": "{radius.md}" }
+    }
+  },
+  "table": {
+    "header": {
+      "bg": { "$value": "{color.bg.secondary}" },
+      "height": { "$value": "40px" }
+    },
+    "cell": {
+      "padding": { "$value": "{space.3}" }
+    }
+  },
+  "tag": {
+    "height": { "$value": "22px" },
+    "border": {
+      "radius": { "$value": "{radius.sm}" }
+    }
+  },
+  "modal": {
+    "border": {
+      "radius": { "$value": "{radius.xl}" }
+    },
+    "shadow": { "$value": "{shadow.modal}" }
+  }
+}

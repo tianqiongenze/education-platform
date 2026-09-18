@@ -4,6 +4,8 @@ import com.ep.order.api.CreateOrderCmd;
 import com.ep.order.api.OrderDto;
 import com.ep.order.api.OrderStatus;
 import com.ep.order.model.OrderModel;
+import com.ep.order.event.OutboxEntity;
+import com.ep.order.event.OutboxRepository;
 import com.ep.order.infrastructure.PulsarEventPublisher;
 import com.ep.order.repository.OrderRepository;
 import com.ep.cache.CacheService;
@@ -70,6 +72,11 @@ class OrderServiceImplTest {
     private PaymentService paymentService;
     @Mock
     private StateMachineEngine sagaEngine;
+    @Mock
+    private OutboxRepository outboxRepository;
+    /** D-218: fail-closed authoritative pricing port (stubbed per test). */
+    @Mock
+    private com.ep.order.pricing.CoursePricingPort coursePricingPort;
 
     private CacheService cacheService;
 
@@ -115,6 +122,50 @@ class OrderServiceImplTest {
         // @DubboReference field - inject the mock directly.
         ReflectionTestUtils.setField(orderService, "paymentService", paymentService);
         ReflectionTestUtils.setField(orderService, "cacheService", cacheService);
+        // D-218: default stub — authoritative price matches the client amount
+        // so existing amount assertions hold; individual tests override.
+        lenient().when(coursePricingPort.authoritativePrice(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new BigDecimal("99.00"));
+    }
+
+    // ---------------- D-218: server-side amount verification ----------------
+
+    @Test
+    void createOrder_clientAmountOverriddenByAuthoritativePrice() {
+        CreateOrderCmd cmd = sampleCmd(); // client claims 99.00
+        when(coursePricingPort.authoritativePrice(200L)).thenReturn(new BigDecimal("59.00"));
+        when(orderRepository.findByIdempotencyKey(cmd.idempotencyKey())).thenReturn(Optional.empty());
+        captureAndAssignId(21L);
+
+        OrderDto result = orderService.createOrder(cmd);
+
+        assertEquals(new BigDecimal("59.00"), result.amount(),
+                "order amount must be the server-resolved price, never the client value");
+    }
+
+    @Test
+    void createOrder_pricingLookupFails_rejectedFailClosed() {
+        CreateOrderCmd cmd = sampleCmd();
+        when(coursePricingPort.authoritativePrice(200L))
+                .thenThrow(new IllegalStateException("D-218 fail-closed: pricing lookup failed"));
+
+        assertThrows(IllegalStateException.class, () -> orderService.createOrder(cmd));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void listUserOrders_pageSizeCappedAt100() {
+        // size=10^6 would scrape the full table; the cap must clamp it to 100.
+        when(orderRepository.findByUserIdOrderByOrderIdAsc(
+                org.mockito.ArgumentMatchers.eq(100L),
+                org.mockito.ArgumentMatchers.any(org.springframework.data.domain.PageRequest.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        orderService.listUserOrders(100L, 1, 1_000_000);
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.PageRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.PageRequest.class);
+        org.mockito.Mockito.verify(orderRepository)
+                .findByUserIdOrderByOrderIdAsc(org.mockito.ArgumentMatchers.eq(100L), captor.capture());
+        assertEquals(100, captor.getValue().getPageSize(), "page size must be capped at 100");
     }
 
     // ---------------- createOrder ----------------
@@ -208,8 +259,17 @@ class OrderServiceImplTest {
         assertEquals("5", req.orderId());
         assertEquals(PaymentChannel.WECHAT, req.channel());
         assertEquals(new BigDecimal("99.00"), req.amount());
-        // event published post-commit
-        verify(eventPublisher, times(1)).publish(any());
+        // D-217: domain event saved to outbox (not published directly).
+        verify(eventPublisher, never()).publish(any());
+        ArgumentCaptor<OutboxEntity> outboxCaptor = ArgumentCaptor.forClass(OutboxEntity.class);
+        verify(outboxRepository, times(1)).save(outboxCaptor.capture());
+        OutboxEntity saved = outboxCaptor.getValue();
+        assertEquals("Order", saved.getAggregateType());
+        assertEquals("5", saved.getAggregateId());
+        assertEquals("OrderPaidEvent", saved.getEventType());
+        assertNotNull(saved.getEventId());
+        assertNotNull(saved.getPayload());
+        assertNotNull(saved.getCreatedAt());
         // D-182: pay should evict the order cache entries.
         verify(cacheService).evict("order:detail", "5");
         verify(cacheService).evict("order:by-user-course", "100:200");
@@ -264,8 +324,9 @@ class OrderServiceImplTest {
         assertEquals(OrderStatus.REFUNDED.getCode(), order.getStatus());
         // THE FIX: payment refund was actually called
         verify(paymentService, times(1)).refund(eq("8"), eq(new BigDecimal("50.00")), eq("user request"));
-        // event published
-        verify(eventPublisher, times(1)).publish(any());
+        // D-217: domain event saved to outbox (not published directly).
+        verify(eventPublisher, never()).publish(any());
+        verify(outboxRepository, times(1)).save(any(OutboxEntity.class));
         // D-182: refund should evict the order cache entries.
         verify(cacheService).evict("order:detail", "8");
         verify(cacheService).evict("order:by-user-course", "100:200");

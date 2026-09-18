@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /**
  * 单元路由核心 — 根据 userId 计算目标 cell, 处理 misroute 纠正与 failover 写挂起.
  *
- * <p>设计见 sp01-sdd §4.1.1. 路由流程:
+ * <p>设计见 user-service-sdd §4.1.1. 路由流程:
  * <ol>
  *   <li>hash 计算 target cell</li>
  *   <li>misroute 检测: 若 currentCell != target, 递增纠正计数; 超限则 Reject(403),

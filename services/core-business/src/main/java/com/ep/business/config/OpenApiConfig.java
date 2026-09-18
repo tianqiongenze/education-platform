@@ -16,7 +16,7 @@ public class OpenApiConfig {
     public OpenAPI epOpenAPI() {
         return new OpenAPI()
             .info(new Info()
-                .title("SP03 Business API")
+                .title("core-business Business API")
                 .description("Education Platform")
                 .version("1.0.0")
                 .contact(new Contact().name("EP Team")))

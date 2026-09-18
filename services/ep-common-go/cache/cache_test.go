@@ -156,11 +156,12 @@ func TestEvictClearsL1L2AndPublishes(t *testing.T) {
 		t.Fatalf("want 2 loader calls after evict, got %d", calls)
 	}
 
-	// The broadcast must have delivered the full key.
+	// D-216: the broadcast uses the cross-language JSON wire contract.
 	select {
 	case msg := <-ch:
-		if msg.Payload != "c:k4" {
-			t.Fatalf("want payload c:k4, got %s", msg.Payload)
+		want := `{"cacheName":"c","key":"k4"}`
+		if msg.Payload != want {
+			t.Fatalf("want payload %s, got %s", want, msg.Payload)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("did not receive invalidation message within 1s")

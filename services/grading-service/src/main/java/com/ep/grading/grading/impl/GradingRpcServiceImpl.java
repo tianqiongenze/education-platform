@@ -25,7 +25,7 @@ import java.util.Objects;
 
 /**
  * D-050 P2-5: Dubbo provider implementing the shared {@link GradingRpcService}
- * contract published in the sp05-api module.
+ * contract published in the grading-service-api module.
  *
  * <p>Closes the audit D-048 P2-5 gap: mcp-server's
  * {@code KnowledgeToolService.gradeSubmission} previously threw
@@ -40,13 +40,13 @@ import java.util.Objects;
  *       is deterministic, not AI). This is the deterministic baseline; the real
  *       rubric table lookup will be added when the rubric service lands.</li>
  *   <li><b>Subjective questions</b> ({@code rubricId} present): graded via the
- *       sp04 AI grading Dubbo service ({@link AiGradingRpcService}) when
+ *       AI grading Dubbo service ({@link AiGradingRpcService}) when
  *       {@code ep.ai-grading.enabled=true}. On AI failure or when AI grading
  *       is disabled, the stage applies the configured fallback ({@code pending}
  *       by default — returns a MANUAL placeholder score so the contract stays
  *       live; {@code fail} rethrows for the production fail-loud profile).
  *       The hook point is {@link #gradeSubjective(GradingRequest)} so all
- *       sp04 wiring is localized.</li>
+ *       AI wiring is localized.</li>
  * </ul>
  *
  * <h3>Iron-law compliance</h3>
@@ -81,13 +81,13 @@ public class GradingRpcServiceImpl implements GradingRpcService {
 
     /**
      * ai-platform AI grading Dubbo reference. {@code check=false} so dev/test
-     * starts cleanly even when sp04 is not registered with Nacos.
+     * starts cleanly even when the AI grading service is not registered with Nacos.
      */
     @DubboReference(check = false)
     private AiGradingRpcService aiGrading;
 
     /**
-     * Gate AI grading: disabled by default so dev/test never depend on sp04.
+     * Gate AI grading: disabled by default so dev/test never depend on the AI grading service.
      * Enable in prod (or via {@code AI_GRADING_ENABLED=true}).
      */
     @Value("${ep.ai-grading.enabled:false}")
@@ -180,7 +180,7 @@ public class GradingRpcServiceImpl implements GradingRpcService {
     }
 
     /**
-     * Subjective grading hook. Wired to the sp04 AI grading Dubbo service
+     * Subjective grading hook. Wired to the AI grading Dubbo service
      * ({@link AiGradingRpcService}) when {@code ep.ai-grading.enabled=true}.
      *
      * <p>Behavior:
@@ -254,7 +254,7 @@ public class GradingRpcServiceImpl implements GradingRpcService {
     private GradingResult pendingSubjective(GradingRequest request) {
         return new GradingResult(
                 75,
-                "Subjective answer received; AI rubric scoring pending sp04 integration (rubric="
+                "Subjective answer received; AI rubric scoring pending AI integration (rubric="
                         + request.rubricId() + ").",
                 Instant.now(),
                 GraderType.MANUAL,

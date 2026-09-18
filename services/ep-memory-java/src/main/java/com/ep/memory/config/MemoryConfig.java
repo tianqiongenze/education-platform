@@ -16,7 +16,7 @@ public class MemoryConfig {
     /** Dubbo RPC first; fall back to HTTP when false or RPC unavailable. */
     private boolean useRpc = true;
 
-    /** SP-04 AI Gateway base URL used by the HTTP fallback client. */
+    /** AI Gateway base URL used by the HTTP fallback client. */
     private String gatewayUrl = "http://ai-platform-gateway:8000";
 
     /** HTTP / RPC timeout in seconds. */

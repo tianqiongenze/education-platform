@@ -192,13 +192,39 @@ describe('createClient', () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
-    it('propagates non-ApiError without retry', async () => {
-      const fetcher = vi.fn().mockRejectedValueOnce(new Error('network down'));
-      const config = makeConfig({ fetcher });
+    it('retries idempotent GET once on network errors, then propagates', async () => {
+      const fetchMock = vi
+        .fn<Fetcher>()
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockRejectedValueOnce(new Error('network down'));
+      const config = makeConfig({ fetcher: fetchMock as unknown as Fetcher });
       const client = createClient(config);
 
       await expect(client.get('/api/user/profile')).rejects.toThrow('network down');
-      expect(fetcher).toHaveBeenCalledTimes(1);
+      // Initial attempt + exactly one automatic retry (GET is idempotent).
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('network-error retry can be disabled per request', async () => {
+      const fetchMock = vi.fn<Fetcher>().mockRejectedValue(new Error('network down'));
+      const config = makeConfig({ fetcher: fetchMock as unknown as Fetcher });
+      const client = createClient(config);
+
+      await expect(
+        client.get('/api/user/profile', undefined, { retry: false })
+      ).rejects.toThrow('network down');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry non-GET requests on network errors', async () => {
+      const fetchMock = vi.fn<Fetcher>().mockRejectedValue(new Error('network down'));
+      const config = makeConfig({ fetcher: fetchMock as unknown as Fetcher });
+      const client = createClient(config);
+
+      await expect(
+        client.post('/api/course/c1/enroll', { userId: 'u1' })
+      ).rejects.toThrow('network down');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('propagates 500 errors without retry', async () => {

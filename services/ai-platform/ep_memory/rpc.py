@@ -2,7 +2,7 @@
 
 This module documents the canonical JSON wire protocol consumed by the
 ``ep-memory-java`` SDK (``com.ep.memory.MemoryClient`` / ``MemoryRpcService``).
-The Java SDK talks to the SP-04 AI Gateway REST surface (``/v1/memory/*``);
+The Java SDK talks to the AI AI Gateway REST surface (``/v1/memory/*``);
 ``rpc.py`` is intentionally framework-agnostic: it only defines the request /
 response schemas and the dispatch table so that:
 

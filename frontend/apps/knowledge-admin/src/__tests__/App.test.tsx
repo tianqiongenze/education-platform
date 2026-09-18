@@ -1,16 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import KnowledgeLayout from '../layouts/KnowledgeLayout';
-
-// ErrorBoundary from @ep/ui-kit imports @tarojs/components (View), which is
-// not available in this Web app's test environment. Provide a minimal mock.
-vi.mock('@ep/ui-kit', () => ({
-  ErrorBoundary: ({ children }: { children: ReactNode }) => children,
-}));
 
 function renderLayout(path = '/knowledge-bases') {
   return render(

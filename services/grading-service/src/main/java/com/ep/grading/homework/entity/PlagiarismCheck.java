@@ -42,6 +42,26 @@ public class PlagiarismCheck implements Serializable {
     public PlagiarismCheck() {
     }
 
+    /**
+     * D-224: rich aggregate behaviour — classifies a similarity score into a
+     * plagiarism verdict and stamps the audit timestamp. The classification
+     * thresholds (CLEAN &lt; 0.3 ≤ REVIEWING &lt; 0.7 ≤ FLAGGED) are owned by
+     * the aggregate, not the service layer.
+     *
+     * @param similarityScore similarity in [0.0, 1.0]
+     */
+    public void classify(double similarityScore) {
+        this.similarityScore = similarityScore;
+        if (similarityScore < 0.3) {
+            this.status = PlagiarismStatus.CLEAN;
+        } else if (similarityScore >= 0.7) {
+            this.status = PlagiarismStatus.FLAGGED;
+        } else {
+            this.status = PlagiarismStatus.REVIEWING;
+        }
+        this.checkedAt = java.time.LocalDateTime.now();
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getSubmissionId() { return submissionId; }

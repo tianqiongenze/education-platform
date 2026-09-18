@@ -1,5 +1,5 @@
 server:
-  port: 8090   # SP-07 MCP Server HTTP endpoint
+  port: 8090   # Knowledge Platform MCP Server HTTP endpoint
 
 spring:
   application:
@@ -26,7 +26,7 @@ spring:
         type: SYNC
         protocol: STREAMABLE
         instructions: >
-          SP-07 Knowledge Platform MCP Server. Exposes knowledge search,
+          Knowledge Platform MCP Server. Exposes knowledge search,
           submission grading, and quiz generation tools for the education platform.
           All tools are multi-tenant (D-044): tenant isolation enforced per-request.
         tool-change-notification: true
@@ -44,7 +44,7 @@ dubbo:
   registry:
     address: nacos://nacos:8848
   scan:
-    base-packages: com.ep.sp07.mcp
+    base-packages: com.ep.mcp
   consumer:
     check: false   # don't fail-fast if a provider isn't up yet
     timeout: 5000

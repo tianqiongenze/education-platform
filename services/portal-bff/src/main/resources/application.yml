@@ -45,7 +45,7 @@ dubbo:
   # 按服务粒度的超时配置 (覆盖全局 consumer.timeout)
   config-center:
     timeout: 3000
-  # SP-03 业务服务: 查询型调用 5s, 写操作 3s (由 @DubboReference 注解细化)
+  # core-business 业务服务: 查询型调用 5s, 写操作 3s (由 @DubboReference 注解细化)
   # ep-api/HealthRpcService: 探针 2s
 
 # D-117: JWT RS256 密钥外化。
@@ -68,6 +68,16 @@ ep:
   pulsar:
     enabled: false
     service-url: pulsar://pulsar-broker:6650
+  # D-event-loop: CoursePublishedConsumer — subscribes the core-business
+  # domain-events topic and warms the course-detail cache (ep-cache L1/L2 via
+  # the core-business course-detail HTTP endpoint). Default OFF: enabling it
+  # requires a reachable Pulsar broker; without one the consumer degrades to a
+  # no-op (no startup failure).
+  event-consumer:
+    enabled: false
+    topic: persistent://public/default/ep-business-domain-events
+    subscription: portal-bff-course-warmup
+    core-business-base-url: http://core-business:8083
   cell-router:
     enabled: true
     cells: bj,sz,hz,sg
@@ -133,17 +143,17 @@ springdoc:
     urls:
       - name: BFF Gateway (本地)
         url: /v3/api-docs
-      - name: SP02 Data (数据中台)
+      - name: data-platform Data (数据中台)
         url: /proxy/data/v3/api-docs
-      - name: SP03 Business (课程/用户)
+      - name: core-business Business (课程/用户)
         url: /proxy/itbackend/v3/api-docs
-      - name: SP03 Order (订单中台)
+      - name: Order (订单中台)
         url: /proxy/order/v3/api-docs
-      - name: SP03 Payment (支付中台)
+      - name: Payment (支付中台)
         url: /proxy/payment/v3/api-docs
-      - name: SP04 AI (AI中台)
+      - name: AI (AI中台)
         url: /proxy/ai/v3/api-docs
-      - name: SP07 Knowledge (知识中台)
+      - name: Knowledge (知识中台)
         url: /proxy/knowledge/v3/api-docs
 
 # D-154 P2-10: Resilience4j rate limiter for the BFF proxy entry point.

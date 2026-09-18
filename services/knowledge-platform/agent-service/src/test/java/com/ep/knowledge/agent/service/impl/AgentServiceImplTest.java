@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
  * generation, default mode, 30-day TTL, index update) and tenant-scoped lookup.
  *
  * <p>Uses {@code @ExtendWith(MockitoExtension.class)} + {@code @Mock} per the
- * sp07 service-test convention.
+ * knowledge-platform service-test convention.
  */
 @ExtendWith(MockitoExtension.class)
 class AgentServiceImplTest {

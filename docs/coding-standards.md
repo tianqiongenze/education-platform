@@ -170,17 +170,17 @@ if (keyword) params.keyword = keyword;
 | knowledge-admin | 3003 | Vite dev |
 | bff-java | 8090 | Spring Boot |
 | gateway-go | 8081 | Go HTTP |
-| sp02-data | 8082 | Spring Boot |
-| sp03-business | 8083 | Spring Boot |
-| sp03-order | 8084 | Spring Boot |
-| sp05-itbackend | 8085 | Spring Boot |
-| sp04-ai | 8086 | Python (Litestar/Granian) |
-| sp03-payment | 8087 | Spring Boot |
-| sp07-bff | 8070 | Spring Boot |
-| sp07-knowledge | 8071 | Spring Boot |
-| sp07-retrieval | 8072 | Spring Boot |
-| sp07-agent | 8073 | Spring Boot |
-| sp07-tenant | 8074 | Spring Boot |
+| data-platform | 8082 | Spring Boot |
+| core-business | 8083 | Spring Boot |
+| order | 8084 | Spring Boot |
+| grading-service | 8085 | Spring Boot |
+| ai-platform | 8086 | Python (Litestar/Granian) |
+| payment | 8087 | Spring Boot |
+| portal-bff | 8070 | Spring Boot |
+| knowledge-platform | 8071 | Spring Boot |
+| knowledge-retrieval | 8072 | Spring Boot |
+| knowledge-agent | 8073 | Spring Boot |
+| knowledge-tenant | 8074 | Spring Boot |
 
 ---
 

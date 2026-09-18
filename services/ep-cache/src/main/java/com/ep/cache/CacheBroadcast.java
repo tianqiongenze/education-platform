@@ -21,4 +21,15 @@ public interface CacheBroadcast {
      * @param key       cache entry key within that cache
      */
     void publishEvict(String cacheName, String key);
+
+    /**
+     * D-216: broadcast a whole-cache eviction (all keys under cacheName).
+     * Implemented via the reserved key {@code "*"} on the existing wire
+     * format so no new payload schema is needed.
+     *
+     * @param cacheName logical cache name to clear cluster-wide
+     */
+    default void publishEvictAll(String cacheName) {
+        publishEvict(cacheName, "*");
+    }
 }

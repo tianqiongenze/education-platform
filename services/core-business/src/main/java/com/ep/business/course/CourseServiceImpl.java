@@ -5,6 +5,7 @@ import com.ep.business.common.DomainEvent;
 import com.ep.business.common.SnowflakeIdGenerator;
 import com.ep.business.event.PulsarEventPublisher;
 import com.ep.cache.CacheService;
+import com.ep.web.common.tenant.TenantContext;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,9 +26,12 @@ public class CourseServiceImpl implements CourseService {
     /** D-182: cache names and TTLs for the course domain. */
     private static final String CACHE_COURSE = "course";
     private static final String CACHE_COURSE_LIST = "course:list";
+    private static final String CACHE_COURSE_SEARCH = "course:search";
     private static final String LIST_ALL_KEY = "all";
     private static final long COURSE_TTL_SEC = 300;
     private static final long COURSE_LIST_TTL_SEC = 300;
+    /** P0 补齐高频未缓存读：search 结果短 TTL 缓存（30s）。 */
+    private static final long COURSE_SEARCH_TTL_SEC = 30;
 
     private final CourseRepository courseRepository;
     private final PulsarEventPublisher eventPublisher;
@@ -64,7 +68,8 @@ public class CourseServiceImpl implements CourseService {
         course.setUpdatedAt(now);
         Course saved = courseRepository.save(course);
         // D-182: evict list cache since a new course changes the list.
-        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
+        cacheService.evictAll(CACHE_COURSE_LIST); // D-216: pagination keys are unbounded — evict whole cache
+        cacheService.evictAll(CACHE_COURSE_SEARCH); // new course may match existing search keywords
         return saved;
     }
 
@@ -72,7 +77,9 @@ public class CourseServiceImpl implements CourseService {
     @Transactional(readOnly = true)
     public Course getCourseById(Long courseId) {
         Objects.requireNonNull(courseId, "courseId must not be null");
-        return cacheService.getOrLoad(CACHE_COURSE, String.valueOf(courseId),
+        // P0 (audit: 租户未进 key): tenant dimension from TenantContext is part
+        // of the cache key so two tenants can never read each other's entry.
+        return cacheService.getOrLoad(CACHE_COURSE, currentTenant(), String.valueOf(courseId),
                 () -> courseRepository.findById(courseId).orElse(null), COURSE_TTL_SEC, true);
     }
 
@@ -81,7 +88,11 @@ public class CourseServiceImpl implements CourseService {
     public List<Course> listCourses(Integer page, Integer size) {
         int p = page == null || page < 1 ? 1 : page;
         int s = size == null || size < 1 ? 10 : size;
-        return cacheService.getOrLoad(CACHE_COURSE_LIST, LIST_ALL_KEY,
+        // D-216 (audit P1-4): the key used to be a constant "all" — every
+        // page/size combination shared one entry, so page 2 served page 1's
+        // cached result and any evict polluted all paginations.
+        String listKey = "p" + p + ":" + s;
+        return cacheService.getOrLoad(CACHE_COURSE_LIST, currentTenant(), listKey,
                 () -> {
                     Page<Course> pageResult = courseRepository.findAllByOrderByCourseIdAsc(PageRequest.of(p - 1, s));
                     return new ArrayList<>(pageResult.getContent());
@@ -92,7 +103,15 @@ public class CourseServiceImpl implements CourseService {
     @Transactional(readOnly = true)
     public List<Course> searchCourses(String keyword) {
         requireNonBlank(keyword, "keyword");
-        return courseRepository.findByTitleContainingOrderByCourseIdAsc(keyword);
+        // 补齐高频未缓存读：search 结果走 30s 短 TTL 缓存（同样带租户维度）。
+        return cacheService.getOrLoad(CACHE_COURSE_SEARCH, currentTenant(), keyword,
+                () -> courseRepository.findByTitleContainingOrderByCourseIdAsc(keyword),
+                COURSE_SEARCH_TTL_SEC, false);
+    }
+
+    /** Current tenant for cache-key scoping (defaults to "default" when unset). */
+    private static String currentTenant() {
+        return TenantContext.getTenantIdOrDefault();
     }
 
     @Override
@@ -105,9 +124,10 @@ public class CourseServiceImpl implements CourseService {
         course.publish();
         courseRepository.save(course);
         publishEvents(course);
-        // D-182: evict cached course + list after a state change.
-        cacheService.evict(CACHE_COURSE, String.valueOf(courseId));
-        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
+        // D-182: evict cached course + list after a state change (P0: tenant-scoped key).
+        cacheService.evict(CACHE_COURSE, currentTenant(), String.valueOf(courseId));
+        cacheService.evictAll(CACHE_COURSE_LIST); // D-216: pagination keys are unbounded — evict whole cache
+        cacheService.evictAll(CACHE_COURSE_SEARCH);
     }
 
     @Override
@@ -120,9 +140,10 @@ public class CourseServiceImpl implements CourseService {
         course.archive();
         courseRepository.save(course);
         publishEvents(course);
-        // D-182: evict cached course + list after a state change.
-        cacheService.evict(CACHE_COURSE, String.valueOf(courseId));
-        cacheService.evict(CACHE_COURSE_LIST, LIST_ALL_KEY);
+        // D-182: evict cached course + list after a state change (P0: tenant-scoped key).
+        cacheService.evict(CACHE_COURSE, currentTenant(), String.valueOf(courseId));
+        cacheService.evictAll(CACHE_COURSE_LIST); // D-216: pagination keys are unbounded — evict whole cache
+        cacheService.evictAll(CACHE_COURSE_SEARCH);
     }
 
     /** Sentinel block handler — signature must match the protected method plus BlockException. */

@@ -3,18 +3,18 @@ package com.ep.data.nlquery;
 /**
  * Configuration for the NL Query Text-to-SQL module (ADR-D08, §12.4.1).
  *
- * <p>Holds the SP-04 AI Gateway connection parameters and LLM generation
+ * <p>Holds the AI Gateway connection parameters and LLM generation
  * settings. The {@link #fromEnv()} static factory reads from environment
  * variables (with sensible defaults) so the module is usable in dev/CI
  * without any external configuration.
  *
  * <p>Implemented as a Java record per D-040 (GraalVM AOT compatible).
  *
- * <p>Note: {@code gatewayUrl} must be the base URL of the SP-04 gateway
+ * <p>Note: {@code gatewayUrl} must be the base URL of the AI gateway
  * (e.g. {@code http://localhost:8000}); the {@link AiGatewayClient} appends
  * the {@code /v1/chat/completions} path at call time.
  *
- * @param gatewayUrl  base URL of the SP-04 AI Gateway (no path)
+ * @param gatewayUrl  base URL of the AI Gateway (no path)
  * @param model       LLM model id (e.g. {@code gpt-4o})
  * @param temperature sampling temperature (0.0 = deterministic)
  * @param timeoutSec  HTTP timeout in seconds
@@ -28,7 +28,7 @@ public record NlQueryConfig(
         int maxTokens
 ) {
 
-    /** Default SP-04 gateway base URL. */
+    /** Default AI gateway base URL. */
     public static final String DEFAULT_GATEWAY_URL = "http://localhost:8000";
 
     /** Default LLM model id. */
@@ -49,21 +49,21 @@ public record NlQueryConfig(
      *
      * <p>Environment variables:
      * <ul>
-     *   <li>{@code SP04_GATEWAY_URL} — default {@value #DEFAULT_GATEWAY_URL}</li>
-     *   <li>{@code SP04_LLM_MODEL} — default {@value #DEFAULT_MODEL}</li>
-     *   <li>{@code SP04_LLM_TEMPERATURE} — default {@value #DEFAULT_TEMPERATURE}</li>
-     *   <li>{@code SP04_LLM_TIMEOUT_SEC} — default {@value #DEFAULT_TIMEOUT_SEC}</li>
-     *   <li>{@code SP04_LLM_MAX_TOKENS} — default {@value #DEFAULT_MAX_TOKENS}</li>
+     *   <li>{@code EP_AI_GATEWAY_URL} — default {@value #DEFAULT_GATEWAY_URL}</li>
+     *   <li>{@code EP_AI_LLM_MODEL} — default {@value #DEFAULT_MODEL}</li>
+     *   <li>{@code EP_AI_LLM_TEMPERATURE} — default {@value #DEFAULT_TEMPERATURE}</li>
+     *   <li>{@code EP_AI_LLM_TIMEOUT_SEC} — default {@value #DEFAULT_TIMEOUT_SEC}</li>
+     *   <li>{@code EP_AI_LLM_MAX_TOKENS} — default {@value #DEFAULT_MAX_TOKENS}</li>
      * </ul>
      *
      * @return resolved configuration
      */
     public static NlQueryConfig fromEnv() {
-        String gatewayUrl = resolveEnv("SP04_GATEWAY_URL", DEFAULT_GATEWAY_URL);
-        String model = resolveEnv("SP04_LLM_MODEL", DEFAULT_MODEL);
-        double temperature = resolveDoubleEnv("SP04_LLM_TEMPERATURE", DEFAULT_TEMPERATURE);
-        int timeoutSec = resolveIntEnv("SP04_LLM_TIMEOUT_SEC", DEFAULT_TIMEOUT_SEC);
-        int maxTokens = resolveIntEnv("SP04_LLM_MAX_TOKENS", DEFAULT_MAX_TOKENS);
+        String gatewayUrl = resolveEnv("EP_AI_GATEWAY_URL", DEFAULT_GATEWAY_URL);
+        String model = resolveEnv("EP_AI_LLM_MODEL", DEFAULT_MODEL);
+        double temperature = resolveDoubleEnv("EP_AI_LLM_TEMPERATURE", DEFAULT_TEMPERATURE);
+        int timeoutSec = resolveIntEnv("EP_AI_LLM_TIMEOUT_SEC", DEFAULT_TIMEOUT_SEC);
+        int maxTokens = resolveIntEnv("EP_AI_LLM_MAX_TOKENS", DEFAULT_MAX_TOKENS);
         return new NlQueryConfig(gatewayUrl, model, temperature, timeoutSec, maxTokens);
     }
 

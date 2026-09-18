@@ -15,6 +15,9 @@ public class CreateRoomCmd implements Serializable {
     @NotBlank
     private String roomName;
 
+    /** D-221: optional business idempotency key for create dedup. */
+    private String idempotencyKey;
+
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public Long getCourseId() { return courseId; }
@@ -23,4 +26,6 @@ public class CreateRoomCmd implements Serializable {
     public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
     public String getRoomName() { return roomName; }
     public void setRoomName(String roomName) { this.roomName = roomName; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 }

@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import { View } from '@tarojs/components';
+import { View } from '../../platform';
 
 interface Props {
   children: ReactNode;
@@ -26,7 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         this.props.fallback ?? (
-          <View className="ep-error-boundary">页面出错了</View>
+          // role="alert" so screen readers announce the failure immediately.
+          <View className="ep-error-boundary" role="alert">
+            页面出错了
+          </View>
         )
       );
     }

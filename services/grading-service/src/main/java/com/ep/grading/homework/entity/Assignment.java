@@ -8,8 +8,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
+import com.ep.grading.common.DomainEvent;
+import com.ep.grading.homework.event.AssignmentClosedEvent;
+import com.ep.grading.homework.event.AssignmentPublishedEvent;
+
 import java.io.Serializable;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @Entity
@@ -54,6 +61,13 @@ public class Assignment implements Serializable {
     @Version
     private Integer version;
 
+    /**
+     * D-201: domain events recorded by aggregate behavior methods. Transient
+     * (not persisted): the application service pulls them after a successful
+     * transaction via {@link #pullEvents()} and publishes to the event bus.
+     */
+    private transient final List<DomainEvent> events = new ArrayList<>();
+
     public Assignment() {
     }
 
@@ -95,6 +109,86 @@ public class Assignment implements Serializable {
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }
 
+    // --------------------- Domain behavior (state machine) ---------------------
+
+    /**
+     * Returns true iff the current status may transition to {@code newStatus}.
+     * <ul>
+     *   <li>DRAFT → PUBLISHED</li>
+     *   <li>PUBLISHED → CLOSED</li>
+     *   <li>CLOSED → ARCHIVED</li>
+     * </ul>
+     * Same-status is not a transition. ARCHIVED is terminal.
+     */
+    public boolean canTransitionTo(AssignmentStatus newStatus) {
+        if (newStatus == this.status) return false;
+        return switch (this.status) {
+            case DRAFT -> newStatus == AssignmentStatus.PUBLISHED;
+            case PUBLISHED -> newStatus == AssignmentStatus.CLOSED;
+            case CLOSED -> newStatus == AssignmentStatus.ARCHIVED;
+            case ARCHIVED -> false; // terminal
+        };
+    }
+
+    /**
+     * Transition DRAFT -> PUBLISHED. Validates the transition, records an
+     * {@link AssignmentPublishedEvent}, and stamps {@code updatedAt}.
+     *
+     * @throws IllegalStateException if the assignment is not in DRAFT status.
+     */
+    public void publish() {
+        if (status != AssignmentStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "Assignment not in DRAFT status, cannot publish. assignmentId=" + id
+                            + " status=" + status);
+        }
+        this.status = AssignmentStatus.PUBLISHED;
+        this.updatedAt = LocalDateTime.now();
+        recordEvent(new AssignmentPublishedEvent(
+                id == null ? 0L : id,
+                id,
+                courseId,
+                teacherId,
+                Instant.now()));
+    }
+
+    /**
+     * Transition PUBLISHED -> CLOSED. Validates the transition, records an
+     * {@link AssignmentClosedEvent}, and stamps {@code updatedAt}.
+     *
+     * @throws IllegalStateException if the assignment is not in PUBLISHED status.
+     */
+    public void close() {
+        if (status != AssignmentStatus.PUBLISHED) {
+            throw new IllegalStateException(
+                    "Assignment not in PUBLISHED status, cannot close. assignmentId=" + id
+                            + " status=" + status);
+        }
+        this.status = AssignmentStatus.CLOSED;
+        this.updatedAt = LocalDateTime.now();
+        recordEvent(new AssignmentClosedEvent(
+                id == null ? 0L : id,
+                id,
+                courseId,
+                teacherId,
+                Instant.now()));
+    }
+
+    /**
+     * Pull and clear recorded domain events. The application service calls
+     * this after the JPA transaction commits so the events can be published
+     * (post-commit) to the event bus.
+     */
+    public List<DomainEvent> pullEvents() {
+        List<DomainEvent> snapshot = new ArrayList<>(events);
+        events.clear();
+        return snapshot;
+    }
+
+    private void recordEvent(DomainEvent event) {
+        events.add(event);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -107,4 +201,3 @@ public class Assignment implements Serializable {
         return Objects.hash(id);
     }
 }
-

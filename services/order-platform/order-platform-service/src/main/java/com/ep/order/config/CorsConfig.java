@@ -10,7 +10,7 @@ import org.springframework.web.filter.CorsFilter;
 import java.util.List;
 
 /**
- * Standard CORS configuration for the SP-03 Order middle platform.
+ * Standard CORS configuration for the core-business Order middle platform.
  * Allowed origins are configurable via {@code cors.allowed-origins}.
  */
 @Configuration

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from litestar import Router, get, post
 from litestar.exceptions import HTTPException
 from litestar.response import Response
@@ -75,7 +77,13 @@ async def chat_completions(data: ChatRequest) -> Response[ChatResponse]:
     try:
         providers = _providers_for(data.model)
         flagship_providers = _flagship_providers_for()
-        response, meta = _cost_stack.execute(data, providers, flagship_providers)
+        # D-216 P0-7: the cost stack is fully synchronous (sync Redis cache +
+        # sync providers). Running it inline froze the event loop for the
+        # duration of every Redis hiccup / slow LLM call — offload to a worker
+        # thread so the loop keeps serving other requests.
+        response, meta = await asyncio.to_thread(
+            _cost_stack.execute, data, providers, flagship_providers
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

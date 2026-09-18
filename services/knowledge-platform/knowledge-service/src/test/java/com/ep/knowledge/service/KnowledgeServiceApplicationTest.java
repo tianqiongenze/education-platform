@@ -36,10 +36,11 @@ class KnowledgeServiceApplicationTest {
     void setUp() {
         documentMapper = mock(DocumentMapper.class);
         // D-182: inject a cache-miss CacheService mock (invokes the loader directly).
+        // P0 (租户未进 key): the service now uses the tenant-scoped 6-arg overload.
         CacheService cacheService = mock(CacheService.class);
-        lenient().when(cacheService.getOrLoad(any(), any(), any(Supplier.class), anyLong(), anyBoolean()))
+        lenient().when(cacheService.getOrLoad(any(), any(), any(), any(Supplier.class), anyLong(), anyBoolean()))
                 .thenAnswer(inv -> {
-                    Supplier<?> loader = inv.getArgument(2);
+                    Supplier<?> loader = inv.getArgument(3);
                     return loader.get();
                 });
         documentService = new DocumentServiceImpl(documentMapper, cacheService);

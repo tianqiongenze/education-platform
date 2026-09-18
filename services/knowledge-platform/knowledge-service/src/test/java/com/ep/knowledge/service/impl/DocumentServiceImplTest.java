@@ -9,6 +9,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.*;
  * extension allowlist. No Spring context is required.
  * <p>
  * D-182: also verifies {@link CacheService} getOrLoad/evict integration.
+ * P0 (租户未进 key): get/evict now go through the tenant-scoped overloads.
  */
 class DocumentServiceImplTest {
 
@@ -36,13 +38,15 @@ class DocumentServiceImplTest {
      * D-182: Create a CacheService mock that simulates a cache miss by invoking
      * the supplied loader. This keeps existing logic intact while allowing
      * cache-hit tests to override the stub.
+     * <p>
+     * P0: the service uses the tenant-scoped 6-arg overload (loader at index 3).
      */
     private static CacheService cacheMiss() {
         CacheService cs = mock(CacheService.class);
         // lenient: not every test exercises getOrLoad (upload/delete/parseAndChunk only evict).
-        lenient().when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+        lenient().when(cs.getOrLoad(anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
                 .thenAnswer(inv -> {
-                    Supplier<?> loader = inv.getArgument(2);
+                    Supplier<?> loader = inv.getArgument(3);
                     return loader.get();
                 });
         return cs;
@@ -159,7 +163,7 @@ class DocumentServiceImplTest {
                 () -> service.upload("t1", file, "c1"));
         assertTrue(ex.getMessage().contains("exe"));
         verify(documentMapper, never()).insert(any(Document.class));
-        verify(cacheService, never()).evict(anyString(), anyString());
+        verify(cacheService, never()).evict(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -170,7 +174,7 @@ class DocumentServiceImplTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.upload("t1", file, "c1"));
         verify(documentMapper, never()).insert(any(Document.class));
-        verify(cacheService, never()).evict(anyString(), anyString());
+        verify(cacheService, never()).evict(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -201,7 +205,8 @@ class DocumentServiceImplTest {
         assertEquals("doc-1", fetched.getId());
         assertEquals("hello.pdf", fetched.getTitle());
         // D-182: get must go through cache getOrLoad (TTL 600s, cacheEmpty=true).
-        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("doc-1"),
+        // P0: the tenant is part of the cache key.
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("t1"), eq("doc-1"),
                 any(Supplier.class), eq(600L), eq(true));
     }
 
@@ -215,7 +220,7 @@ class DocumentServiceImplTest {
         Document fetched = service.get("t1", "doc-2");
 
         assertNull(fetched, "tenant mismatch must return null");
-        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("doc-2"),
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("t1"), eq("doc-2"),
                 any(Supplier.class), eq(600L), eq(true));
     }
 
@@ -225,7 +230,7 @@ class DocumentServiceImplTest {
         Document cached = new Document();
         cached.setId("doc-ch");
         cached.setTenantId("t1");
-        when(cacheService.getOrLoad(eq("knowledge:document"), eq("doc-ch"),
+        when(cacheService.getOrLoad(eq("knowledge:document"), eq("t1"), eq("doc-ch"),
                 any(Supplier.class), eq(600L), eq(true)))
                 .thenReturn(cached);
 
@@ -236,20 +241,39 @@ class DocumentServiceImplTest {
     }
 
     @Test
+    void get_sameIdForTwoTenants_usesDistinctCacheKeys() {
+        // P0 (租户串号): the same document id requested by two tenants must
+        // produce two tenant-scoped getOrLoad calls — never a shared entry.
+        Document doc = new Document();
+        doc.setId("doc-shared");
+        doc.setTenantId("t1");
+        when(documentMapper.selectById("doc-shared")).thenReturn(doc);
+
+        service.get("t1", "doc-shared");
+        service.get("t2", "doc-shared");
+
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("t1"), eq("doc-shared"),
+                any(Supplier.class), eq(600L), eq(true));
+        verify(cacheService).getOrLoad(eq("knowledge:document"), eq("t2"), eq("doc-shared"),
+                any(Supplier.class), eq(600L), eq(true));
+    }
+
+    @Test
     void upload_evictsCacheAfterInsert() {
         // D-182: upload should evict the potentially cached null entry for the
-        // newly assigned document id.
+        // newly assigned document id (tenant-scoped) and the tenant's list cache.
         MultipartFile file = new MockMultipartFile(
                 "file", "test.pdf", "application/octet-stream", new byte[]{1});
 
         service.upload("t1", file, "c1");
 
-        verify(cacheService).evict(eq("knowledge:document"), anyString());
+        verify(cacheService).evict(eq("knowledge:document"), eq("t1"), anyString());
+        verify(cacheService).evictAll("knowledge:document:list");
     }
 
     @Test
     void delete_evictsCacheAfterDelete() {
-        // D-182: delete should evict the cache entry.
+        // D-182: delete should evict the cache entry (tenant-scoped).
         Document doc = new Document();
         doc.setId("doc-del");
         doc.setTenantId("t1");
@@ -258,7 +282,8 @@ class DocumentServiceImplTest {
         service.delete("t1", "doc-del");
 
         verify(documentMapper).deleteById((java.io.Serializable) "doc-del");
-        verify(cacheService).evict("knowledge:document", "doc-del");
+        verify(cacheService).evict("knowledge:document", "t1", "doc-del");
+        verify(cacheService).evictAll("knowledge:document:list");
     }
 
     @Test
@@ -272,6 +297,53 @@ class DocumentServiceImplTest {
         service.delete("t1", "doc-del2");
 
         verify(documentMapper, never()).deleteById(any(java.io.Serializable.class));
-        verify(cacheService, never()).evict(anyString(), anyString());
+        verify(cacheService, never()).evict(anyString(), anyString(), anyString());
+    }
+
+    // ---- list: tenant+category caching (60s) ------------------------------
+
+    @Test
+    void list_cachesByTenantAndCategory() {
+        when(documentMapper.selectList(any())).thenReturn(List.of());
+
+        service.list("t1", "cat-9");
+
+        verify(cacheService).getOrLoad(eq("knowledge:document:list"), eq("t1"), eq("cat-9"),
+                any(Supplier.class), eq(60L), eq(false));
+    }
+
+    @Test
+    void list_nullCategoryNormalizedToAll() {
+        when(documentMapper.selectList(any())).thenReturn(List.of());
+
+        service.list("t1", null);
+
+        verify(cacheService).getOrLoad(eq("knowledge:document:list"), eq("t1"), eq("all"),
+                any(Supplier.class), eq(60L), eq(false));
+    }
+
+    @Test
+    void list_sameCategoryForTwoTenants_usesDistinctCacheKeys() {
+        when(documentMapper.selectList(any())).thenReturn(List.of());
+
+        service.list("t1", "cat-1");
+        service.list("t2", "cat-1");
+
+        verify(cacheService).getOrLoad(eq("knowledge:document:list"), eq("t1"), eq("cat-1"),
+                any(Supplier.class), eq(60L), eq(false));
+        verify(cacheService).getOrLoad(eq("knowledge:document:list"), eq("t2"), eq("cat-1"),
+                any(Supplier.class), eq(60L), eq(false));
+    }
+
+    @Test
+    void list_returnsLoaderResult() {
+        Document doc = new Document();
+        doc.setId("d-l1");
+        when(documentMapper.selectList(any())).thenReturn(List.of(doc));
+
+        List<Document> result = service.list("t1", null);
+
+        assertEquals(1, result.size());
+        assertSame(doc, result.get(0));
     }
 }

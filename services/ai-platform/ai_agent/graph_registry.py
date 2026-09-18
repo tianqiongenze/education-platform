@@ -1,4 +1,4 @@
-"""Dynamic subgraph registry (SP-04 industry-agnostic refactoring).
+"""Dynamic subgraph registry (AI industry-agnostic refactoring).
 
 Builds the set of industry-specific agent subgraphs from an
 ``IndustryConfig``. Modules are imported via ``importlib`` and the named

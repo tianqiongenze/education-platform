@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -240,32 +241,81 @@ func (h *Hub) StartSubscribe(ctx context.Context) {
 	// in production, NoOpTransport in dev). Each message is bridged to local
 	// in-memory subscribers the same way Redis Pub/Sub messages are: we try
 	// session-targeted delivery first, then room delivery.
-	go h.crossPod.StartReceiving(ctx, func(payload []byte) {
-		if sid := extractSessionID(payload); sid != "" {
-			h.DeliverToSession(sid, payload)
-		}
-		if roomID := extractRoomID(payload); roomID != "" {
-			h.DeliverToRoom(roomID, payload)
-		}
-	})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[panic-recovery] cross-pod consumer panicked: %v", r)
+			}
+		}()
+		h.crossPod.StartReceiving(ctx, func(payload []byte) {
+			if sid := extractSessionID(payload); sid != "" {
+				h.DeliverToSession(sid, payload)
+			}
+			if roomID := extractRoomID(payload); roomID != "" {
+				h.DeliverToRoom(roomID, payload)
+			}
+		})
+	}()
 }
 
 // subscribePattern subscribes to a Redis key pattern and calls handler for
-// each received message. Blocks until ctx is cancelled.
+// each received message. It blocks until ctx is cancelled.
+//
+// P0-4: if the PubSub channel closes (e.g. Redis dropped the connection), the
+// loop re-subscribes with an exponential backoff (1s → 30s) instead of
+// returning permanently. Without this, a transient Redis blip would silently
+// strip this pod of all cross-pod broadcast reception for the rest of its life.
 func (h *Hub) subscribePattern(ctx context.Context, pattern string, handler func(payload string)) {
-	pubsub := h.rdb.PSubscribe(ctx, pattern)
-	defer pubsub.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[panic-recovery] subscribePattern(%s) panicked: %v", pattern, r)
+		}
+	}()
 
-	ch := pubsub.Channel()
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
+
+	backoff := initialBackoff
 	for {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+
+		pubsub := h.rdb.PSubscribe(ctx, pattern)
+		ch := pubsub.Channel()
+
+		channelClosed := false
+		for !channelClosed {
+			select {
+			case <-ctx.Done():
+				_ = pubsub.Close()
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					// Redis closed the subscription channel — reconnect below.
+					channelClosed = true
+					break
+				}
+				handler(msg.Payload)
+			}
+		}
+
+		// Channel closed: clean up this subscription and re-subscribe after backoff.
+		_ = pubsub.Close()
+		log.Printf("hub: pubsub channel for pattern %s closed, reconnecting in %v", pattern, backoff)
+
 		select {
 		case <-ctx.Done():
 			return
-		case msg, ok := <-ch:
-			if !ok {
-				return
-			}
-			handler(msg.Payload)
+		case <-time.After(backoff):
+		}
+
+		// Exponential backoff with a 30s cap.
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
 		}
 	}
 }

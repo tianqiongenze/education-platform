@@ -229,7 +229,7 @@ class AiGradingProviderImplTest {
     @Test
     void test_http_error_throws_runtime() {
         AiGradingProviderImpl impl = providerThrowing(
-                new RuntimeException("SP-04 gateway returned HTTP 503: upstream timeout"));
+                new RuntimeException("AI gateway returned HTTP 503: upstream timeout"));
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> impl.grade(req(LONG_ANSWER)));

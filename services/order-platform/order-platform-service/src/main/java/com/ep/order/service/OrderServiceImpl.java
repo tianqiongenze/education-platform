@@ -7,6 +7,8 @@ import com.ep.order.api.OrderService;
 import com.ep.order.api.OrderStatus;
 import com.ep.order.common.SnowflakeIdGenerator;
 import com.ep.order.event.DomainEvent;
+import com.ep.order.event.OutboxEntity;
+import com.ep.order.event.OutboxRepository;
 import com.ep.order.infrastructure.PulsarEventPublisher;
 import com.ep.order.model.OrderModel;
 import com.ep.order.repository.OrderRepository;
@@ -16,6 +18,7 @@ import com.ep.payment.api.PaymentResult;
 import com.ep.payment.api.PaymentService;
 import com.ep.payment.api.Refund;
 import com.ep.cache.CacheService;
+import com.ep.order.pricing.CoursePricingPort;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.seata.saga.engine.StateMachineEngine;
 import org.apache.dubbo.config.annotation.DubboReference;
@@ -27,6 +30,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * SP-03 Order middle-platform application service.
+ * core-business Order middle-platform application service.
  * <p>
  * Exposed over Dubbo via {@link DubboService @DubboService}. Implementing
  * {@link OrderService} (the thin RPC contract in order-platform-api).
@@ -55,7 +59,7 @@ import java.util.Objects;
  * The long-running order -> stock -> payment flow previously used Seata AT
  * ({@code @GlobalTransactional}). AT holds global locks for the entire flow,
  * which is unacceptable for long-running cross-service transactions, and there
- * is no live Seata TC server in dev/CI (the same gap that drove D-077 on sp05).
+ * is no live Seata TC server in dev/CI (the same gap that drove D-077 on grading-service).
  * <p>
  * The create-order flow is now driven by a Seata Saga state machine
  * ({@code create-order-saga.json}). Each forward step (reserveStock,
@@ -91,6 +95,15 @@ public class OrderServiceImpl implements OrderService {
     private final PulsarEventPublisher eventPublisher;
 
     /**
+     * D-217: Transactional-outbox repository. Domain events are persisted to
+     * {@code ep_outbox} in the SAME JPA transaction as the aggregate state
+     * change (see {@link #publishEvents(OrderModel)}), eliminating the dual-write
+     * gap where a Pulsar publish could be lost after commit or sent after a
+     * rollback. The {@code OutboxRelayService} drains the outbox asynchronously.
+     */
+    private final OutboxRepository outboxRepository;
+
+    /**
      * D-113: Seata Saga state-machine engine. Drives the long-running
      * order -> stock -> payment flow via the JSON definitions under
      * {@code src/main/resources/saga/}. Injected (rather than field-autowired)
@@ -113,14 +126,46 @@ public class OrderServiceImpl implements OrderService {
     @DubboReference(check = false, timeout = 10000)
     private PaymentService paymentService;
 
+    /**
+     * D-218: fail-closed authoritative course pricing. The client-supplied
+     * amount is never trusted — COURSE orders resolve the price through this
+     * port and override the client value.
+     */
+    private final CoursePricingPort coursePricingPort;
+
+    /** D-218: pagination size cap (anti-scraping). */
+    static final int MAX_PAGE_SIZE = 100;
+
     public OrderServiceImpl(OrderRepository orderRepository,
                             PulsarEventPublisher eventPublisher,
                             StateMachineEngine sagaEngine,
-                            CacheService cacheService) {
+                            CacheService cacheService,
+                            OutboxRepository outboxRepository,
+                            CoursePricingPort coursePricingPort) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.sagaEngine = sagaEngine;
         this.cacheService = cacheService;
+        this.outboxRepository = outboxRepository;
+        this.coursePricingPort = Objects.requireNonNull(coursePricingPort,
+                "coursePricingPort (D-218 fail-closed pricing) must not be null");
+    }
+
+    /**
+     * Legacy 5-arg constructor kept for existing unit tests that construct the
+     * service directly without a pricing port. Orders for COURSE products will
+     * be rejected fail-closed until a {@link CoursePricingPort} is provided.
+     */
+    public OrderServiceImpl(OrderRepository orderRepository,
+                            PulsarEventPublisher eventPublisher,
+                            StateMachineEngine sagaEngine,
+                            CacheService cacheService,
+                            OutboxRepository outboxRepository) {
+        this(orderRepository, eventPublisher, sagaEngine, cacheService, outboxRepository,
+                courseId -> {
+                    throw new IllegalStateException(
+                            "D-218 fail-closed: no pricing port configured — COURSE orders rejected");
+                });
     }
 
     @Override
@@ -133,17 +178,33 @@ public class OrderServiceImpl implements OrderService {
             throw new IllegalArgumentException("courseId/productId is required for COURSE orders");
         }
         Objects.requireNonNull(cmd.amount(), "amount must not be null");
+        if (cmd.amount().signum() <= 0) {
+            throw new IllegalArgumentException("amount must be > 0");
+        }
         requireNonBlank(cmd.idempotencyKey(), "idempotencyKey");
 
         if (orderRepository.findByIdempotencyKey(cmd.idempotencyKey()).isPresent()) {
             throw new IllegalStateException("Duplicate idempotency key: " + cmd.idempotencyKey());
+        }
+        // D-218: server-side amount verification (fail-closed). The client
+        // amount is never trusted: COURSE orders resolve the authoritative
+        // price over RPC and override the client value. Any pricing failure
+        // (provider down, course missing, price unset) rejects the order.
+        BigDecimal amount = cmd.amount();
+        if (OrderModel.PRODUCT_COURSE.equals(productType)) {
+            BigDecimal authoritative = coursePricingPort.authoritativePrice(cmd.courseId());
+            if (amount.compareTo(authoritative) != 0) {
+                log.warn("D-218: client amount {} overridden by authoritative price {} for courseId={}",
+                        amount, authoritative, cmd.courseId());
+            }
+            amount = authoritative;
         }
         long now = System.currentTimeMillis();
         OrderModel order = new OrderModel();
         order.setOrderId(SnowflakeIdGenerator.getInstance().nextId());
         order.setUserId(cmd.userId());
         order.setCourseId(cmd.courseId());
-        order.setAmount(cmd.amount());
+        order.setAmount(amount);
         order.setStatus(OrderStatus.PENDING.getCode());
         order.setPayMethod(null);
         order.setIdempotencyKey(cmd.idempotencyKey());
@@ -353,7 +414,9 @@ public class OrderServiceImpl implements OrderService {
     public List<OrderDto> listUserOrders(Long userId, Integer page, Integer size) {
         Objects.requireNonNull(userId, "userId must not be null");
         int p = page == null || page < 1 ? 1 : page;
-        int s = size == null || size < 1 ? 10 : size;
+        // D-218: pagination size cap — an unbounded size would allow
+        // full-table scraping with a single request (e.g. size=10^6).
+        int s = Math.min(size == null || size < 1 ? 10 : size, MAX_PAGE_SIZE);
         Page<OrderModel> pageResult = orderRepository.findByUserIdOrderByOrderIdAsc(
                 userId, PageRequest.of(p - 1, s));
         List<OrderDto> out = new ArrayList<>(pageResult.getNumberOfElements());
@@ -365,11 +428,29 @@ public class OrderServiceImpl implements OrderService {
 
     // --------------------- helpers ---------------------
 
+    /**
+     * D-217: Transactional-outbox write.
+     * <p>
+     * Domain events pulled from the aggregate are persisted to {@code ep_outbox}
+     * <b>inside</b> the caller's {@code @Transactional} boundary (createOrder /
+     * payOrder / refundOrder), so the event write is atomic with the business
+     * write. The {@code OutboxRelayService} later drains the outbox and forwards
+     * each row to Pulsar — this method does NOT publish directly, which closes
+     * the dual-write gap (no event lost on commit, no phantom event on
+     * rollback).
+     */
     private void publishEvents(OrderModel order) {
         List<DomainEvent> events = order.pullEvents();
         for (DomainEvent event : events) {
-            log.info("D-066: domain event recorded: {}", event);
-            eventPublisher.publish(event);
+            log.info("D-217: domain event saved to outbox: {}", event);
+            OutboxEntity outbox = new OutboxEntity();
+            outbox.setEventId(event.eventId());
+            outbox.setAggregateType("Order");
+            outbox.setAggregateId(String.valueOf(order.getOrderId()));
+            outbox.setEventType(event.eventType());
+            outbox.setPayload(event.toJson());
+            outbox.setCreatedAt(Instant.now());
+            outboxRepository.save(outbox);
         }
     }
 

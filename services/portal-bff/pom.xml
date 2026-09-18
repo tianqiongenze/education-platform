@@ -142,7 +142,7 @@
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
     </dependency>
-    <!-- D-070: springdoc-openapi replaced with swagger-models-jakarta directly (same as sp03/sp05).
+    <!-- D-070: springdoc-openapi replaced with swagger-models-jakarta directly (same as core-business/grading-service).
          springdoc references org.springframework.data.util.TypeInformation which SB4/Hibernate7 moved,
          causing NoClassDefFoundError during Dubbo bean scanning. -->
     <dependency>
@@ -170,12 +170,27 @@
       <artifactId>ep-cache</artifactId>
       <version>1.0.0</version>
     </dependency>
+    <!-- D-event-loop: Pulsar client for the CoursePublishedConsumer (course-detail
+         cache warm-up). Only used at runtime when ep.event-consumer.enabled=true
+         (default false); same version as every other service (root pom pulsar.version). -->
+    <dependency>
+      <groupId>org.apache.pulsar</groupId>
+      <artifactId>pulsar-client</artifactId>
+      <version>3.3.9</version>
+    </dependency>
     <!-- D-136: ArchUnit — architecture rule enforcement (layering, no cycles). -->
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit-junit5</artifactId>
       <version>1.3.0</version>
       <scope>test</scope>
+    </dependency>
+    <!-- D-225: PostgreSQL driver for CockroachDB (PG wire) on the
+         applications-cluster (TiDB absent; jdbc:postgresql URL via env). -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
   <build>

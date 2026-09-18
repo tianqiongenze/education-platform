@@ -32,7 +32,7 @@ public class PulsarClientProperties {
     }
 
     public static class Topic {
-        private String domainEvents = "persistent://public/default/sp03-domain-events";
+        private String domainEvents = "persistent://public/default/ep-business-domain-events";
 
         public String getDomainEvents() {
             return domainEvents;

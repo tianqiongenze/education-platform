@@ -40,3 +40,20 @@ jwt-*
 
 # superpowers SDD workspace (scratch, per-plan)
 .superpowers/sdd/
+
+# frontend
+node_modules/
+frontend/**/node_modules/
+.turbo/
+*.tsbuildinfo
+
+# jib image tars / large artifacts
+*.tar
+!deploy/**/*.tar
+
+# plan/session working files
+.zcode/plans/
+# python venv
+.venv/
+# taro/swc build cache
+.swc/

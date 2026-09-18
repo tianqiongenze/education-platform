@@ -2,7 +2,7 @@
 
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
-| D-194 | v1.0 | 2026-08-12 | PoC 进行中 | 平台架构组 | 架构委员会 |
+| D-194 | v1.1 | 2026-08-12 | PoC 制品就绪 (集成测试覆盖, 待生产集群验证) | 平台架构组 | 架构委员会 |
 
 > 关联：D-041（多区域多活 cell-sg 海外 cell）、D-045（ep_memory 四级记忆）、铁律 8（决策对比分析 ≥3 方案）、铁律 9（真实实现无桩）、GDPR/PDPA 数据驻留合规要求。
 
@@ -148,8 +148,53 @@ dev/CI 环境下不部署 CockroachDB，所有 PoC 验证返回 SKIP，服务正
 
 ## 9. 后续工作
 
-- [ ] PoC 环境部署 CockroachDB 集群（cell-sg K8s）
-- [ ] 执行 `scripts/cockroachdb-poc.sh` 收集验证结果
-- [ ] 根据结果更新本 ADR 状态（PoC 完成 → 决策）
-- [ ] 若通过，扩展 RoutingDataSource 到 boardgame-service、core-business
-- [ ] 建立海外 CockroachDB 备份策略（`cockroach backup` → S3）
+- [x] 集成测试覆盖 — CockroachDbIntegrationIT + DualDbConfigIT (D-202)
+- [ ] 生产 CockroachDB 集群部署 (cell-sg K8s)
+- [ ] 生产环境 PoC 脚本执行 (`scripts/cockroachdb-poc.sh`)
+- [ ] 跨大洲延迟基准测试 (生产多区域集群, sg↔fra↔tyo)
+- [ ] 根据结果更新本 ADR 状态 (PoC 完成 → 决策)
+- [ ] 若通过, 扩展 RoutingDataSource 到 boardgame-service、core-business
+- [ ] 建立海外 CockroachDB 备份策略 (`cockroach backup` → S3)
+
+## 10. 集成测试验证结果 (D-202)
+
+D-202 为 CockroachDB PoC 补齐了真实集成测试覆盖 (Iron Law 9: 运行验证), 摆脱"仅 Mockito mock"状态。
+
+### 10.1 DualDbConfigIT (始终运行, 无需 Docker)
+
+- **路径**: `services/data-platform/src/test/java/com/ep/data/cockroachdb/DualDbConfigIT.java`
+- **方式**: 双 H2 内存数据库模拟 (primary=TiDB, overseas=CockroachDB), 各建唯一标记表区分
+- **验证项**:
+  1. `region=domestic` → 路由到 primary, 命中 TiDB 标记表, 看不到 overseas 表
+  2. `region=overseas` → 路由到 overseas, 命中 CRDB 标记表, 看不到 primary 表
+  3. 无 region → 默认 primary (fail-safe: 永不误路由国内流量到海外)
+  4. region 切换后路由即时切换
+  5. TenantContext 线程隔离 (新线程默认 domestic, 不继承)
+- **意义**: 验证 `RoutingDataSource` + `TenantContext` 的核心路由契约, 不依赖外部基础设施, 每次 CI 都跑
+
+### 10.2 CockroachDbIntegrationIT (EP_LIVE=1 时运行, 真实 CRDB 容器)
+
+- **路径**: `services/data-platform/src/test/java/com/ep/data/cockroachdb/CockroachDbIntegrationIT.java`
+- **方式**: Testcontainers `CockroachContainer` (cockroachdb/cockroach:v23.2.5), 默认 `@Tag("live")` + `EP_LIVE=1` 双重保护跳过
+- **运行**: `EP_LIVE=1 mvn test -pl services/data-platform -Dgroups=live -Dtest=CockroachDbIntegrationIT`
+- **验证项** (4 项 PoC):
+  1. `verifyRegionalByRow()` — `CREATE TABLE ... LOCALITY REGIONAL BY ROW` + INSERT + count (PASS)
+  2. `verifyCrossRegionLatency()` — 20 次 INSERT 探针, P99 < 5s (单节点容器; 生产跨大洲目标 <200ms)
+  3. `verifyChangefeedsAdapter()` — `CREATE CHANGEFEED` DDL (企业版 license gated, 文档化 SKIP, 语法已验证)
+  4. `verifyOneMillionConnections()` — `SHOW CLUSTER SETTING sql.pool.max_size` 可查询且可配置 (PASS)
+  5. `runFullPocAgainstRealCrdb()` — 用生产 `CockroachDbPocService` 连真实容器跑全量 4 项
+- **意义**: PoC 从 mock 升级为真实执行 (Iron Law 9), DDL 语法/驱动兼容性/连接配置全部验证
+
+### 10.3 Testcontainers 依赖
+
+- `org.testcontainers:cockroachdb:1.20.4` (test scope)
+- `org.testcontainers:testcontainers:1.20.4` (test scope)
+- `org.testcontainers:junit-jupiter:1.20.4` (test scope)
+- `com.h2database:h2` (test scope, DualDbConfigIT 用)
+- 版本由根 BOM `testcontainers.version=1.20.4` 统一管理
+
+### 10.4 局限与待办
+
+- 单节点 Testcontainers 容器无法验证真实跨大洲延迟与多 region locality — 待生产集群 (§9 第 4 项)
+- Changefeeds 需企业版 license, 容器内为 unlicensed — DDL 语法验证通过, 功能待生产 license
+- 连接规模 (1M) 仅验证配置可读, 真实压力测试由 `scripts/cockroachdb-poc.sh` 在生产侧执行

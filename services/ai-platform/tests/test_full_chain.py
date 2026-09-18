@@ -1,6 +1,6 @@
-"""Full-chain functional test: student submission → SP-04 AI Gateway grading → grade returned.
+"""Full-chain functional test: student submission → AI AI Gateway grading → grade returned.
 
-This test connects to the real SP-04 AI Gateway (port-forwarded to localhost:8086)
+This test connects to the real AI AI Gateway (port-forwarded to localhost:8086)
 and verifies the end-to-end AI grading pipeline: health, grading via chat completions
 proxy, embeddings (RAG indexing), and memory-assisted learning context retrieval.
 

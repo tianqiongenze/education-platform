@@ -22,11 +22,11 @@ export interface IdeEditorProps {
   /** IDE session id (also the Yjs doc id). */
   sessionId: string;
   /** JWT access token for WebSocket auth. */
-  token?: string;
+  token?: string | undefined;
   /** WebSocket base URL, e.g. ws://localhost:8080 */
-  wsBaseUrl?: string;
+  wsBaseUrl?: string | undefined;
   /** Programming language for syntax highlighting label. */
-  language?: string;
+  language?: string | undefined;
   /** Called when the local text content changes. */
   onChange?: (value: string) => void;
   /** Called when the WebSocket connection state changes. */
@@ -57,7 +57,7 @@ export default function IdeEditor({
 }: IdeEditorProps) {
   const [value, setValue] = useState('');
   const [connected, setConnected] = useState(false);
-  const [collaboratorCount, setCollaboratorCount] = useState(1);
+  const [collaboratorCount] = useState(1);
   const wsRef = useRef<YjsWebSocket | null>(null);
   const valueRef = useRef('');
 

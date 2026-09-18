@@ -131,16 +131,26 @@ public class NettyEdgeServer {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-            // Convert the Netty HTTP request to raw bytes for the backend
-            byte[] rawBytes = encodeRequest(request);
-
-            // Create a GatewayEvent
+            // D-216 (audit P0-1/P0-2): carry the request in structured form
+            // (method/path/headers/body) plus the client channel; the batch
+            // dispatcher rebuilds a correct backend request and writes the
+            // REAL backend response back on this channel. The 202-Accepted
+            // shortcut that silently discarded every backend response is gone.
             GatewayEvent event = new GatewayEvent();
-            event.setRawBytes(rawBytes);
+            event.setMethod(request.method().name());
+            event.setPath(request.uri());
+            event.setBody(new byte[request.content().readerIndex() >= 0
+                    ? request.content().readableBytes() : 0]);
+            request.content().readBytes(event.getBody());
+            java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<String, String> h : request.headers()) {
+                headers.put(h.getKey(), h.getValue());
+            }
+            event.setHeaders(headers);
             event.setRemoteAddr(remoteAddr(ctx));
             event.setTimestamp(System.nanoTime());
+            event.setChannel(ctx.channel());
 
-            // Publish to Disruptor RingBuffer
             PublishResult result = ringBuffer.publish(event);
 
             if (result == PublishResult.DROPPED) {
@@ -153,18 +163,9 @@ public class NettyEdgeServer {
                                 "{\"error\":\"RingBuffer full\",\"status\":\"429\"}".getBytes()));
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-            } else {
-                // Accepted — the batch dispatcher will forward to Jetty and
-                // return the response. For now, respond with 202 Accepted.
-                // In a full implementation, we'd use async response writing
-                // (write response when batch dispatcher gets the backend response).
-                FullHttpResponse response = new DefaultFullHttpResponse(
-                        HttpVersion.HTTP_1_1, HttpResponseStatus.ACCEPTED,
-                        Unpooled.copiedBuffer(
-                                "{\"status\":\"accepted\"}".getBytes()));
-                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
             }
+            // PUBLISHED: no immediate response — the dispatcher answers via
+            // the event's channel once the backend responds (or 502/503 on failure).
 
             ReferenceCountUtil.release(request);
         }

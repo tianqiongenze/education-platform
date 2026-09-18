@@ -1,9 +1,31 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
+import { resolve, normalize, dirname } from 'path';
+
+/**
+ * Redirect the ui-kit Taro platform adapter to the web adapter.
+ * See ADR-D217.  Full rationale in apps/admin-web/vite.config.ts.
+ */
+function redirectTaroToWeb(uiKitSrcDir: string): Plugin {
+  const taroNoExt = normalize(resolve(uiKitSrcDir, 'platform/taro')).replace(/\.(ts|tsx|js|jsx)$/, '');
+  const webPath = resolve(uiKitSrcDir, 'platform/web.ts');
+  return {
+    name: 'redirect-taro-to-web',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer) return null;
+      const resolved = normalize(resolve(dirname(importer), source)).replace(/\.(ts|tsx|js|jsx)$/, '');
+      if (resolved === taroNoExt) return webPath;
+      return null;
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    redirectTaroToWeb(resolve(__dirname, '../../packages/ui-kit/src')),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

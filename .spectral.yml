@@ -1,0 +1,36 @@
+extends:
+  - spectral:oas
+  - spectral:oas:recommended
+rules:
+  oas3-api-servers:
+    severity: error
+  oas3-operation-security-defined:
+    severity: error
+  operation-operationId-unique:
+    severity: error
+  operation-operationId-url-safe:
+    severity: error
+  # Custom EP rules
+  ep-naming-convention:
+    description: Paths must use kebab-case
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        match: "^/[a-z0-9-/{}]+$"
+    severity: warn
+  ep-version-in-path:
+    description: API paths should not include version prefix (version is in URL base)
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/v[0-9]+/"
+    severity: warn
+  ep-error-response:
+    description: All error responses should use a standard error schema
+    given: $.paths[*][*].responses[?(@property >= 400)]
+    then:
+      field: content.application/json.schema.$ref
+      function: truthy
+    severity: warn

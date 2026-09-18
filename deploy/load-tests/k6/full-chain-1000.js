@@ -2,15 +2,15 @@
  * full-chain-1000.js — 1000 并发全链路全功能压力性能测试
  *
  * 覆盖需求矩阵:
- *   BFF (8090) → sp03 (Dubbo RPC) → sp05 (Dubbo RPC)
+ *   BFF (8090) → core-business (Dubbo RPC) → grading-service (Dubbo RPC)
  *
  * 功能场景 (按需求测试用例):
- *   1. 用户域: 创建用户 / 查询用户 / 更新用户 (BFF→sp03)
- *   2. 课程域: 创建课程 / 发布课程 / 搜索课程 / 列表课程 (BFF→sp03)
- *   3. 订单域: 创建订单 / 支付订单 / 查询订单 / 用户订单列表 (BFF→sp03)
- *   4. 作业域: 创建作业 / 查询作业列表 (sp05 直连)
- *   5. 提交域: 创建提交 / 查询提交 (sp05 直连)
- *   6. 评分域: 启动评分 / 查询评分 / 查询评分阶段 (sp05 直连)
+ *   1. 用户域: 创建用户 / 查询用户 / 更新用户 (BFF→core-business)
+ *   2. 课程域: 创建课程 / 发布课程 / 搜索课程 / 列表课程 (BFF→core-business)
+ *   3. 订单域: 创建订单 / 支付订单 / 查询订单 / 用户订单列表 (BFF→core-business)
+ *   4. 作业域: 创建作业 / 查询作业列表 (grading-service 直连)
+ *   5. 提交域: 创建提交 / 查询提交 (grading-service 直连)
+ *   6. 评分域: 启动评分 / 查询评分 / 查询评分阶段 (grading-service 直连)
  *
  * 安全约束:
  *   - 共享基础设施保护: 限制 RPS, 不做写操作风暴
@@ -32,7 +32,7 @@ import { SharedArray } from 'k6/data';
 // Configuration
 // ---------------------------------------------------------------------------
 const BFF_URL = __ENV.K6_BFF_URL || 'http://127.0.0.1:8090';
-const SP05_URL = __ENV.K6_SP05_URL || 'http://127.0.0.1:8085';
+const GRADING_URL = __ENV.K6_GRADING_URL || 'http://127.0.0.1:8085';
 
 // Load pre-generated JWT tokens from file.
 // The file is a JSON object: { students: [...], teachers: [...], admins: [...] }
@@ -66,17 +66,17 @@ const metrics = {
   bff_user_latency: new Trend('bff_user_latency', true),
   bff_course_latency: new Trend('bff_course_latency', true),
   bff_order_latency: new Trend('bff_order_latency', true),
-  sp05_assignment_latency: new Trend('sp05_assignment_latency', true),
-  sp05_submission_latency: new Trend('sp05_submission_latency', true),
-  sp05_grading_latency: new Trend('sp05_grading_latency', true),
+  grading_assignment_latency: new Trend('grading_assignment_latency', true),
+  grading_submission_latency: new Trend('grading_submission_latency', true),
+  grading_grading_latency: new Trend('grading_grading_latency', true),
 
   // Per-domain error rates
   bff_user_errors: new Rate('bff_user_errors'),
   bff_course_errors: new Rate('bff_course_errors'),
   bff_order_errors: new Rate('bff_order_errors'),
-  sp05_assignment_errors: new Rate('sp05_assignment_errors'),
-  sp05_submission_errors: new Rate('sp05_submission_errors'),
-  sp05_grading_errors: new Rate('sp05_grading_errors'),
+  grading_assignment_errors: new Rate('grading_assignment_errors'),
+  grading_submission_errors: new Rate('grading_submission_errors'),
+  grading_grading_errors: new Rate('grading_grading_errors'),
 
   // Business metrics
   orders_created: new Counter('orders_created'),
@@ -123,9 +123,9 @@ export const options = {
     'bff_user_errors': ['rate<0.10'],
     'bff_course_errors': ['rate<0.05'],
     'bff_order_errors': ['rate<0.10'],
-    'sp05_assignment_errors': ['rate<0.10'],
-    'sp05_submission_errors': ['rate<0.15'],
-    'sp05_grading_errors': ['rate<0.15'],
+    'grading_assignment_errors': ['rate<0.10'],
+    'grading_submission_errors': ['rate<0.15'],
+    'grading_grading_errors': ['rate<0.15'],
   },
   tags: {
     scenario: 'full-chain-1000',
@@ -187,19 +187,19 @@ export default function () {
   const scenarioType = iter % 10;  // 0-9
 
   if (scenarioType < 3) {
-    // 30% — Course browse flow (read-heavy, BFF→sp03)
+    // 30% — Course browse flow (read-heavy, BFF→core-business)
     courseBrowseFlow(iter);
   } else if (scenarioType < 5) {
-    // 20% — Order lifecycle (write, BFF→sp03)
+    // 20% — Order lifecycle (write, BFF→core-business)
     orderLifecycleFlow(iter);
   } else if (scenarioType < 7) {
-    // 20% — User management (mixed, BFF→sp03)
+    // 20% — User management (mixed, BFF→core-business)
     userManagementFlow(iter);
   } else if (scenarioType < 8) {
-    // 10% — Assignment + Submission + Grading (full sp05 chain)
+    // 10% — Assignment + Submission + Grading (full grading-service chain)
     homeworkGradingFlow(iter);
   } else if (scenarioType < 9) {
-    // 10% — Assignment list + detail (sp05 read)
+    // 10% — Assignment list + detail (grading-service read)
     assignmentReadFlow(iter);
   } else {
     // 10% — Mixed read: course search + user lookup + order list
@@ -211,7 +211,7 @@ export default function () {
 }
 
 // ---------------------------------------------------------------------------
-// Flow 1: Course Browse (BFF → sp03 via Dubbo)
+// Flow 1: Course Browse (BFF → core-business via Dubbo)
 // ---------------------------------------------------------------------------
 function courseBrowseFlow(iter) {
   const admin = getAdminToken(iter);
@@ -255,7 +255,7 @@ function courseBrowseFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Flow 2: Order Lifecycle (BFF → sp03 via Dubbo)
+// Flow 2: Order Lifecycle (BFF → core-business via Dubbo)
 // ---------------------------------------------------------------------------
 function orderLifecycleFlow(iter) {
   const student = getStudentToken(iter);
@@ -350,7 +350,7 @@ function orderLifecycleFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Flow 3: User Management (BFF → sp03 via Dubbo)
+// Flow 3: User Management (BFF → core-business via Dubbo)
 // ---------------------------------------------------------------------------
 function userManagementFlow(iter) {
   const admin = getAdminToken(iter);
@@ -416,13 +416,13 @@ function userManagementFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Flow 4: Homework + Grading (sp05 direct — full IT backend chain)
+// Flow 4: Homework + Grading (grading-service direct — full IT backend chain)
 // ---------------------------------------------------------------------------
 function homeworkGradingFlow(iter) {
   const teacher = getTeacherToken(iter);
   const student = getStudentToken(iter);
 
-  // sp05 uses X-Role header, not JWT
+  // grading-service uses X-Role header, not JWT
   const teacherHeaders = {
     'Content-Type': 'application/json',
     'X-Role': 'teacher',
@@ -437,14 +437,14 @@ function homeworkGradingFlow(iter) {
 
     // 1. Get assignment by ID
     const assignStart = Date.now();
-    const assignRes = http.get(`${SP05_URL}/api/v1/assignments/${assignmentId}`,
+    const assignRes = http.get(`${GRADING_URL}/api/v1/assignments/${assignmentId}`,
       { headers: adminHeaders, responseCallback:expectedStatus(200, 404) });
-    metrics.sp05_assignment_latency.add(Date.now() - assignStart);
+    metrics.grading_assignment_latency.add(Date.now() - assignStart);
 
     const assignOk = check(assignRes, {
       'assignment get 200 or 404': (r) => r.status === 200 || r.status === 404,
     });
-    metrics.sp05_assignment_errors.add(!assignOk);
+    metrics.grading_assignment_errors.add(!assignOk);
     metrics.total_errors.add(!assignOk);
 
     sleep(0.05);
@@ -453,7 +453,7 @@ function homeworkGradingFlow(iter) {
     const idemKey = genIdempotencyKey('lt-sub');
     const subStart = Date.now();
     const subRes = http.post(
-      `${SP05_URL}/api/v1/submissions`,
+      `${GRADING_URL}/api/v1/submissions`,
       JSON.stringify({
         assignmentId: assignmentId,
         studentId: student.userId,
@@ -462,7 +462,7 @@ function homeworkGradingFlow(iter) {
       }),
       { headers: { 'Content-Type': 'application/json', 'X-Role': 'student' }, responseCallback:expectedStatus(200, 201, 400, 409) }
     );
-    metrics.sp05_submission_latency.add(Date.now() - subStart);
+    metrics.grading_submission_latency.add(Date.now() - subStart);
 
     let submissionIdStr = null;
     let subOk = false;
@@ -479,7 +479,7 @@ function homeworkGradingFlow(iter) {
     check(subRes, {
       'submission create handled': () => subOk,
     });
-    metrics.sp05_submission_errors.add(!subOk);
+    metrics.grading_submission_errors.add(!subOk);
     metrics.total_errors.add(!subOk);
     if (submissionIdStr) metrics.submissions_created.add(1);
 
@@ -490,7 +490,7 @@ function homeworkGradingFlow(iter) {
       const gradeIdemKey = genIdempotencyKey('lt-grade');
       const gradeStart = Date.now();
       const gradeRes = http.post(
-        `${SP05_URL}/api/v1/grading/start`,
+        `${GRADING_URL}/api/v1/grading/start`,
         JSON.stringify({
           submissionId: submissionIdStr,
           gradedBy: teacher.userId,
@@ -498,7 +498,7 @@ function homeworkGradingFlow(iter) {
         }),
         { headers: teacherHeaders, responseCallback:expectedStatus(200, 201, 400, 409) }
       );
-      metrics.sp05_grading_latency.add(Date.now() - gradeStart);
+      metrics.grading_grading_latency.add(Date.now() - gradeStart);
 
       let pipelineIdStr = null;
       let gradeOk = false;
@@ -515,7 +515,7 @@ function homeworkGradingFlow(iter) {
       check(gradeRes, {
         'grading start handled': () => gradeOk,
       });
-      metrics.sp05_grading_errors.add(!gradeOk);
+      metrics.grading_grading_errors.add(!gradeOk);
       metrics.total_errors.add(!gradeOk);
       if (pipelineIdStr) metrics.grading_started.add(1);
 
@@ -524,34 +524,34 @@ function homeworkGradingFlow(iter) {
       // 4. Get grading pipeline by pipeline ID — use string ID
       if (pipelineIdStr) {
         const getStart = Date.now();
-        const getRes = http.get(`${SP05_URL}/api/v1/grading/${pipelineIdStr}`,
+        const getRes = http.get(`${GRADING_URL}/api/v1/grading/${pipelineIdStr}`,
           { headers: adminHeaders, responseCallback:expectedStatus(200) });
-        metrics.sp05_grading_latency.add(Date.now() - getStart);
+        metrics.grading_grading_latency.add(Date.now() - getStart);
 
         const getOk = check(getRes, {
           'grading get 200': (r) => r.status === 200,
         });
-        metrics.sp05_grading_errors.add(!getOk);
+        metrics.grading_grading_errors.add(!getOk);
         metrics.total_errors.add(!getOk);
       }
     }
 
     // 5. List assignments by course
     const listStart = Date.now();
-    const listRes = http.get(`${SP05_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
+    const listRes = http.get(`${GRADING_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
       { headers: adminHeaders, responseCallback:expectedStatus(200) });
-    metrics.sp05_assignment_latency.add(Date.now() - listStart);
+    metrics.grading_assignment_latency.add(Date.now() - listStart);
 
     const listOk = check(listRes, {
       'assignment list 200': (r) => r.status === 200,
     });
-    metrics.sp05_assignment_errors.add(!listOk);
+    metrics.grading_assignment_errors.add(!listOk);
     metrics.total_errors.add(!listOk);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Flow 5: Assignment Read (sp05 direct — read-only)
+// Flow 5: Assignment Read (grading-service direct — read-only)
 // ---------------------------------------------------------------------------
 function assignmentReadFlow(iter) {
   const headers = {
@@ -562,14 +562,14 @@ function assignmentReadFlow(iter) {
   group('assignment_read', function () {
     // 1. List assignments by course
     const listStart = Date.now();
-    const listRes = http.get(`${SP05_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
+    const listRes = http.get(`${GRADING_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
       { headers, responseCallback:expectedStatus(200) });
-    metrics.sp05_assignment_latency.add(Date.now() - listStart);
+    metrics.grading_assignment_latency.add(Date.now() - listStart);
 
     const listOk = check(listRes, {
       'assignment list 200': (r) => r.status === 200,
     });
-    metrics.sp05_assignment_errors.add(!listOk);
+    metrics.grading_assignment_errors.add(!listOk);
     metrics.total_errors.add(!listOk);
 
     sleep(0.05);
@@ -577,20 +577,20 @@ function assignmentReadFlow(iter) {
     // 2. Get assignment by ID
     const assignmentId = KNOWN_ASSIGNMENT_IDS[iter % KNOWN_ASSIGNMENT_IDS.length];
     const getStart = Date.now();
-    const getRes = http.get(`${SP05_URL}/api/v1/assignments/${assignmentId}`,
+    const getRes = http.get(`${GRADING_URL}/api/v1/assignments/${assignmentId}`,
       { headers, responseCallback:expectedStatus(200, 404) });
-    metrics.sp05_assignment_latency.add(Date.now() - getStart);
+    metrics.grading_assignment_latency.add(Date.now() - getStart);
 
     const getOk = check(getRes, {
       'assignment get 200 or 404': (r) => r.status === 200 || r.status === 404,
     });
-    metrics.sp05_assignment_errors.add(!getOk);
+    metrics.grading_assignment_errors.add(!getOk);
     metrics.total_errors.add(!getOk);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Flow 6: Mixed Read (BFF + sp05)
+// Flow 6: Mixed Read (BFF + grading-service)
 // ---------------------------------------------------------------------------
 function mixedReadFlow(iter) {
   const admin = getAdminToken(iter);
@@ -598,7 +598,7 @@ function mixedReadFlow(iter) {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${admin.token}`,
   };
-  const sp05Headers = {
+  const gradingHeaders = {
     'Content-Type': 'application/json',
     'X-Role': 'admin',
   };
@@ -640,14 +640,14 @@ function mixedReadFlow(iter) {
 
     sleep(0.05);
 
-    // 4. sp05: Assignment list
+    // 4. grading-service: Assignment list
     const assignStart = Date.now();
-    const assignRes = http.get(`${SP05_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
-      { headers: sp05Headers, responseCallback:expectedStatus(200) });
-    metrics.sp05_assignment_latency.add(Date.now() - assignStart);
+    const assignRes = http.get(`${GRADING_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
+      { headers: gradingHeaders, responseCallback:expectedStatus(200) });
+    metrics.grading_assignment_latency.add(Date.now() - assignStart);
 
     const assignOk = check(assignRes, { 'assignment list 200': (r) => r.status === 200 });
-    metrics.sp05_assignment_errors.add(!assignOk);
+    metrics.grading_assignment_errors.add(!assignOk);
     metrics.total_errors.add(!assignOk);
   });
 }
@@ -666,13 +666,13 @@ export function setup() {
   }
   console.log('BFF (8090): UP');
 
-  // Check sp05
-  const sp05Health = http.get(`${SP05_URL}/actuator/health`);
-  if (sp05Health.status !== 200) {
-    console.error(`sp05 health check FAILED: ${sp05Health.status}`);
+  // Check grading-service
+  const gradingHealth = http.get(`${GRADING_URL}/actuator/health`);
+  if (gradingHealth.status !== 200) {
+    console.error(`grading-service health check FAILED: ${gradingHealth.status}`);
     return { abort: true };
   }
-  console.log('sp05 (8085): UP');
+  console.log('grading-service (8085): UP');
 
   console.log(`Loaded ${studentTokens.length} student + ${teacherTokens.length} teacher + ${adminTokens.length} admin tokens`);
   console.log('All services healthy. Starting 1000-VU load test...');

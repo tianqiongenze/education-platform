@@ -1,4 +1,4 @@
-"""GraphRegistry unit tests (SP-04 industry-agnostic refactoring).
+"""GraphRegistry unit tests (AI industry-agnostic refactoring).
 
 Verifies:
 - manual registration + build

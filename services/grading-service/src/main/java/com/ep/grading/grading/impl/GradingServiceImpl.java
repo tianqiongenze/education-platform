@@ -33,7 +33,7 @@ import java.util.Objects;
  *   <li>P0-6: in-memory idempotency index replaced by Redis {@link IdempotencyService} (TTL 24h);
  *       {@code @Version} on {@link GradePipeline} enforces optimistic locking.</li>
  *   <li>P0-7: {@link SentinelResource} on {@link #startGrading} for rate limiting.</li>
- *   <li>P1-3: {@link GlobalTransactional} so grading + submission status update + sp03 order
+ *   <li>P1-3: {@link GlobalTransactional} so grading + submission status update + core-business order
  *       completion commit or roll back atomically across services.</li>
  * </ul>
  * Service interface unchanged; only implementation rewritten.

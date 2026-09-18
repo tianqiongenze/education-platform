@@ -1,30 +1,33 @@
 /**
- * full-chain-comprehensive.js — 全功能全链路压力性能测试 (17 场景)
+ * full-chain-comprehensive.js — 全功能全链路压力性能测试 (20 场景)
  *
  * 覆盖需求矩阵:
- *   BFF  (8090) Java Spring Boot → sp03 (Dubbo RPC)
- *   sp05 (8085) Java Spring Boot (IT backend, 直连)
- *   sp04-ai (8086) Python Litestar+Granian (AI Gateway)
+ *   BFF  (8090) Java Spring Boot → core-business (Dubbo RPC)
+ *   grading-service (8085) Java Spring Boot (IT backend, 直连)
+ *   ai-platform (8086) Python Litestar+Granian (AI Gateway)
  *   gateway-go (8081) Go net/http (WebSocket 网关)
  *
- * 17 个场景 (按需求测试用例):
- *   1.  课程列表浏览          BFF→sp03   读   15%   GET /api/courses?page=0&size=10
- *   2.  课程搜索              BFF→sp03   读   10%   GET /api/courses/search?keyword=test&page=0&size=5
- *   3.  课程详情              BFF→sp03   读   10%   GET /api/courses/{KNOWN_COURSE_ID}
- *   4.  订单创建 (幂等)        BFF→sp03   写    8%   POST /api/orders (userId, courseId, amount, idempotencyKey)
- *   5.  订单支付              BFF→sp03   写    5%   POST /api/orders/{orderId}/pay (payMethod)
- *   6.  订单查询              BFF→sp03   读    7%   GET /api/orders/user/{userId}
- *   7.  用户创建 (幂等)        BFF→sp03   写    5%   POST /api/users (username, email, phone, role, password)
- *   8.  用户查询 (phone)      BFF→sp03   读    5%   GET /api/users/phone/{phone}
- *   9.  作业列表              sp05       读    8%   GET /api/v1/assignments?courseId={KNOWN_COURSE_ID}
- *   10. 作业详情              sp05       读    5%   GET /api/v1/assignments/{assignmentId}
- *   11. 提交创建 (幂等)        sp05       写    5%   POST /api/v1/submissions (assignmentId, studentId, content, idempotencyKey)
- *   12. 评分启动 (幂等)        sp05       写    4%   POST /api/v1/grading/start (submissionId, gradedBy, idempotencyKey)
- *   13. 评分查询              sp05       读    5%   GET /api/v1/grading/{pipelineId}
- *   14. AI Gateway chat       sp04-ai    读    4%   POST /v1/chat/completions (messages, model)
- *   15. AI Gateway embeddings sp04-ai    读    2%   POST /v1/embeddings (input)
+ * 20 个场景 (按需求测试用例):
+ *   1.  课程列表浏览          BFF→core-business   读   14%   GET /api/courses?page=0&size=10
+ *   2.  课程搜索              BFF→core-business   读   10%   GET /api/courses/search?keyword=test&page=0&size=5
+ *   3.  课程详情              BFF→core-business   读   10%   GET /api/courses/{KNOWN_COURSE_ID}
+ *   4.  订单创建 (幂等)        BFF→core-business   写    8%   POST /api/orders (userId, courseId, amount, idempotencyKey)
+ *   5.  订单支付              BFF→core-business   写    5%   POST /api/orders/{orderId}/pay (payMethod)
+ *   6.  订单查询              BFF→core-business   读    7%   GET /api/orders/user/{userId}
+ *   7.  用户创建 (幂等)        BFF→core-business   写    4%   POST /api/users (username, email, phone, role, password)
+ *   8.  用户查询 (phone)      BFF→core-business   读    4%   GET /api/users/phone/{phone}
+ *   9.  作业列表              grading-service       读    7%   GET /api/v1/assignments?courseId={KNOWN_COURSE_ID}
+ *   10. 作业详情              grading-service       读    5%   GET /api/v1/assignments/{assignmentId}
+ *   11. 提交创建 (幂等)        grading-service       写    5%   POST /api/v1/submissions (assignmentId, studentId, content, idempotencyKey)
+ *   12. 评分启动 (幂等)        grading-service       写    4%   POST /api/v1/grading/start (submissionId, gradedBy, idempotencyKey)
+ *   13. 评分查询              grading-service       读    4%   GET /api/v1/grading/{pipelineId}
+ *   14. AI Gateway chat       ai-platform    读    3%   POST /v1/chat/completions (messages, model)
+ *   15. AI Gateway embeddings ai-platform    读    2%   POST /v1/embeddings (input)
  *   16. WebSocket health      gateway-go 读    1%   GET /healthz
- *   17. 幂等性重复请求         BFF→sp03   写    1%   同一 idempotencyKey 连续 POST /api/orders 两次
+ *   17. 幂等性重复请求         BFF→core-business   写    1%   同一 idempotencyKey 连续 POST /api/orders 两次
+ *   18. IDE 会话生命周期       grading-service       写    2%   POST /api/v1/ide/sessions → activate → close
+ *   19. 直播间生命周期         grading-service       写    2%   POST /api/v1/live/rooms → prepare → live → end
+ *   20. 沙箱代码执行           grading-service       写    2%   POST /api/v1/grading/start with sourceCode (sandbox)
  *
  * 执行模式: RPS 驱动 (ramping-arrival-rate)，通过 K6_TEST_LEVEL 控制三档负载:
  *   K6_TEST_LEVEL=10k   startRate=500  ramp→3000 iter/s   ~8min
@@ -47,8 +50,8 @@ import { SharedArray } from 'k6/data';
 // Service URLs
 // ---------------------------------------------------------------------------
 const BFF_URL     = __ENV.K6_BFF_URL  || 'http://127.0.0.1:8090';  // Java Spring Boot
-const SP05_URL    = __ENV.K6_SP05_URL || 'http://127.0.0.1:8085';  // Java Spring Boot (IT backend)
-const SP04_AI_URL = __ENV.K6_SP04_AI_URL || 'http://127.0.0.1:8086'; // Python Litestar+Granian
+const GRADING_URL    = __ENV.K6_GRADING_URL || 'http://127.0.0.1:8085';  // Java Spring Boot (IT backend)
+const AI_GATEWAY_URL = __ENV.K6_AI_GATEWAY_URL || 'http://127.0.0.1:8086'; // Python Litestar+Granian
 const GO_WS_URL   = __ENV.K6_GO_WS_URL || 'http://127.0.0.1:8081';  // Go net/http
 
 // ---------------------------------------------------------------------------
@@ -80,26 +83,35 @@ const metrics = {
   bff_course_latency:      new Trend('bff_course_latency', true),
   bff_order_latency:       new Trend('bff_order_latency', true),
   bff_user_latency:        new Trend('bff_user_latency', true),
-  sp05_assignment_latency: new Trend('sp05_assignment_latency', true),
-  sp05_submission_latency: new Trend('sp05_submission_latency', true),
-  sp05_grading_latency:    new Trend('sp05_grading_latency', true),
-  sp04_ai_latency:         new Trend('sp04_ai_latency', true),
+  grading_assignment_latency: new Trend('grading_assignment_latency', true),
+  grading_submission_latency: new Trend('grading_submission_latency', true),
+  grading_grading_latency:    new Trend('grading_grading_latency', true),
+  grading_ide_latency:        new Trend('grading_ide_latency', true),
+  grading_live_latency:       new Trend('grading_live_latency', true),
+  grading_sandbox_latency:    new Trend('grading_sandbox_latency', true),
+  ai_gateway_latency:         new Trend('ai_gateway_latency', true),
   go_ws_latency:           new Trend('go_ws_latency', true),
 
   // Per-service error rate
   bff_course_errors:      new Rate('bff_course_errors'),
   bff_order_errors:       new Rate('bff_order_errors'),
   bff_user_errors:        new Rate('bff_user_errors'),
-  sp05_assignment_errors: new Rate('sp05_assignment_errors'),
-  sp05_submission_errors: new Rate('sp05_submission_errors'),
-  sp05_grading_errors:    new Rate('sp05_grading_errors'),
-  sp04_ai_errors:         new Rate('sp04_ai_errors'),
+  grading_assignment_errors: new Rate('grading_assignment_errors'),
+  grading_submission_errors: new Rate('grading_submission_errors'),
+  grading_grading_errors:    new Rate('grading_grading_errors'),
+  grading_ide_errors:        new Rate('grading_ide_errors'),
+  grading_live_errors:       new Rate('grading_live_errors'),
+  grading_sandbox_errors:    new Rate('grading_sandbox_errors'),
+  ai_gateway_errors:         new Rate('ai_gateway_errors'),
 
   // Business counters
   orders_created:      new Counter('orders_created'),
   submissions_created: new Counter('submissions_created'),
   grading_started:     new Counter('grading_started'),
   users_created:       new Counter('users_created'),
+  ide_sessions_created: new Counter('ide_sessions_created'),
+  live_rooms_created:  new Counter('live_rooms_created'),
+  sandbox_executions:  new Counter('sandbox_executions'),
 
   // Overall
   total_errors: new Rate('total_errors'),
@@ -148,18 +160,56 @@ const levels = {
 };
 const cfg = levels[testLevel] || levels['10k'];
 
-export const options = {
-  scenarios: {
-    full_chain: {
-      executor: 'ramping-arrival-rate',
-      startRate: cfg.startRate,
-      timeUnit: '1s',
-      preAllocatedVUs: cfg.preAllocatedVUs,
-      maxVUs: cfg.maxVUs,
-      stages: cfg.stages,
-      gracefulStop: '30s',
-    },
+// K6_SCENARIO env var selects which scenario to run:
+//   K6_SCENARIO=full_chain  (default) — RPS-driven ramping-arrival-rate
+//   K6_SCENARIO=smoke       — 5 VUs for 30s (quick verification)
+//   K6_SCENARIO=stress      — 50 VUs for 2m (sustained load)
+//   K6_SCENARIO=spike       — 0→100 VUs in 10s, hold 20s, drop (spike test)
+const scenarioName = __ENV.K6_SCENARIO || 'full_chain';
+
+const scenarioConfigs = {
+  // RPS-driven full chain (production load test)
+  full_chain: {
+    executor: 'ramping-arrival-rate',
+    startRate: cfg.startRate,
+    timeUnit: '1s',
+    preAllocatedVUs: cfg.preAllocatedVUs,
+    maxVUs: cfg.maxVUs,
+    stages: cfg.stages,
+    gracefulStop: '30s',
   },
+  // Smoke: 5 VUs for 30s — quick consistency check
+  smoke: {
+    executor: 'constant-vus',
+    vus: 5,
+    duration: '30s',
+    gracefulStop: '5s',
+  },
+  // Stress: 50 VUs for 2m — sustained load to find steady-state bottlenecks
+  stress: {
+    executor: 'constant-vus',
+    vus: 50,
+    duration: '2m',
+    gracefulStop: '10s',
+  },
+  // Spike: 0→100 VUs in 10s, hold 20s, ramp down — tests burst handling
+  spike: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '10s', target: 100 },  // ramp up 0→100 in 10s
+      { duration: '20s', target: 100 },  // hold at 100 for 20s
+      { duration: '5s', target: 0 },     // ramp down
+    ],
+    gracefulStop: '5s',
+  },
+};
+
+const activeScenario = {};
+activeScenario[scenarioName] = scenarioConfigs[scenarioName];
+
+export const options = {
+  scenarios: activeScenario,
   // HTTP timeout: 15s prevents stuck VUs from blocking the test
   // (Dubbo consumer timeout is 10s, so 15s gives margin for BFF error response)
   httpDebug: 'none',
@@ -218,37 +268,40 @@ function genUniquePhone(vuIter) {
 const expectedStatus = http.expectedStatuses;
 
 // ---------------------------------------------------------------------------
-// Scenario dispatcher — picks one of 17 scenarios per iteration based on a
+// Scenario dispatcher — picks one of 20 scenarios per iteration based on a
 // 100-slice weight allocation.
 // ---------------------------------------------------------------------------
 export default function () {
   const iter = __ITER;
   const mod = iter % 100; // 100 份权重
 
-  if      (mod < 15) courseBrowseFlow(iter);        // 15% 课程列表浏览
-  else if (mod < 25) courseSearchFlow(iter);        // 10% 课程搜索
-  else if (mod < 35) courseDetailFlow(iter);        // 10% 课程详情
-  else if (mod < 43) orderCreateFlow(iter);         //  8% 订单创建
-  else if (mod < 48) orderPayFlow(iter);            //  5% 订单支付
-  else if (mod < 55) orderQueryFlow(iter);          //  7% 订单查询
-  else if (mod < 60) userCreateFlow(iter);          //  5% 用户创建
-  else if (mod < 65) userPhoneFlow(iter);           //  5% 用户查询(phone)
-  else if (mod < 73) assignmentListFlow(iter);      //  8% 作业列表
-  else if (mod < 78) assignmentDetailFlow(iter);    //  5% 作业详情
-  else if (mod < 83) submissionCreateFlow(iter);    //  5% 提交创建
-  else if (mod < 87) gradingStartFlow(iter);        //  4% 评分启动
-  else if (mod < 92) gradingQueryFlow(iter);        //  5% 评分查询
-  else if (mod < 96) aiChatFlow(iter);              //  4% AI Gateway chat
-  else if (mod < 98) aiEmbeddingFlow(iter);         //  2% AI Gateway embeddings
-  else if (mod < 99) wsHealthFlow(iter);            //  1% WebSocket health
-  else               idempotencyTestFlow(iter);     //  1% 幂等性重复请求
+  if      (mod < 14) courseBrowseFlow(iter);        // 14% 课程列表浏览
+  else if (mod < 24) courseSearchFlow(iter);        // 10% 课程搜索
+  else if (mod < 34) courseDetailFlow(iter);        // 10% 课程详情
+  else if (mod < 42) orderCreateFlow(iter);         //  8% 订单创建
+  else if (mod < 47) orderPayFlow(iter);            //  5% 订单支付
+  else if (mod < 54) orderQueryFlow(iter);          //  7% 订单查询
+  else if (mod < 58) userCreateFlow(iter);          //  4% 用户创建
+  else if (mod < 62) userPhoneFlow(iter);           //  4% 用户查询(phone)
+  else if (mod < 69) assignmentListFlow(iter);      //  7% 作业列表
+  else if (mod < 74) assignmentDetailFlow(iter);    //  5% 作业详情
+  else if (mod < 79) submissionCreateFlow(iter);    //  5% 提交创建
+  else if (mod < 83) gradingStartFlow(iter);        //  4% 评分启动
+  else if (mod < 87) gradingQueryFlow(iter);        //  4% 评分查询
+  else if (mod < 90) aiChatFlow(iter);              //  3% AI Gateway chat
+  else if (mod < 92) aiEmbeddingFlow(iter);         //  2% AI Gateway embeddings
+  else if (mod < 93) wsHealthFlow(iter);            //  1% WebSocket health
+  else if (mod < 94) idempotencyTestFlow(iter);     //  1% 幂等性重复请求
+  else if (mod < 96) ideSessionFlow(iter);          //  2% IDE 会话生命周期
+  else if (mod < 98) liveRoomFlow(iter);            //  2% 直播间生命周期
+  else               sandboxExecutionFlow(iter);    //  2% 沙箱代码执行
 
   // Brief think time between iterations
   sleep(0.05 + Math.random() * 0.1);
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 1: 课程列表浏览 (BFF → sp03, 读, 15%)
+// Scenario 1: 课程列表浏览 (BFF → core-business, 读, 15%)
 // GET /api/courses?page=0&size=10
 // ---------------------------------------------------------------------------
 function courseBrowseFlow(iter) {
@@ -277,7 +330,7 @@ function courseBrowseFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 2: 课程搜索 (BFF → sp03, 读, 10%)
+// Scenario 2: 课程搜索 (BFF → core-business, 读, 10%)
 // GET /api/courses/search?keyword=test&page=0&size=5
 // ---------------------------------------------------------------------------
 function courseSearchFlow(iter) {
@@ -302,7 +355,7 @@ function courseSearchFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 3: 课程详情 (BFF → sp03, 读, 10%)
+// Scenario 3: 课程详情 (BFF → core-business, 读, 10%)
 // GET /api/courses/{KNOWN_COURSE_ID}
 // ---------------------------------------------------------------------------
 function courseDetailFlow(iter) {
@@ -327,7 +380,7 @@ function courseDetailFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 4: 订单创建 (BFF → sp03, 写, 8%)
+// Scenario 4: 订单创建 (BFF → core-business, 写, 8%)
 // POST /api/orders (userId, courseId, amount, idempotencyKey)
 // ---------------------------------------------------------------------------
 function orderCreateFlow(iter) {
@@ -374,7 +427,7 @@ function orderCreateFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 5: 订单支付 (BFF → sp03, 写, 5%)
+// Scenario 5: 订单支付 (BFF → core-business, 写, 5%)
 // POST /api/orders/{orderId}/pay (payMethod) — 需先创建订单
 // ---------------------------------------------------------------------------
 function orderPayFlow(iter) {
@@ -432,7 +485,7 @@ function orderPayFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 6: 订单查询 (BFF → sp03, 读, 7%)
+// Scenario 6: 订单查询 (BFF → core-business, 读, 7%)
 // GET /api/orders/user/{userId}
 // ---------------------------------------------------------------------------
 function orderQueryFlow(iter) {
@@ -457,7 +510,7 @@ function orderQueryFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 7: 用户创建 (BFF → sp03, 写, 5%)
+// Scenario 7: 用户创建 (BFF → core-business, 写, 5%)
 // POST /api/users (username, email, phone, role, password)
 // ---------------------------------------------------------------------------
 function userCreateFlow(iter) {
@@ -504,7 +557,7 @@ function userCreateFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 8: 用户查询 phone (BFF → sp03, 读, 5%)
+// Scenario 8: 用户查询 phone (BFF → core-business, 读, 5%)
 // GET /api/users/phone/{phone}
 // ---------------------------------------------------------------------------
 function userPhoneFlow(iter) {
@@ -531,11 +584,11 @@ function userPhoneFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 9: 作业列表 (sp05, 读, 8%)
+// Scenario 9: 作业列表 (grading-service, 读, 8%)
 // GET /api/v1/assignments?courseId={KNOWN_COURSE_ID}
 // ---------------------------------------------------------------------------
 function assignmentListFlow(iter) {
-  // sp05 uses X-Role header, not JWT
+  // grading-service uses X-Role header, not JWT
   const headers = {
     'Content-Type': 'application/json',
     'X-Role': 'admin',
@@ -543,20 +596,20 @@ function assignmentListFlow(iter) {
 
   group('assignment_list', function () {
     const start = Date.now();
-    const res = http.get(`${SP05_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
+    const res = http.get(`${GRADING_URL}/api/v1/assignments?courseId=${KNOWN_COURSE_ID}`,
       { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200) });
-    metrics.sp05_assignment_latency.add(Date.now() - start);
+    metrics.grading_assignment_latency.add(Date.now() - start);
 
     const ok = check(res, {
       'assignment list 200': (r) => r.status === 200,
     });
-    metrics.sp05_assignment_errors.add(!ok);
+    metrics.grading_assignment_errors.add(!ok);
     metrics.total_errors.add(!ok);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 10: 作业详情 (sp05, 读, 5%)
+// Scenario 10: 作业详情 (grading-service, 读, 5%)
 // GET /api/v1/assignments/{assignmentId}
 // ---------------------------------------------------------------------------
 function assignmentDetailFlow(iter) {
@@ -568,20 +621,20 @@ function assignmentDetailFlow(iter) {
 
   group('assignment_detail', function () {
     const start = Date.now();
-    const res = http.get(`${SP05_URL}/api/v1/assignments/${assignmentId}`,
+    const res = http.get(`${GRADING_URL}/api/v1/assignments/${assignmentId}`,
       { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 404) });
-    metrics.sp05_assignment_latency.add(Date.now() - start);
+    metrics.grading_assignment_latency.add(Date.now() - start);
 
     const ok = check(res, {
       'assignment detail 200 or 404': (r) => r.status === 200 || r.status === 404,
     });
-    metrics.sp05_assignment_errors.add(!ok);
+    metrics.grading_assignment_errors.add(!ok);
     metrics.total_errors.add(!ok);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 11: 提交创建 (sp05, 写, 5%)
+// Scenario 11: 提交创建 (grading-service, 写, 5%)
 // POST /api/v1/submissions (assignmentId, studentId, content, idempotencyKey)
 // ---------------------------------------------------------------------------
 function submissionCreateFlow(iter) {
@@ -596,7 +649,7 @@ function submissionCreateFlow(iter) {
   group('submission_create', function () {
     const start = Date.now();
     const res = http.post(
-      `${SP05_URL}/api/v1/submissions`,
+      `${GRADING_URL}/api/v1/submissions`,
       JSON.stringify({
         assignmentId: assignmentId,
         studentId: student.userId,
@@ -605,7 +658,7 @@ function submissionCreateFlow(iter) {
       }),
       { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
     );
-    metrics.sp05_submission_latency.add(Date.now() - start);
+    metrics.grading_submission_latency.add(Date.now() - start);
 
     // Extract id as string — snowflake ID exceeds JS Number.MAX_SAFE_INTEGER
     let submissionIdStr = null;
@@ -620,14 +673,14 @@ function submissionCreateFlow(iter) {
       ok = true; // acceptable under load
     }
     check(res, { 'submission create handled': () => ok });
-    metrics.sp05_submission_errors.add(!ok);
+    metrics.grading_submission_errors.add(!ok);
     metrics.total_errors.add(!ok);
     if (submissionIdStr) metrics.submissions_created.add(1);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 12: 评分启动 (sp05, 写, 4%)
+// Scenario 12: 评分启动 (grading-service, 写, 4%)
 // POST /api/v1/grading/start (submissionId, gradedBy, idempotencyKey)
 // 需先创建提交以获得 submissionId
 // ---------------------------------------------------------------------------
@@ -650,7 +703,7 @@ function gradingStartFlow(iter) {
     const subIdemKey = genIdempotencyKey('lt-sub');
     const subStart = Date.now();
     const subRes = http.post(
-      `${SP05_URL}/api/v1/submissions`,
+      `${GRADING_URL}/api/v1/submissions`,
       JSON.stringify({
         assignmentId: assignmentId,
         studentId: student.userId,
@@ -659,7 +712,7 @@ function gradingStartFlow(iter) {
       }),
       { headers: studentHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
     );
-    metrics.sp05_submission_latency.add(Date.now() - subStart);
+    metrics.grading_submission_latency.add(Date.now() - subStart);
 
     let submissionIdStr = null;
     if (subRes.status === 200 || subRes.status === 201) {
@@ -675,7 +728,7 @@ function gradingStartFlow(iter) {
       const gradeIdemKey = genIdempotencyKey('lt-grade');
       const gradeStart = Date.now();
       const gradeRes = http.post(
-        `${SP05_URL}/api/v1/grading/start`,
+        `${GRADING_URL}/api/v1/grading/start`,
         JSON.stringify({
           submissionId: submissionIdStr,
           gradedBy: teacher.userId,
@@ -683,7 +736,7 @@ function gradingStartFlow(iter) {
         }),
         { headers: teacherHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
       );
-      metrics.sp05_grading_latency.add(Date.now() - gradeStart);
+      metrics.grading_grading_latency.add(Date.now() - gradeStart);
 
       let gradeOk = false;
       if (gradeRes.status === 200 || gradeRes.status === 201) {
@@ -692,17 +745,17 @@ function gradingStartFlow(iter) {
         gradeOk = true; // acceptable under load
       }
       check(gradeRes, { 'grading start handled': () => gradeOk });
-      metrics.sp05_grading_errors.add(!gradeOk);
+      metrics.grading_grading_errors.add(!gradeOk);
       metrics.total_errors.add(!gradeOk);
       if (gradeOk) metrics.grading_started.add(1);
     } else {
-      metrics.sp05_grading_errors.add(false);
+      metrics.grading_grading_errors.add(false);
     }
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 13: 评分查询 (sp05, 读, 5%)
+// Scenario 13: 评分查询 (grading-service, 读, 5%)
 // GET /api/v1/grading/{pipelineId}
 // 需先创建提交并启动评分以获得 pipelineId
 // ---------------------------------------------------------------------------
@@ -719,7 +772,7 @@ function gradingQueryFlow(iter) {
     const subIdemKey = genIdempotencyKey('lt-sub');
     const subStart = Date.now();
     const subRes = http.post(
-      `${SP05_URL}/api/v1/submissions`,
+      `${GRADING_URL}/api/v1/submissions`,
       JSON.stringify({
         assignmentId: assignmentId,
         studentId: student.userId,
@@ -728,7 +781,7 @@ function gradingQueryFlow(iter) {
       }),
       { headers: studentHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
     );
-    metrics.sp05_submission_latency.add(Date.now() - subStart);
+    metrics.grading_submission_latency.add(Date.now() - subStart);
 
     let submissionIdStr = null;
     if (subRes.status === 200 || subRes.status === 201) {
@@ -745,7 +798,7 @@ function gradingQueryFlow(iter) {
       const gradeIdemKey = genIdempotencyKey('lt-grade');
       const gradeStart = Date.now();
       const gradeRes = http.post(
-        `${SP05_URL}/api/v1/grading/start`,
+        `${GRADING_URL}/api/v1/grading/start`,
         JSON.stringify({
           submissionId: submissionIdStr,
           gradedBy: teacher.userId,
@@ -753,7 +806,7 @@ function gradingQueryFlow(iter) {
         }),
         { headers: teacherHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
       );
-      metrics.sp05_grading_latency.add(Date.now() - gradeStart);
+      metrics.grading_grading_latency.add(Date.now() - gradeStart);
 
       if (gradeRes.status === 200 || gradeRes.status === 201) {
         try {
@@ -767,23 +820,23 @@ function gradingQueryFlow(iter) {
     // Step 3: Query grading pipeline by ID
     if (pipelineIdStr) {
       const getStart = Date.now();
-      const getRes = http.get(`${SP05_URL}/api/v1/grading/${pipelineIdStr}`,
+      const getRes = http.get(`${GRADING_URL}/api/v1/grading/${pipelineIdStr}`,
         { headers: adminHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200) });
-      metrics.sp05_grading_latency.add(Date.now() - getStart);
+      metrics.grading_grading_latency.add(Date.now() - getStart);
 
       const getOk = check(getRes, {
         'grading query 200': (r) => r.status === 200,
       });
-      metrics.sp05_grading_errors.add(!getOk);
+      metrics.grading_grading_errors.add(!getOk);
       metrics.total_errors.add(!getOk);
     } else {
-      metrics.sp05_grading_errors.add(false);
+      metrics.grading_grading_errors.add(false);
     }
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 14: AI Gateway chat (sp04-ai, 读, 4%)
+// Scenario 14: AI Gateway chat (ai-platform, 读, 4%)
 // POST /v1/chat/completions (messages, model) — 无需认证
 // ---------------------------------------------------------------------------
 function aiChatFlow(iter) {
@@ -792,25 +845,25 @@ function aiChatFlow(iter) {
   group('ai_chat', function () {
     const start = Date.now();
     const res = http.post(
-      `${SP04_AI_URL}/v1/chat/completions`,
+      `${AI_GATEWAY_URL}/v1/chat/completions`,
       JSON.stringify({
         model: 'mock',
         messages: [{ role: 'user', content: 'Hello' }],
       }),
       { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 500, 503) }
     );
-    metrics.sp04_ai_latency.add(Date.now() - start);
+    metrics.ai_gateway_latency.add(Date.now() - start);
 
     const ok = check(res, {
       'ai chat handled': (r) => r.status === 200 || r.status === 500 || r.status === 503,
     });
-    metrics.sp04_ai_errors.add(!ok);
+    metrics.ai_gateway_errors.add(!ok);
     metrics.total_errors.add(!ok);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 15: AI Gateway embeddings (sp04-ai, 读, 2%)
+// Scenario 15: AI Gateway embeddings (ai-platform, 读, 2%)
 // POST /v1/embeddings (input) — 无需认证
 // ---------------------------------------------------------------------------
 function aiEmbeddingFlow(iter) {
@@ -819,19 +872,19 @@ function aiEmbeddingFlow(iter) {
   group('ai_embedding', function () {
     const start = Date.now();
     const res = http.post(
-      `${SP04_AI_URL}/v1/embeddings`,
+      `${AI_GATEWAY_URL}/v1/embeddings`,
       JSON.stringify({
         model: 'mock',
         input: 'test text for embedding',
       }),
       { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 500, 503) }
     );
-    metrics.sp04_ai_latency.add(Date.now() - start);
+    metrics.ai_gateway_latency.add(Date.now() - start);
 
     const ok = check(res, {
       'ai embedding handled': (r) => r.status === 200 || r.status === 500 || r.status === 503,
     });
-    metrics.sp04_ai_errors.add(!ok);
+    metrics.ai_gateway_errors.add(!ok);
     metrics.total_errors.add(!ok);
   });
 }
@@ -855,7 +908,7 @@ function wsHealthFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 17: 幂等性重复请求 (BFF → sp03, 写, 1%)
+// Scenario 17: 幂等性重复请求 (BFF → core-business, 写, 1%)
 // 同一 idempotencyKey 连续 POST /api/orders 两次，验证第二次返回相同结果或 409
 // ---------------------------------------------------------------------------
 function idempotencyTestFlow(iter) {
@@ -933,6 +986,273 @@ function idempotencyTestFlow(iter) {
 }
 
 // ---------------------------------------------------------------------------
+// Scenario 18: IDE 会话生命周期 (grading-service, 写, 2%)
+// POST /api/v1/ide/sessions → POST /{sessionId}/activate → POST /{sessionId}/close
+// D-186: IDE session state machine (CREATED → ACTIVE → SUSPENDED → CLOSED)
+// ---------------------------------------------------------------------------
+function ideSessionFlow(iter) {
+  const teacher = getTeacherToken(iter);
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Role': 'teacher',
+    'Authorization': `Bearer ${teacher.token}`,
+  };
+
+  group('ide_session', function () {
+    // Step 1: Create IDE session
+    const createStart = Date.now();
+    const createRes = http.post(
+      `${GRADING_URL}/api/v1/ide/sessions`,
+      JSON.stringify({
+        courseId: KNOWN_COURSE_ID,
+        assignmentId: KNOWN_ASSIGNMENT_IDS[iter % KNOWN_ASSIGNMENT_IDS.length],
+        teacherId: teacher.userId,
+      }),
+      { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
+    );
+    metrics.grading_ide_latency.add(Date.now() - createStart);
+
+    // Extract sessionId as string (may be a UUID string, not a snowflake)
+    let sessionIdStr = null;
+    let ok = false;
+    if (createRes.status === 200 || createRes.status === 201) {
+      try {
+        const match = createRes.body.match(/"sessionId"\s*:\s*"([^"]+)"/);
+        sessionIdStr = match ? match[1] : null;
+        if (!sessionIdStr) {
+          // Try numeric id
+          const numMatch = createRes.body.match(/"sessionId"\s*:\s*(\d+)/);
+          sessionIdStr = numMatch ? numMatch[1] : null;
+        }
+        // Try "id" field as fallback
+        if (!sessionIdStr) {
+          const idMatch = createRes.body.match(/"id"\s*:\s*"?([^",}]+)"?/);
+          sessionIdStr = idMatch ? idMatch[1] : null;
+        }
+        ok = sessionIdStr != null;
+      } catch (e) { /* parse error */ }
+    } else if (createRes.status === 400 || createRes.status === 409) {
+      ok = true; // acceptable under load
+    }
+    check(createRes, { 'ide create handled': () => ok });
+    metrics.grading_ide_errors.add(!ok);
+    metrics.total_errors.add(!ok);
+    if (sessionIdStr) metrics.ide_sessions_created.add(1);
+
+    // Step 2: Activate session (if created)
+    if (sessionIdStr) {
+      const activateStart = Date.now();
+      const activateRes = http.post(
+        `${GRADING_URL}/api/v1/ide/sessions/${sessionIdStr}/activate`,
+        '{}',
+        { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 400, 409) }
+      );
+      metrics.grading_ide_latency.add(Date.now() - activateStart);
+      const activateOk = check(activateRes, {
+        'ide activate handled': (r) => r.status === 200 || r.status === 400 || r.status === 409,
+      });
+      metrics.grading_ide_errors.add(!activateOk);
+      metrics.total_errors.add(!activateOk);
+
+      // Step 3: Close session
+      const closeStart = Date.now();
+      const closeRes = http.post(
+        `${GRADING_URL}/api/v1/ide/sessions/${sessionIdStr}/close`,
+        '{}',
+        { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 400, 404, 409) }
+      );
+      metrics.grading_ide_latency.add(Date.now() - closeStart);
+      const closeOk = check(closeRes, {
+        'ide close handled': (r) => r.status === 200 || r.status === 400 || r.status === 404 || r.status === 409,
+      });
+      metrics.grading_ide_errors.add(!closeOk);
+      metrics.total_errors.add(!closeOk);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 19: 直播间生命周期 (grading-service, 写, 2%)
+// POST /api/v1/live/rooms → POST /{roomId}/prepare → POST /{roomId}/live → POST /{roomId}/end
+// D-187: Live room state machine (CREATED → PREPARED → LIVE → PAUSED → ENDED → ARCHIVED)
+// ---------------------------------------------------------------------------
+function liveRoomFlow(iter) {
+  const teacher = getTeacherToken(iter);
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Role': 'teacher',
+    'Authorization': `Bearer ${teacher.token}`,
+  };
+
+  group('live_room', function () {
+    // Step 1: Create live room
+    const createStart = Date.now();
+    const createRes = http.post(
+      `${GRADING_URL}/api/v1/live/rooms`,
+      JSON.stringify({
+        courseId: KNOWN_COURSE_ID,
+        teacherId: teacher.userId,
+        title: `Load test live room ${iter}-${__VU}`,
+        maxParticipants: 100,
+      }),
+      { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
+    );
+    metrics.grading_live_latency.add(Date.now() - createStart);
+
+    // Extract roomId as string — snowflake ID exceeds JS Number.MAX_SAFE_INTEGER
+    let roomIdStr = null;
+    let ok = false;
+    if (createRes.status === 200 || createRes.status === 201) {
+      try {
+        const match = createRes.body.match(/"roomId"\s*:\s*(\d+)/);
+        roomIdStr = match ? match[1] : null;
+        if (!roomIdStr) {
+          const idMatch = createRes.body.match(/"id"\s*:\s*(\d+)/);
+          roomIdStr = idMatch ? idMatch[1] : null;
+        }
+        ok = roomIdStr != null;
+      } catch (e) { /* parse error */ }
+    } else if (createRes.status === 400 || createRes.status === 409) {
+      ok = true; // acceptable under load
+    }
+    check(createRes, { 'live room create handled': () => ok });
+    metrics.grading_live_errors.add(!ok);
+    metrics.total_errors.add(!ok);
+    if (roomIdStr) metrics.live_rooms_created.add(1);
+
+    // Step 2-4: Room lifecycle (prepare → live → end)
+    if (roomIdStr) {
+      // Prepare
+      const prepareStart = Date.now();
+      const prepareRes = http.post(
+        `${GRADING_URL}/api/v1/live/rooms/${roomIdStr}/prepare`,
+        '{}',
+        { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 400, 409) }
+      );
+      metrics.grading_live_latency.add(Date.now() - prepareStart);
+      const prepareOk = check(prepareRes, {
+        'live prepare handled': (r) => r.status === 200 || r.status === 400 || r.status === 409,
+      });
+      metrics.grading_live_errors.add(!prepareOk);
+      metrics.total_errors.add(!prepareOk);
+
+      // Go live
+      const liveStart = Date.now();
+      const liveRes = http.post(
+        `${GRADING_URL}/api/v1/live/rooms/${roomIdStr}/live`,
+        '{}',
+        { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 400, 409) }
+      );
+      metrics.grading_live_latency.add(Date.now() - liveStart);
+      const liveOk = check(liveRes, {
+        'live go-live handled': (r) => r.status === 200 || r.status === 400 || r.status === 409,
+      });
+      metrics.grading_live_errors.add(!liveOk);
+      metrics.total_errors.add(!liveOk);
+
+      // End
+      const endStart = Date.now();
+      const endRes = http.post(
+        `${GRADING_URL}/api/v1/live/rooms/${roomIdStr}/end`,
+        '{}',
+        { headers, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 400, 404, 409) }
+      );
+      metrics.grading_live_latency.add(Date.now() - endStart);
+      const endOk = check(endRes, {
+        'live end handled': (r) => r.status === 200 || r.status === 400 || r.status === 404 || r.status === 409,
+      });
+      metrics.grading_live_errors.add(!endOk);
+      metrics.total_errors.add(!endOk);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 20: 沙箱代码执行 (grading-service, 写, 2%)
+// POST /api/v1/grading/start with sourceCode — triggers sandbox execution
+// D-185: Process sandbox executor runs student code in an isolated process
+// Flow: create submission with code → start grading → sandbox executes code
+// ---------------------------------------------------------------------------
+function sandboxExecutionFlow(iter) {
+  const teacher = getTeacherToken(iter);
+  const student = getStudentToken(iter);
+  const studentHeaders = {
+    'Content-Type': 'application/json',
+    'X-Role': 'student',
+  };
+  const teacherHeaders = {
+    'Content-Type': 'application/json',
+    'X-Role': 'teacher',
+  };
+  const assignmentId = KNOWN_ASSIGNMENT_IDS[iter % KNOWN_ASSIGNMENT_IDS.length];
+  const idemKey = genIdempotencyKey('lt-sandbox');
+
+  group('sandbox_execution', function () {
+    // Step 1: Create submission with source code for sandbox execution
+    const subStart = Date.now();
+    const subRes = http.post(
+      `${GRADING_URL}/api/v1/submissions`,
+      JSON.stringify({
+        assignmentId: assignmentId,
+        studentId: student.userId,
+        content: `print("Hello from sandbox: student ${student.userId}")`,
+        sourceCode: `public class Main { public static void main(String[] args) { System.out.println("Hello from sandbox: student ${student.userId}"); } }`,
+        language: 'java',
+        idempotencyKey: idemKey,
+      }),
+      { headers: studentHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
+    );
+    metrics.grading_submission_latency.add(Date.now() - subStart);
+
+    // Extract submissionId as string — snowflake ID exceeds JS Number.MAX_SAFE_INTEGER
+    let submissionIdStr = null;
+    let subOk = false;
+    if (subRes.status === 200 || subRes.status === 201) {
+      try {
+        const match = subRes.body.match(/"id"\s*:\s*(\d+)/);
+        submissionIdStr = match ? match[1] : null;
+        subOk = submissionIdStr != null;
+      } catch (e) { /* parse error */ }
+    } else if (subRes.status === 400 || subRes.status === 409) {
+      subOk = true; // acceptable under load
+    }
+    check(subRes, { 'sandbox submission handled': () => subOk });
+    metrics.grading_submission_errors.add(!subOk);
+    metrics.total_errors.add(!subOk);
+    if (submissionIdStr) metrics.submissions_created.add(1);
+
+    // Step 2: Start grading with sandbox execution
+    if (submissionIdStr) {
+      const gradeIdemKey = genIdempotencyKey('lt-sandbox-grade');
+      const gradeStart = Date.now();
+      const gradeRes = http.post(
+        `${GRADING_URL}/api/v1/grading/start`,
+        JSON.stringify({
+          submissionId: submissionIdStr,
+          gradedBy: teacher.userId,
+          idempotencyKey: gradeIdemKey,
+        }),
+        { headers: teacherHeaders, timeout: REQ_TIMEOUT, responseCallback: expectedStatus(200, 201, 400, 409) }
+      );
+      metrics.grading_sandbox_latency.add(Date.now() - gradeStart);
+
+      let gradeOk = false;
+      if (gradeRes.status === 200 || gradeRes.status === 201) {
+        gradeOk = true;
+      } else if (gradeRes.status === 400 || gradeRes.status === 409) {
+        gradeOk = true; // acceptable under load
+      }
+      check(gradeRes, { 'sandbox grading start handled': () => gradeOk });
+      metrics.grading_sandbox_errors.add(!gradeOk);
+      metrics.total_errors.add(!gradeOk);
+      if (gradeOk) metrics.sandbox_executions.add(1);
+    } else {
+      metrics.grading_sandbox_errors.add(false);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Setup: verify all services are healthy before starting
 // ---------------------------------------------------------------------------
 export function setup() {
@@ -940,8 +1260,8 @@ export function setup() {
 
   const services = [
     { name: 'BFF',         url: `${BFF_URL}/actuator/health` },
-    { name: 'sp05',        url: `${SP05_URL}/actuator/health` },
-    { name: 'sp04-ai',     url: `${SP04_AI_URL}/health` },
+    { name: 'grading-service',        url: `${GRADING_URL}/actuator/health` },
+    { name: 'ai-platform',     url: `${AI_GATEWAY_URL}/health` },
     { name: 'gateway-go',  url: `${GO_WS_URL}/healthz` },
   ];
 

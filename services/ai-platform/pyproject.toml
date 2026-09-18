@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "sp04-ai"
+name = "ai-platform"
 version = "1.0.0"
 description = "EP AI Middle-Platform"
 authors = ["EP Team"]

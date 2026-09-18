@@ -11,7 +11,6 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   CloseCircleOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import IdeEditor from './IdeEditor';
 import { useIdeSession } from '../api/useIdeSession';

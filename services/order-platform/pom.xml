@@ -14,7 +14,7 @@
   <artifactId>order-platform</artifactId>
   <version>1.0.0</version>
   <packaging>pom</packaging>
-  <name>SP-03 Order Middle Platform Parent</name>
+  <name>Order Platform Parent</name>
 
   <modules>
     <module>order-platform-api</module>
@@ -86,6 +86,14 @@
       <dependency>
         <groupId>com.ep</groupId>
         <artifactId>payment-platform-api</artifactId>
+        <version>1.0.0</version>
+      </dependency>
+      <!-- D-218: core-business Dubbo contract (CourseService) for server-side
+           order amount verification. Fail-closed pricing: orders are rejected
+           when the authoritative course price cannot be resolved. -->
+      <dependency>
+        <groupId>com.ep</groupId>
+        <artifactId>core-business</artifactId>
         <version>1.0.0</version>
       </dependency>
     </dependencies>

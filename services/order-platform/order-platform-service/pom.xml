@@ -11,7 +11,7 @@
 
   <artifactId>order-platform-service</artifactId>
   <packaging>jar</packaging>
-  <name>SP-03 Order Service</name>
+  <name>Order Service</name>
 
   <properties>
     <!-- D-115: JIB build port (order-platform-service listens on 8084). -->
@@ -36,11 +36,40 @@
       <artifactId>payment-platform-api</artifactId>
     </dependency>
 
+    <!-- D-218: core-business Dubbo contract (com.ep.business.course.CourseService)
+         for server-side order amount verification. createOrder resolves the
+         authoritative course price over RPC (fail-closed) instead of trusting
+         the client-supplied amount. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>core-business</artifactId>
+    </dependency>
+
     <!-- ep-web-common: shared RoleChecker / ForbiddenException / ErrorResponse /
          GlobalExceptionHandler (version from parent dependencyManagement). -->
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+    </dependency>
+
+    <!-- D-216: Disruptor multi-stage pipeline (order-events outbox). Provided
+         only as a compile dependency; default-OFF via ep.disruptor.enabled=false
+         so synchronous Pulsar publish behaviour is unchanged until production
+         opts in. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-disruptor</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
+    <!-- D-216: ep-data read/write-split datasource routing (HikariCP dual pool +
+         EpRoutingDataSource + LazyConnectionDataSourceProxy). Opt-in via
+         ep.data.enabled=true; when disabled (default) this service's own
+         DataSource auto-config is untouched. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-data</artifactId>
+      <version>1.0.0</version>
     </dependency>
 
     <!-- D-182: Multi-level cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast).
@@ -295,6 +324,13 @@
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
       <scope>test</scope>
+    </dependency>
+    <!-- D-225: PostgreSQL driver for CockroachDB (PG wire) on the
+         applications-cluster (TiDB absent; jdbc:postgresql URL via env). -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 

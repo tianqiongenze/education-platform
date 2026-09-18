@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>knowledge-bff</artifactId>
-  <name>SP-07 BFF (Gateway + Aggregation)</name>
+  <name>Knowledge BFF (Gateway + Aggregation)</name>
 
   <dependencies>
     <dependency>

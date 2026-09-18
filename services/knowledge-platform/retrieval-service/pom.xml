@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>retrieval-service</artifactId>
-  <name>SP-07 Retrieval Service</name>
+  <name>Knowledge Retrieval Service</name>
 
   <properties>
     <!-- D-115: JIB build port (retrieval-service listens on 8070; the

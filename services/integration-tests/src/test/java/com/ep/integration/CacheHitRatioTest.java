@@ -156,7 +156,6 @@ class CacheHitRatioTest {
 
         Course create(com.ep.integration.support.IntegrationDtos.CreateCourseCmd cmd) {
             Course c = backing.createCourse(cmd);
-            cache.put(courseKey(c.getCourseId()), c);
             return c;
         }
 

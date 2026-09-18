@@ -16,7 +16,7 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>grading-service</name>
-    <description>SP-05 IT Backend Business Unit Services</description>
+    <description>grading-service Backend Business Unit Services</description>
 
     <properties>
         <java.version>21</java.version>
@@ -55,6 +55,24 @@
         <dependency>
             <groupId>com.ep</groupId>
             <artifactId>grading-api</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- D-216: shared ep-disruptor SDK (RingBuffer pipeline + single worker).
+             Powers the grading-events outbox pipeline (enqueue → publish) and
+             the Yjs update batch buffer for high-frequency collaborative edits. -->
+        <dependency>
+            <groupId>com.ep</groupId>
+            <artifactId>ep-disruptor</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- D-216: shared read/write-split datasource routing (HikariCP dual pool +
+             EpRoutingDataSource + LazyConnectionDataSourceProxy). Provider-pluggable;
+             opt-in per profile via ep.data.enabled. -->
+        <dependency>
+            <groupId>com.ep</groupId>
+            <artifactId>ep-data</artifactId>
             <version>1.0.0</version>
         </dependency>
 
@@ -140,11 +158,6 @@
 
         <!-- P1-3: Redisson distributed lock + Seata distributed transaction -->
         <dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>${redisson.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.seata</groupId>
             <artifactId>seata-spring-boot-starter</artifactId>
             <version>${seata.version}</version>
@@ -209,7 +222,7 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
-        <!-- D-070: springdoc-openapi replaced with swagger-models-jakarta directly (same as sp03).
+        <!-- D-070: springdoc-openapi replaced with swagger-models-jakarta directly (same as core-business).
              springdoc references org.springframework.data.util.TypeInformation which SB4/Hibernate7 moved,
              causing NoClassDefFoundError during Dubbo bean scanning. -->
         <dependency>
@@ -247,7 +260,14 @@
             <version>1.3.0</version>
             <scope>test</scope>
         </dependency>
-    </dependencies>
+      <!-- D-225: PostgreSQL driver for CockroachDB (PG wire) on the
+         applications-cluster (TiDB absent; jdbc:postgresql URL via env). -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
 
     <build>
         <plugins>

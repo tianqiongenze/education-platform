@@ -11,7 +11,7 @@
 
   <artifactId>order-platform-api</artifactId>
   <packaging>jar</packaging>
-  <name>SP-03 Order API (Dubbo Interfaces &amp; DTOs)</name>
+  <name>Order API (Dubbo Interfaces &amp; DTOs)</name>
 
   <dependencies>
     <!-- Dubbo is required for the @DubboService / @DubboReference annotations

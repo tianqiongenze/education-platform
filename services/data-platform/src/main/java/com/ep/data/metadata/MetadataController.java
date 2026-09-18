@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST endpoint for querying the Data Fabric metadata catalog (D-074).
  *
- * <p>Minimal viable subset of sp02-sdd §12.1 / ADR-D05: list tables, list
+ * <p>Minimal viable subset of data-platform-sdd §12.1 / ADR-D05: list tables, list
  * columns for a table, and free-text search by name. GNN lineage and NL
  * query (M4) are out of scope.
  *

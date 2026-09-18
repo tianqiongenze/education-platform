@@ -141,6 +141,11 @@ func main() {
 
 	// Graceful shutdown: flush pending OTel spans before exit.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[panic-recovery] http server goroutine panicked: %v", r)
+			}
+		}()
 		log.Printf("ws-gateway listening on :%s (ws=/ws, ide=/ws/ide/, auth=%v)", port, !allowAnonymous)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
@@ -151,7 +156,21 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// P0-3: gracefully drain hijacked WebSocket connections. http.Server.Shutdown
+	// only closes the HTTP listener; hijacked TCP sockets stay open and their
+	// read/write pumps loop forever. CloseAll flips each connection's closed
+	// flag and closes its send channel, which lets the write pumps exit. The
+	// per-connection defer conn.Close() then releases the underlying TCP socket.
+	log.Printf("ws-gateway: shutting down — closing %d active ws connections", registry.Count())
+	registry.CloseAll()
+
+	// Cancel the Redis Pub/Sub + cross-pod subscribe goroutines so they exit
+	// promptly instead of blocking on a closed Redis connection.
+	subscribeCancel()
+
+	// Drain in-flight HTTP requests and give the write pumps a bounded window to
+	// flush their final frames before we tear down the server.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("http server shutdown error: %v", err)

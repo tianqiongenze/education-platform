@@ -73,9 +73,13 @@ public class GatewayRingBuffer {
                 .waitStrategy(WaitStrategyType.SLEEPING)
                 .factory(GatewayEvent::new)
                 .translator((slot, seq, src) -> {
-                    slot.setRawBytes(src.getRawBytes());
+                    slot.setMethod(src.getMethod());
+                    slot.setPath(src.getPath());
+                    slot.setHeaders(src.getHeaders());
+                    slot.setBody(src.getBody());
                     slot.setRemoteAddr(src.getRemoteAddr());
                     slot.setTimestamp(src.getTimestamp());
+                    slot.setChannel(src.getChannel());
                 })
                 .handler(dispatcher)
                 .build();

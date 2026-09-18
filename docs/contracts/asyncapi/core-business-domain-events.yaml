@@ -1,0 +1,162 @@
+asyncapi: 3.0.0
+info:
+  title: Core Business Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for core-business domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: core-business service.
+    Subscribers: grading-service (course events), data-platform (CDC).
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  core-business-domain-events:
+    address: persistent://public/default/core-business-domain-events
+    description: Topic for core-business domain events (course lifecycle, user lifecycle).
+    messages:
+      CoursePublishedEvent:
+        $ref: '#/components/messages/CoursePublishedEvent'
+      CourseArchivedEvent:
+        $ref: '#/components/messages/CourseArchivedEvent'
+      UserFrozenEvent:
+        $ref: '#/components/messages/UserFrozenEvent'
+operations:
+  publishCoursePublishedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/core-business-domain-events'
+    messages:
+      - $ref: '#/components/messages/CoursePublishedEvent'
+  publishCourseArchivedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/core-business-domain-events'
+    messages:
+      - $ref: '#/components/messages/CourseArchivedEvent'
+  publishUserFrozenEvent:
+    action: send
+    channel:
+      $ref: '#/channels/core-business-domain-events'
+    messages:
+      - $ref: '#/components/messages/UserFrozenEvent'
+components:
+  messages:
+    CoursePublishedEvent:
+      description: Emitted when a Course transitions from DRAFT to PUBLISHED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [CoursePublishedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/CoursePublishedEventPayload'
+    CourseArchivedEvent:
+      description: Emitted when a Course transitions from PUBLISHED to ARCHIVED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [CourseArchivedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/CourseArchivedEventPayload'
+    UserFrozenEvent:
+      description: Emitted when a User transitions to FROZEN.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [UserFrozenEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/UserFrozenEventPayload'
+  schemas:
+    CoursePublishedEventPayload:
+      type: object
+      required: [aggregateId, courseId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (course id).
+        courseId:
+          type: integer
+          format: int64
+          description: The published course ID.
+        teacherId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The teacher assigned to the course (nullable).
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    CourseArchivedEventPayload:
+      type: object
+      required: [aggregateId, courseId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (course id).
+        courseId:
+          type: integer
+          format: int64
+          description: The archived course ID.
+        teacherId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The teacher assigned to the course (nullable).
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    UserFrozenEventPayload:
+      type: object
+      required: [aggregateId, userId, reason, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (user id).
+        userId:
+          type: integer
+          format: int64
+          description: The frozen user ID.
+        reason:
+          type: string
+          description: Reason the user was frozen.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

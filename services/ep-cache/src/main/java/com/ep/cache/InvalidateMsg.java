@@ -1,5 +1,6 @@
 package com.ep.cache;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class InvalidateMsg {
     private String cacheName;
     private String key;

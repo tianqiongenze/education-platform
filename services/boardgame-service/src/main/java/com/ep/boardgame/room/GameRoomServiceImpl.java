@@ -61,12 +61,30 @@ public class GameRoomServiceImpl implements GameRoomService {
         if (cmd.getTenantId() == null) {
             throw new NullPointerException("tenantId");
         }
+
+        // D-221: probe-pattern idempotency — a retried create with the same
+        // business key returns the original room instead of duplicating it.
+        // Blank keys are normalised to null so they never enter the unique index.
+        String idemKey = cmd.getIdempotencyKey() == null || cmd.getIdempotencyKey().isBlank()
+                ? null : cmd.getIdempotencyKey().trim();
+        if (idemKey != null) {
+            GameRoom existing = roomRepo
+                    .findByTenantIdAndIdempotencyKey(cmd.getTenantId(), idemKey)
+                    .orElse(null);
+            if (existing != null) {
+                log.info("D-221: createRoom idempotent replay for tenantId={} key={}: returning roomId={}",
+                        cmd.getTenantId(), idemKey, existing.getRoomId());
+                return existing;
+            }
+        }
+
         GameRoom room = new GameRoom();
         room.setRoomId(SnowflakeIdGenerator.getInstance().nextId());
         room.setTenantId(cmd.getTenantId());
         room.setCourseId(cmd.getCourseId());
         room.setLessonId(cmd.getLessonId());
         room.setRoomName(cmd.getRoomName());
+        room.setIdempotencyKey(idemKey);
         room.setStatus(GameRoom.STATUS_CREATED);
         room.setCreatedAt(System.currentTimeMillis());
         room.setUpdatedAt(System.currentTimeMillis());

@@ -1,7 +1,7 @@
 package com.ep.grading.api.grading;
 
 /**
- * D-050 P2-5: sp05 grading Dubbo RPC contract.
+ * D-050 P2-5: grading-service grading Dubbo RPC contract.
  *
  * <p>Closes the audit D-048 P2-5 gap: {@code KnowledgeToolService.gradeSubmission}
  * previously threw {@link UnsupportedOperationException} because no shared

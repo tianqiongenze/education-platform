@@ -1,14 +1,15 @@
+# SP-04 AI中台 软件需求规格说明书(SRS)
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp04` for reference continuity. Per D-137, sp04 → ai-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP04-SRS | v1.0 | 2026-08-03 | 评审通过 | AI中台文档工程组 | 架构委员会 |
-
-# SP-04 AI中台 软件需求规格说明书(SRS)
 
 > 关联：项目群顶层 spec `2026-08-03-education-platform-blueprint-and-platforms-sad.md` §6
 > 决策：D-010 / D-018 / D-019 / D-020；ADR-A01 / ADR-A02 / ADR-A03 / ADR-A04
 
 ## 1. 引言
-
 ### 1.1 目的
 本文档对 SP-04 AI中台 的功能性需求与非功能性需求进行完整、可验证的描述，覆盖 4 层架构（AI应用层 / 模型网关 / RAG层 / 数据底座）及 5 个智能 Agent（批改 / 出题 / 答疑 / 学习路径 / 数字人）。文档面向架构评审、研发实现、测试验收三方。
 

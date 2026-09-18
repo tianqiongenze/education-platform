@@ -1,8 +1,10 @@
+# SP-04 AI中台 软件详细设计(SDD)
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp04` for reference continuity. Per D-137, sp04 → ai-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP04-SDD | v1.0 | 2026-08-03 | 评审通过 | AI中台架构组 | 架构委员会 |
-
-# SP-04 AI中台 软件详细设计(SDD)
 
 > 关联：SRS `sp04-srs.md`、SAD `sp04-sad.md`；ADR-A01..A04；D-010/018/019/020
 

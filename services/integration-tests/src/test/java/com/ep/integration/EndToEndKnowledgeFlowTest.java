@@ -179,10 +179,23 @@ class EndToEndKnowledgeFlowTest {
 
         List<KnowledgeChunk> search(String kbId, String query) {
             List<KnowledgeChunk> chunks = byKb.getOrDefault(kbId, List.of());
-            // Naive substring match — sufficient for the fake.
+            // Token-based match: any significant query token (length > 3)
+            // found in the chunk text counts as a hit — this mirrors real
+            // RAG retrieval where a natural-language query is matched on its
+            // terms, not as a full-string substring.
             List<KnowledgeChunk> hits = new ArrayList<>();
+            if (query == null) return hits;
+            String[] queryTokens = query.toLowerCase().split("\\s+");
             for (KnowledgeChunk c : chunks) {
-                if (query != null && c.text().toLowerCase().contains(query.toLowerCase())) {
+                String textLower = c.text().toLowerCase();
+                boolean matched = false;
+                for (String token : queryTokens) {
+                    if (token.length() > 3 && textLower.contains(token)) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (matched) {
                     hits.add(c);
                 }
             }

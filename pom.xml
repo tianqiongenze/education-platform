@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.ep</groupId>
+    <artifactId>ep-parent</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>EP Education Platform - Root BOM</name>
+    <description>Unified dependency management for all EP Java services.
+
+        This BOM aggregates the canonical dependency versions used across the
+        EP Java service fleet. It serves three purposes:
+        1. A central version reference document — compare service pom versions
+           against the properties below to detect version drift.
+        2. A future migration target — services can adopt this BOM via
+           &lt;dependencyManagement&gt; import once a migration window opens.
+        3. A build aggregator — the &lt;modules&gt; list enumerates every Java
+           service so a reactor build can be run from the repo root.
+
+        NOTE: Existing service pom.xml files are intentionally NOT modified to
+        import this BOM yet. Each service still inherits from
+        spring-boot-starter-parent directly. The versions below mirror the
+        highest version currently declared in any service pom.xml so the BOM
+        is a safe, non-breaking superset.
+    </description>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Spring Boot: all services use 4.0.7 -->
+        <spring-boot.version>4.0.7</spring-boot.version>
+
+        <!-- Pulsar: all services already aligned on 3.3.9 (D-195 upgrade
+             target is Pulsar 4.0 / 2027 Q1). -->
+        <pulsar.version>3.3.9</pulsar.version>
+
+        <!-- Jackson: 2.19.4 across ep-cache and data-platform. -->
+        <jackson.version>2.19.4</jackson.version>
+
+        <!-- SLF4J: 2.0.18 across ep-cache, ep-disruptor, data-platform. -->
+        <slf4j.version>2.0.18</slf4j.version>
+
+        <!-- JUnit 5: 5.14.4 across all services that declare it explicitly. -->
+        <junit.version>5.14.4</junit.version>
+
+        <!-- Mockito: 5.18.0 across all services that declare it explicitly. -->
+        <mockito.version>5.18.0</mockito.version>
+
+        <!-- ArchUnit: 1.3.0 across all services with ArchitectureTest. -->
+        <archunit.version>1.3.0</archunit.version>
+
+        <!-- Resilience4j: 2.2.0 across boardgame-service, core-business,
+             data-platform, ep-web-common, grading-service, portal-bff,
+             senior-care, knowledge-platform. -->
+        <resilience4j.version>2.2.0</resilience4j.version>
+
+        <!-- Springdoc OpenAPI: 2.6.0 across data-platform and the
+             knowledge-platform services. Several services (core-business,
+             grading-service, portal-bff) replaced springdoc with
+             swagger-models-jakarta directly due to SB4 incompatibilities;
+             they do not consume this entry. -->
+        <springdoc.version>2.6.0</springdoc.version>
+
+        <!-- Dubbo: 3.3.6 across ep-memory-java, grading-api, grading-service,
+             integration-tests, knowledge-platform, order-platform,
+             payment-platform, portal-bff. -->
+        <dubbo.version>3.3.6</dubbo.version>
+
+        <!-- Seata: 2.0.0 across grading-service and integration-tests. -->
+        <seata.version>2.0.0</seata.version>
+
+        <!-- Redisson: 3.51.0 across grading-service and integration-tests. -->
+        <redisson.version>3.51.0</redisson.version>
+
+        <!-- JJWT: 0.12.6 in grading-service. -->
+        <jjwt.version>0.12.6</jjwt.version>
+
+        <!-- Testcontainers: 1.20.4 in order-platform-service
+             (Spring Boot 4.0.7 BOM manages 2.0.5 where not overridden). -->
+        <testcontainers.version>1.20.4</testcontainers.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot BOM — imports the full managed-dependency set
+                 for Spring Boot 4.0.7 (Spring Framework, Hibernate, Tomcat,
+                 Jackson where not overridden below, Logback, etc.). -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Pulsar (unified version) — declared explicitly because
+                 Spring Boot does not manage org.apache.pulsar artifacts. -->
+            <dependency>
+                <groupId>org.apache.pulsar</groupId>
+                <artifactId>pulsar-client</artifactId>
+                <version>${pulsar.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pulsar</groupId>
+                <artifactId>pulsar-client-admin</artifactId>
+                <version>${pulsar.version}</version>
+            </dependency>
+
+            <!-- Jackson (pinned above the SB BOM default where services
+                   need 2.19.4 explicitly). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jsr310</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
+            <!-- SLF4J -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- Test stack -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Resilience4j -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-reactor</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+
+            <!-- Springdoc OpenAPI -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- Dubbo -->
+            <dependency>
+                <groupId>org.apache.dubbo</groupId>
+                <artifactId>dubbo-spring-boot-starter</artifactId>
+                <version>${dubbo.version}</version>
+            </dependency>
+
+            <!-- Seata -->
+            <dependency>
+                <groupId>io.seata</groupId>
+                <artifactId>seata-spring-boot-starter</artifactId>
+                <version>${seata.version}</version>
+            </dependency>
+
+            <!-- Redisson -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-spring-boot-starter</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+
+            <!-- JJWT -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- Testcontainers -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers</artifactId>
+                <version>${testcontainers.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>mysql</artifactId>
+                <version>${testcontainers.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- EP internal libraries (module coordinates for reference) -->
+            <dependency>
+                <groupId>com.ep</groupId>
+                <artifactId>ep-web-common</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ep</groupId>
+                <artifactId>ep-disruptor</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ep</groupId>
+                <artifactId>ep-cache</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ep</groupId>
+                <artifactId>ep-memory-java</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+            <!-- D-216: shared read/write-split datasource routing (HikariCP dual pool +
+                 EpRoutingDataSource + LazyConnectionDataSourceProxy). Provider-pluggable:
+                 tidb | cockroachdb | mysql | h2. -->
+            <dependency>
+                <groupId>com.ep</groupId>
+                <artifactId>ep-data</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- Module list for reference (not enforced for build today; services
+         still build independently against spring-boot-starter-parent). -->
+    <modules>
+        <!-- Shared libraries
+             (ep-memory-java is also a module of knowledge-platform, so it is
+             not listed standalone here to avoid a duplicate reactor entry) -->
+        <module>services/ep-web-common</module>
+        <module>services/ep-disruptor</module>
+        <module>services/ep-cache</module>
+        <module>services/ep-data</module>
+
+        <!-- Core business services -->
+        <module>services/core-business</module>
+        <module>services/grading-api</module>
+        <module>services/grading-service</module>
+        <module>services/senior-care</module>
+        <module>services/boardgame-service</module>
+        <module>services/data-platform</module>
+
+        <!-- Platform services -->
+        <module>services/portal-bff</module>
+        <module>services/integration-tests</module>
+
+        <!-- Order platform (multi-module) -->
+        <module>services/order-platform</module>
+
+        <!-- Payment platform (multi-module) -->
+        <module>services/payment-platform</module>
+
+        <!-- Knowledge platform (multi-module) -->
+        <module>services/knowledge-platform</module>
+    </modules>
+</project>

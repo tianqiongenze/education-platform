@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <!--
-    D-050 P2-5: grading-api — shared Dubbo API contract module for SP-05 IT Backend.
+    D-050 P2-5: grading-api — shared Dubbo API contract module for grading-service.
     Mirrors knowledge-api's role: a thin, dependency-light jar holding only Dubbo
     interfaces + Serializable DTOs/records, consumable by BFF, mcp-server
     and any other consumer without dragging in Spring Boot / JPA / Sentinel.
@@ -25,8 +25,8 @@
   <artifactId>grading-api</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
-  <name>SP-05 API (Dubbo Interfaces &amp; DTOs)</name>
-  <description>Shared Dubbo RPC contracts for SP-05 IT Backend (GradingRpcService and DTOs).</description>
+  <name>Grading API (Dubbo Interfaces &amp; DTOs)</name>
+  <description>Shared Dubbo RPC contracts for grading-service (GradingRpcService and DTOs).</description>
 
   <properties>
     <java.version>21</java.version>

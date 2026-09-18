@@ -129,20 +129,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientID := nextYjsConnID()
 
 	// sendCh is the per-connection outbound buffer. The write pump drains it.
-	sendCh := make(chan []byte, 256)
+	// st coordinates close/send so a concurrent BroadcastUpdate can never panic
+	// on "send on closed channel" (P0-1).
+	st := newClientState()
 	closed := make(chan struct{})
 
 	client := &Client{
 		ID:     clientID,
 		UserID: userID,
-		Send: func(msg []byte) bool {
-			select {
-			case sendCh <- msg:
-				return true
-			default:
-				return false
-			}
-		},
+		Send:   st.trySend,
 	}
 
 	if !room.Join(client) {
@@ -176,7 +171,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 7. Read pump: read binary frames, dispatch to the room
 	go func() {
-		defer func() { close(sendCh) }()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[panic-recovery] yjs read pump panicked: %v", r)
+			}
+			st.closeAndDrain()
+		}()
 		buf := make([]byte, 65536)
 		for {
 			n, err := rw.Read(buf)
@@ -194,7 +194,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 8. Write pump: drain sendCh to the wire
 	for {
 		select {
-		case msg, ok := <-sendCh:
+		case msg, ok := <-st.sendCh:
 			if !ok {
 				return
 			}

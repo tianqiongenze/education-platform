@@ -3,7 +3,7 @@
 Delegates extract/retrieve to the official Mem0 pipeline (``mem0ai``). The
 Mem0 instance is configured to use:
   * Milvus as the vector store,
-  * the SP04 gateway (OpenAI-compatible) as both the LLM and the embedder.
+  * the AI gateway (OpenAI-compatible) as both the LLM and the embedder.
 
 Iron Law 0 compliance (D-052):
   * Production (EP_DEV_ONLY not set): Mem0/Milvus init failure → ``ConnectionError``.
@@ -162,24 +162,24 @@ class LongTermMemory:
     # Mem0 configuration
     # ------------------------------------------------------------------ #
     def _build_mem0_config(self) -> dict:
-        """Build Mem0 config pointing at Milvus for vectors and the SP04
+        """Build Mem0 config pointing at Milvus for vectors and the AI
         gateway (OpenAI-compatible) for LLM + embedder.
 
-        When ``sp04_gateway_url`` is set, both the LLM and embedder blocks
-        use ``openai_base_url`` so Mem0 routes requests through the SP04
+        When ``ai_gateway_url`` is set, both the LLM and embedder blocks
+        use ``openai_base_url`` so Mem0 routes requests through the AI
         gateway instead of calling OpenAI directly. When unset, Mem0 falls
         back to its own defaults (which require OPENAI_API_KEY).
         """
-        llm_config: dict[str, Any] = {"model": self.config.sp04_gateway_llm_model}
+        llm_config: dict[str, Any] = {"model": self.config.ai_gateway_llm_model}
         embedder_config: dict[str, Any] = {
-            "model": self.config.sp04_gateway_embedder_model
+            "model": self.config.ai_gateway_embedder_model
         }
-        if self.config.sp04_gateway_url:
-            llm_config["openai_base_url"] = self.config.sp04_gateway_url
-            embedder_config["openai_base_url"] = self.config.sp04_gateway_url
-        if self.config.sp04_gateway_api_key:
-            llm_config["api_key"] = self.config.sp04_gateway_api_key
-            embedder_config["api_key"] = self.config.sp04_gateway_api_key
+        if self.config.ai_gateway_url:
+            llm_config["openai_base_url"] = self.config.ai_gateway_url
+            embedder_config["openai_base_url"] = self.config.ai_gateway_url
+        if self.config.ai_gateway_api_key:
+            llm_config["api_key"] = self.config.ai_gateway_api_key
+            embedder_config["api_key"] = self.config.ai_gateway_api_key
         return {
             "vector_store": {
                 "provider": "milvus",

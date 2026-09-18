@@ -1,6 +1,7 @@
 package com.ep.senior.event;
 
 import com.ep.senior.common.DomainEvent;
+import com.ep.web.common.event.EventSendRetrySupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -11,12 +12,18 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * D-147: publishes senior-care domain events to Pulsar.
  * Best-effort: a publish failure is logged and never propagates.
+ * D-event-reliability: send failures are retried (bounded, linear backoff) via
+ * {@link EventSendRetrySupport}; terminal failures are logged at WARN with the
+ * structured envelope fields eventId/eventType/aggregateId/schemaVersion (the
+ * failure handler there is the future transactional-outbox hook). Publish stays
+ * post-commit only.
  * EP_DEV_ONLY guard: when ep.pulsar.enabled=false (dev/test default),
  * the publisher is a no-op.
  */
@@ -29,15 +36,29 @@ public class PulsarEventPublisher {
     private final String topic;
     private final ObjectMapper mapper;
     private final boolean pulsarEnabled;
+    private final int sendRetries;
+    private final long sendBackoffMillis;
 
     private volatile Producer<byte[]> producer;
 
     public PulsarEventPublisher(ObjectProvider<PulsarClient> clientProvider,
                                 PulsarClientProperties properties,
                                 @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled) {
+        this(clientProvider, properties, pulsarEnabled,
+                EventSendRetrySupport.DEFAULT_MAX_RETRIES, EventSendRetrySupport.DEFAULT_BACKOFF_MILLIS);
+    }
+
+    @Autowired
+    public PulsarEventPublisher(ObjectProvider<PulsarClient> clientProvider,
+                                PulsarClientProperties properties,
+                                @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled,
+                                @Value("${ep.pulsar.send-retries:2}") int sendRetries,
+                                @Value("${ep.pulsar.send-backoff-millis:200}") long sendBackoffMillis) {
         this.clientProvider = clientProvider;
         this.topic = properties.getTopic().getDomainEvents();
         this.pulsarEnabled = pulsarEnabled;
+        this.sendRetries = sendRetries;
+        this.sendBackoffMillis = sendBackoffMillis;
         this.mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -74,11 +95,11 @@ public class PulsarEventPublisher {
         }
         try {
             byte[] payload = mapper.writeValueAsBytes(event);
-            producer.sendAsync(payload)
-                    .exceptionally(e -> {
-                        log.warn("Pulsar send failed for {}: {}", event.getClass().getSimpleName(), e.getMessage());
-                        return null;
-                    });
+            // D-event-reliability: bounded retries with backoff; on terminal
+            // failure the shared-contract envelope fields are logged at WARN
+            // (outbox hook lives in EventSendRetrySupport).
+            EventSendRetrySupport.sendWithRetry(() -> producer.sendAsync(payload), event.envelope(),
+                    sendRetries, sendBackoffMillis);
         } catch (Exception e) {
             log.warn("Pulsar publish failed for {}: {}", event.getClass().getSimpleName(), e.getMessage());
         }

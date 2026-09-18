@@ -11,8 +11,8 @@
   </parent>
 
   <artifactId>mcp-server</artifactId>
-  <name>SP-07 MCP Server</name>
-  <description>SP-07 Knowledge MCP Server exposing knowledge/retrieval/tenant tools via the Model Context Protocol (JSON-RPC 2.0).</description>
+  <name>EP MCP Server</name>
+  <description>Knowledge Platform MCP Server exposing knowledge/retrieval/tenant tools via the Model Context Protocol (JSON-RPC 2.0).</description>
 
   <dependencies>
     <!-- P2-5: knowledge-api shared Dubbo contracts (RetrievalRpcService, etc.) -->
@@ -22,7 +22,7 @@
       <version>${project.version}</version>
     </dependency>
     <!-- D-050 P2-5: grading-api shared Dubbo contracts (GradingRpcService + DTOs)
-         so submission.grade can @DubboReference the sp05 grading provider. -->
+         so submission.grade can @DubboReference the grading provider. -->
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>grading-api</artifactId>

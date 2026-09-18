@@ -56,8 +56,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * additionally refuses to boot if {@code EP_DEV_ONLY=true} in a non-dev
  * profile.
  *
- * <p>Idempotency: {@code paymentId} is a UUID minted per create call. A
- * production version adds the Redis SETNX + DB UNIQUE-key layer from SDD §3.3.
+ * <p>Idempotency: {@code createPayment} deduplicates by {@code orderId} — a
+ * second create request for an order that already has a payment returns the
+ * existing payment (same {@code paymentId}) instead of minting a new one. The
+ * dedup is enforced both in the application layer ({@code existsByOrderId} /
+ * the in-memory {@code paymentsByOrder} map) and at the DB level via the
+ * UNIQUE constraint on {@code ep_payment.order_id} (D-090), so the guard holds
+ * even under a concurrent race. {@code paymentId} itself is a UUID minted per
+ * create call.
  */
 @DubboService
 public class PaymentServiceImpl implements PaymentService {
@@ -190,6 +196,22 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (request.channel() == null) {
             throw new IllegalArgumentException("channel must not be null");
+        }
+
+        // D-090: idempotency — a payment already exists for this order. Return
+        // the existing payment (same paymentId) instead of minting a duplicate.
+        // Both the JPA path (existsByOrderId, backed by the UNIQUE order_id
+        // constraint) and the in-memory fallback (paymentsByOrder) are covered.
+        Payment existing = isJpa()
+                ? (paymentRepository.existsByOrderId(request.orderId())
+                        ? getPaymentByOrderDirect(request.orderId())
+                        : null)
+                : paymentsByOrder.get(request.orderId());
+        if (existing != null) {
+            log.info("createPayment: idempotent reuse for orderId={}, paymentId={}",
+                    request.orderId(), existing.getPaymentId());
+            return new PaymentResult(existing.getPaymentId(), existing.getStatus(),
+                    existing.getChannelTxId(), existing.getPaidAt());
         }
 
         PaymentChannel effective = devGuard ? PaymentChannel.MOCK : request.channel();

@@ -52,6 +52,22 @@ public class ElderProfileServiceImpl implements ElderProfileService {
         Objects.requireNonNull(cmd.getFacilityId(), "facilityId");
         Objects.requireNonNull(cmd.getTenantId(), "tenantId");
 
+        // D-221: probe-pattern idempotency — a retried create with the same
+        // business key returns the original profile instead of duplicating it.
+        // Blank keys are normalised to null so they never enter the unique index.
+        String idemKey = cmd.getIdempotencyKey() == null || cmd.getIdempotencyKey().isBlank()
+                ? null : cmd.getIdempotencyKey().trim();
+        if (idemKey != null) {
+            ElderProfile existing = repository
+                    .findByTenantIdAndIdempotencyKey(cmd.getTenantId(), idemKey)
+                    .orElse(null);
+            if (existing != null) {
+                log.info("D-221: createElder idempotent replay for tenantId={} key={}: returning elderId={}",
+                        cmd.getTenantId(), idemKey, existing.getElderId());
+                return existing;
+            }
+        }
+
         long now = System.currentTimeMillis();
         ElderProfile elder = new ElderProfile();
         elder.setElderId(SnowflakeIdGenerator.getInstance().nextId());
@@ -65,6 +81,7 @@ public class ElderProfileServiceImpl implements ElderProfileService {
         elder.setEmergencyContact(cmd.getEmergencyContact());
         elder.setAddress(cmd.getAddress());
         elder.setNotes(cmd.getNotes());
+        elder.setIdempotencyKey(idemKey);
         elder.setStatus(ElderStatus.ACTIVE.getCode());
         elder.setCreatedAt(now);
         elder.setUpdatedAt(now);

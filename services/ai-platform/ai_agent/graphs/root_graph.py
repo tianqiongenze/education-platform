@@ -5,7 +5,7 @@ The supervisor routes to one of the industry-specific subgraphs (loaded from
 completion then returns to the supervisor for another round (or END).
 
 Industry subgraphs are discovered dynamically from the industry config so the
-platform code stays industry-agnostic (SP-04 industry-agnostic refactoring).
+platform code stays industry-agnostic (AI industry-agnostic refactoring).
 """
 
 from __future__ import annotations

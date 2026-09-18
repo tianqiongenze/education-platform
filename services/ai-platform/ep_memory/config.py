@@ -36,12 +36,12 @@ class MemoryConfig:
     # L2 long-term memory
     l2_collection: str = "mem_episodic"
     mem0_enabled: bool = True
-    # SP04 gateway endpoints for Mem0 LLM + embedder (OpenAI-compatible).
+    # AI gateway endpoints for Mem0 LLM + embedder (OpenAI-compatible).
     # When unset, Mem0 falls back to its own defaults (which require OPENAI_API_KEY).
-    sp04_gateway_url: str | None = None
-    sp04_gateway_llm_model: str = "gpt-4o-mini"
-    sp04_gateway_embedder_model: str = "text-embedding-3-small"
-    sp04_gateway_api_key: str | None = None
+    ai_gateway_url: str | None = None
+    ai_gateway_llm_model: str = "gpt-4o-mini"
+    ai_gateway_embedder_model: str = "text-embedding-3-small"
+    ai_gateway_api_key: str | None = None
 
     # L2 procedural memory — TiDB recursive CTE (D-053: Neo4j→TiDB)
     procedural_table: str = "mem_procedural"
@@ -69,14 +69,14 @@ class MemoryConfig:
             l1_ttl=int(os.environ.get("EP_MEM_L1_TTL", "604800") or 604800),
             l2_collection=os.environ.get("EP_MEM_L2_COLLECTION", "mem_episodic") or "mem_episodic",
             mem0_enabled=os.environ.get("EP_MEM_MEM0_ENABLED", "1") not in ("0", "false", "False"),
-            sp04_gateway_url=os.environ.get("SP04_GATEWAY_URL") or None,
-            sp04_gateway_llm_model=os.environ.get("SP04_GATEWAY_LLM_MODEL", "gpt-4o-mini")
+            ai_gateway_url=os.environ.get("EP_AI_GATEWAY_URL") or None,
+            ai_gateway_llm_model=os.environ.get("EP_AI_GATEWAY_LLM_MODEL", "gpt-4o-mini")
             or "gpt-4o-mini",
-            sp04_gateway_embedder_model=os.environ.get(
-                "SP04_GATEWAY_EMBEDDER_MODEL", "text-embedding-3-small"
+            ai_gateway_embedder_model=os.environ.get(
+                "EP_AI_GATEWAY_EMBEDDER_MODEL", "text-embedding-3-small"
             )
             or "text-embedding-3-small",
-            sp04_gateway_api_key=os.environ.get("SP04_GATEWAY_API_KEY") or None,
+            ai_gateway_api_key=os.environ.get("EP_AI_GATEWAY_API_KEY") or None,
             procedural_table=os.environ.get("EP_MEM_PROCEDURAL_TABLE", "mem_procedural")
             or "mem_procedural",
             procedural_max_depth=int(os.environ.get("EP_MEM_PROCEDURAL_MAX_DEPTH", "5") or 5),

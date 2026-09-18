@@ -1,0 +1,141 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Layer 1/3 — atomic primitives (W3C DTCG format). No semantic meaning here.",
+  "color": {
+    "$type": "color",
+    "$description": "Atomic palette. Brand: blue #1890ff family, purple #722ed1 family (AntD-compatible scales).",
+    "blue": {
+      "1": { "$value": "#e6f7ff", "$description": "blue-1 container" },
+      "2": { "$value": "#91d5ff", "$description": "blue-2 hover" },
+      "3": { "$value": "#40a9ff", "$description": "blue-3 hover / dark-mode brand" },
+      "4": { "$value": "#1890ff", "$description": "blue-4 BRAND PRIMARY" },
+      "5": { "$value": "#096dd9", "$description": "blue-5 active" },
+      "6": { "$value": "#0050b3", "$description": "blue-6 pressed" },
+      "7": { "$value": "#003a8c", "$description": "blue-7 deep" },
+      "8": { "$value": "#002766", "$description": "blue-8 deepest" }
+    },
+    "purple": {
+      "1": { "$value": "#f9f0ff", "$description": "purple-1 container" },
+      "2": { "$value": "#efdbff", "$description": "purple-2" },
+      "3": { "$value": "#d3adf7", "$description": "purple-3" },
+      "4": { "$value": "#b37feb", "$description": "purple-4 hover" },
+      "5": { "$value": "#722ed1", "$description": "purple-5 SECONDARY BRAND (knowledge BU)" },
+      "6": { "$value": "#531dab", "$description": "purple-6 active" },
+      "7": { "$value": "#391085", "$description": "purple-7" },
+      "8": { "$value": "#22075e", "$description": "purple-8" }
+    },
+    "cyan": {
+      "1": { "$value": "#e6fffb", "$description": "cyan-1 container" },
+      "2": { "$value": "#87e8de", "$description": "cyan-2" },
+      "3": { "$value": "#13c2c2", "$description": "cyan-3 brand (knowledge portal accent)" },
+      "4": { "$value": "#08979c", "$description": "cyan-4" },
+      "5": { "$value": "#006d75", "$description": "cyan-5" }
+    },
+    "green": {
+      "1": { "$value": "#f6ffed", "$description": "green-1 container" },
+      "2": { "$value": "#b7eb8f", "$description": "green-2" },
+      "3": { "$value": "#52c41a", "$description": "green-3 SUCCESS" },
+      "4": { "$value": "#389e0d", "$description": "green-4" },
+      "5": { "$value": "#237804", "$description": "green-5" },
+      "6": { "$value": "#135200", "$description": "green-6" }
+    },
+    "orange": {
+      "1": { "$value": "#fff7e6", "$description": "orange-1 container" },
+      "2": { "$value": "#ffd591", "$description": "orange-2" },
+      "3": { "$value": "#fa8c16", "$description": "orange-3 WARNING" },
+      "4": { "$value": "#d46b08", "$description": "orange-4" },
+      "5": { "$value": "#874d00", "$description": "orange-5" }
+    },
+    "red": {
+      "1": { "$value": "#fff1f0", "$description": "red-1 container" },
+      "2": { "$value": "#ffa39e", "$description": "red-2" },
+      "3": { "$value": "#ff7875", "$description": "red-3" },
+      "4": { "$value": "#ff4d4f", "$description": "red-4 ERROR" },
+      "5": { "$value": "#f5222d", "$description": "red-5" },
+      "6": { "$value": "#cf1322", "$description": "red-6 dark-mode error text" },
+      "7": { "$value": "#a8071a", "$description": "red-7" }
+    },
+    "magenta": {
+      "1": { "$value": "#fff0f6", "$description": "magenta-1 container" },
+      "2": { "$value": "#ffadd2", "$description": "magenta-2" },
+      "3": { "$value": "#eb2f96", "$description": "magenta-3 accent (AI)" },
+      "4": { "$value": "#c41d7f", "$description": "magenta-4" },
+      "5": { "$value": "#9e1068", "$description": "magenta-5" }
+    },
+    "gray": {
+      "0": { "$value": "#ffffff", "$description": "white" },
+      "1": { "$value": "#fafafa", "$description": "gray-1 layout alt" },
+      "2": { "$value": "#f5f5f5", "$description": "gray-2 page bg" },
+      "3": { "$value": "#f0f0f0", "$description": "gray-3 divider" },
+      "4": { "$value": "#d9d9d9", "$description": "gray-4 border" },
+      "5": { "$value": "#bfbfbf", "$description": "gray-5 border strong" },
+      "6": { "$value": "#8c8c8c", "$description": "gray-6 text secondary" },
+      "7": { "$value": "#595959", "$description": "gray-7" },
+      "8": { "$value": "#434343", "$description": "gray-8 dark border" },
+      "9": { "$value": "#262626", "$description": "gray-9 text primary" },
+      "10": { "$value": "#1f1f1f", "$description": "gray-10 dark container" },
+      "11": { "$value": "#141414", "$description": "gray-11 dark page bg" },
+      "12": { "$value": "#e6e6e6", "$description": "gray-12 dark-mode text primary" }
+    }
+  },
+  "space": {
+    "$type": "dimension",
+    "$description": "8-level spacing scale on a 4px base grid.",
+    "1": { "$value": "4px", "$description": "space-xs" },
+    "2": { "$value": "8px", "$description": "space-sm" },
+    "3": { "$value": "12px", "$description": "space-sm+" },
+    "4": { "$value": "16px", "$description": "space-md" },
+    "5": { "$value": "24px", "$description": "space-lg" },
+    "6": { "$value": "32px", "$description": "space-lg+" },
+    "7": { "$value": "48px", "$description": "space-xl" },
+    "8": { "$value": "64px", "$description": "space-xxl" }
+  },
+  "font": {
+    "size": {
+      "$type": "dimension",
+      "$description": "8-level type scale.",
+      "1": { "$value": "12px", "$description": "caption / button sm" },
+      "2": { "$value": "14px", "$description": "body (base)" },
+      "3": { "$value": "16px", "$description": "body lg" },
+      "4": { "$value": "18px", "$description": "subtitle" },
+      "5": { "$value": "20px", "$description": "title 4" },
+      "6": { "$value": "24px", "$description": "title 3" },
+      "7": { "$value": "28px", "$description": "title 2" },
+      "8": { "$value": "36px", "$description": "title 1 / display" }
+    },
+    "weight": {
+      "regular": { "$value": "400" },
+      "medium": { "$value": "500" },
+      "bold": { "$value": "700" }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "$description": "4-level corner radius scale.",
+    "1": { "$value": "4px", "$description": "sm — chips, tags" },
+    "2": { "$value": "6px", "$description": "md — buttons, inputs (AntD default)" },
+    "3": { "$value": "8px", "$description": "lg — cards" },
+    "4": { "$value": "12px", "$description": "xl — modals, hero blocks" }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "$description": "4-level elevation scale.",
+    "1": { "$value": "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)", "$description": "card" },
+    "2": { "$value": "0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)", "$description": "dropdown" },
+    "3": { "$value": "0 12px 48px 16px rgba(0, 0, 0, 0.03), 0 3px 6px -4px rgba(0, 0, 0, 0.11), 0 9px 28px 8px rgba(0, 0, 0, 0.13)", "$description": "modal / drawer" },
+    "4": { "$value": "0 16px 56px 20px rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.16), 0 9px 28px 8px rgba(0, 0, 0, 0.18)", "$description": "heavy / dialog over overlay" }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "fast": { "$value": "100ms", "$description": "hover / press feedback" },
+      "base": { "$value": "200ms", "$description": "expand / collapse, color transitions" },
+      "slow": { "$value": "300ms", "$description": "drawer / modal enter" }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "standard": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$description": "in-out default" },
+      "entrance": { "$value": "cubic-bezier(0, 0, 0.2, 1)", "$description": "decelerated entrance" }
+    }
+  }
+}

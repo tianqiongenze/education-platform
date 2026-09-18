@@ -146,4 +146,58 @@ class PulsarEventPublisherTest {
 
         assertDoesNotThrow(() -> pub.publish(null));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void publishRetriesSendFailuresAndSucceedsOnThirdAttempt() throws Exception {
+        // D-event-reliability: sendAsync fails twice, third attempt succeeds —
+        // the publisher must retry (bounded, backoff) instead of dropping.
+        PulsarClient client = mock(PulsarClient.class);
+        ProducerBuilder<byte[]> builder = mock(ProducerBuilder.class);
+        Producer<byte[]> producer = mock(Producer.class);
+        when(client.newProducer()).thenReturn(builder);
+        when(builder.topic(anyString())).thenReturn(builder);
+        when(builder.blockIfQueueFull(anyBoolean())).thenReturn(builder);
+        when(builder.sendTimeout(anyInt(), any())).thenReturn(builder);
+        when(builder.create()).thenReturn(producer);
+
+        CompletableFuture<org.apache.pulsar.client.api.MessageId> fail1 = new CompletableFuture<>();
+        fail1.completeExceptionally(new RuntimeException("fail 1"));
+        CompletableFuture<org.apache.pulsar.client.api.MessageId> fail2 = new CompletableFuture<>();
+        fail2.completeExceptionally(new RuntimeException("fail 2"));
+        when(producer.sendAsync(any(byte[].class)))
+                .thenReturn(fail1, fail2, CompletableFuture.completedFuture(null));
+
+        // 5-arg constructor: 2 retries with a 1ms backoff keeps the test fast.
+        PulsarEventPublisher pub = new PulsarEventPublisher(clientProvider(client), props(), true, 2, 1L);
+        pub.init();
+
+        assertDoesNotThrow(() -> pub.publish(sampleEvent()));
+
+        verify(producer, timeout(2000).times(3)).sendAsync(any(byte[].class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void publishDropsEventAfterExhaustedRetriesWithoutThrowing() throws Exception {
+        PulsarClient client = mock(PulsarClient.class);
+        ProducerBuilder<byte[]> builder = mock(ProducerBuilder.class);
+        Producer<byte[]> producer = mock(Producer.class);
+        when(client.newProducer()).thenReturn(builder);
+        when(builder.topic(anyString())).thenReturn(builder);
+        when(builder.blockIfQueueFull(anyBoolean())).thenReturn(builder);
+        when(builder.sendTimeout(anyInt(), any())).thenReturn(builder);
+        when(builder.create()).thenReturn(producer);
+        CompletableFuture<org.apache.pulsar.client.api.MessageId> alwaysFail = new CompletableFuture<>();
+        alwaysFail.completeExceptionally(new RuntimeException("broker down"));
+        when(producer.sendAsync(any(byte[].class))).thenReturn(alwaysFail);
+
+        PulsarEventPublisher pub = new PulsarEventPublisher(clientProvider(client), props(), true, 2, 1L);
+        pub.init();
+
+        assertDoesNotThrow(() -> pub.publish(sampleEvent()));
+
+        // Initial attempt + 2 retries, then the event is dropped (WARN-logged).
+        verify(producer, timeout(2000).times(3)).sendAsync(any(byte[].class));
+    }
 }

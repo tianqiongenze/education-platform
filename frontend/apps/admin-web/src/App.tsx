@@ -1,32 +1,40 @@
 import { BrowserRouter } from 'react-router-dom';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import type { ReactNode } from 'react';
 import { QueryProvider } from '@ep/query';
-import { ErrorBoundary } from '@ep/ui-kit';
+import { ErrorBoundary, ThemeProvider, useTheme } from '@ep/ui-kit';
 import { AppRoutes } from './routes';
 import { UserProvider } from './stores/UserContext';
+import { antdThemeConfig } from './theme/antdTheme';
+
+/**
+ * Bridges the ui-kit ThemeProvider (CSS variables + persisted preference) to
+ * AntD 5's ConfigProvider so both design systems follow the same mode.
+ */
+function ThemedConfigProvider({ children }: { children: ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <ConfigProvider locale={zhCN} theme={antdThemeConfig(theme)}>
+      {children}
+    </ConfigProvider>
+  );
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <UserProvider>
-          <QueryProvider>
-            <ConfigProvider
-              locale={zhCN}
-              theme={{
-                token: {
-                  colorPrimary: '#1890ff',
-                  borderRadius: 6,
-                },
-                algorithm: antdTheme.defaultAlgorithm,
-              }}
-            >
-              <AppRoutes />
-            </ConfigProvider>
-          </QueryProvider>
-        </UserProvider>
-      </BrowserRouter>
+      <ThemeProvider>
+        <ThemedConfigProvider>
+          <BrowserRouter>
+            <UserProvider>
+              <QueryProvider>
+                <AppRoutes />
+              </QueryProvider>
+            </UserProvider>
+          </BrowserRouter>
+        </ThemedConfigProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

@@ -12,3 +12,14 @@ ep:
       enabled: false      # 默认关闭，需要的服务自行开启
       permits: 20         # 许可数，建议与 HikariCP maximum-pool-size 一致
       timeout-ms: 5000    # 获取许可超时 5 秒，超时触发限流降级
+
+# D-216: ep-data shared read/write-split datasource (services/ep-data).
+# Disabled by default — enable per environment; provider freely selectable.
+# ep:
+#   data:
+#     enabled: true
+#     provider: cockroachdb    # tidb | cockroachdb | mysql | h2
+#     read-replicas: true
+#     follower-reads: true     # CRDB read pool: SET default_transaction_use_followers
+#     write: { host: crdb:26257, database: ep_business, maximum-pool-size: 10 }
+#     read:  { host: crdb-ro:26257, database: ep_business, maximum-pool-size: 20 }

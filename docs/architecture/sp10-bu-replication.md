@@ -1,5 +1,7 @@
 # SP-10 事业群复制方案 —— 软件架构设计文档(SAD)
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp10` for reference continuity. Per D-137, sp10 → gateway. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP10-SAD-001 | v1.0 | 2026-08-04 | Draft(待评审) | ZCode(解决方案架构师) | EP-TOGAF-001 全文 / SP01-SAD-001 / SP05-SRS / 决策 D-001/D-032/D-012 |

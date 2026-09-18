@@ -1,0 +1,154 @@
+asyncapi: 3.0.0
+info:
+  title: Boardgame Service Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for boardgame-service domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: boardgame-service.
+    Subscribers: ws-gateway (real-time broadcast), data-platform.
+    Note: boardgame-service uses epoch millis (long) for occurredAt, not ISO-8601 Instant.
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  boardgame-service-events:
+    address: persistent://public/default/boardgame-service-events
+    description: Topic for boardgame-service domain events (room and match lifecycle).
+    messages:
+      RoomStartedEvent:
+        $ref: '#/components/messages/RoomStartedEvent'
+      RoomFinishedEvent:
+        $ref: '#/components/messages/RoomFinishedEvent'
+      MatchFinishedEvent:
+        $ref: '#/components/messages/MatchFinishedEvent'
+operations:
+  publishRoomStartedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/boardgame-service-events'
+    messages:
+      - $ref: '#/components/messages/RoomStartedEvent'
+  publishRoomFinishedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/boardgame-service-events'
+    messages:
+      - $ref: '#/components/messages/RoomFinishedEvent'
+  publishMatchFinishedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/boardgame-service-events'
+    messages:
+      - $ref: '#/components/messages/MatchFinishedEvent'
+components:
+  messages:
+    RoomStartedEvent:
+      description: Fired when a game room transitions to PLAYING.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [RoomStartedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/RoomStartedEventPayload'
+    RoomFinishedEvent:
+      description: Fired when a game room transitions to FINISHED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [RoomFinishedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/RoomFinishedEventPayload'
+    MatchFinishedEvent:
+      description: Fired when a match finishes (win/draw).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [MatchFinishedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/MatchFinishedEventPayload'
+  schemas:
+    RoomStartedEventPayload:
+      type: object
+      required: [aggregateId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Aggregate root ID (room id).
+        matchId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The match associated with the started room.
+        occurredAt:
+          type: integer
+          format: int64
+          description: When the event occurred (epoch millis — boardgame uses long, not Instant).
+    RoomFinishedEventPayload:
+      type: object
+      required: [aggregateId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Aggregate root ID (room id).
+        matchId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The match associated with the finished room.
+        occurredAt:
+          type: integer
+          format: int64
+          description: When the event occurred (epoch millis — boardgame uses long, not Instant).
+    MatchFinishedEventPayload:
+      type: object
+      required: [aggregateId, result, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Aggregate root ID (match id).
+        result:
+          type: integer
+          description: Match result code (e.g. win/draw encoding).
+        occurredAt:
+          type: integer
+          format: int64
+          description: When the event occurred (epoch millis — boardgame uses long, not Instant).

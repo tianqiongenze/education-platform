@@ -1,4 +1,5 @@
 -- D-132: sp03-payment TiDB DDL. Snowflake PK (NOT AUTO_INCREMENT) to avoid write hotspot.
+-- D-090: order_id UNIQUE — DB-level idempotency guard so at most one payment row exists per order.
 CREATE TABLE IF NOT EXISTS ep_payment (
     payment_id VARCHAR(64) NOT NULL PRIMARY KEY COMMENT 'Snowflake ID',
     order_id VARCHAR(64) NOT NULL,
@@ -12,7 +13,7 @@ CREATE TABLE IF NOT EXISTS ep_payment (
     paid_at TIMESTAMP NULL,
     lock_version INT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_order_id (order_id),
+    UNIQUE KEY uk_order_id (order_id),
     INDEX idx_status (status)
 ) COMMENT '支付记录表';
 

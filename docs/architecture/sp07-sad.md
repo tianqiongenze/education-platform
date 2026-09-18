@@ -1,8 +1,10 @@
+# SP-07 知识中台 软件架构设计(SAD)
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp07` for reference continuity. Per D-137, sp07 → knowledge-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP07-SAD | v1.1 | 2026-08-06 | 正式 | 知识中台架构组 | 架构委员会 |
-
-# SP-07 知识中台 软件架构设计(SAD)
 
 > 关联：顶层 spec §6；决策 D-019 / D-033 / D-039 / D-040 / D-041 / D-042 / D-043 / D-045 / D-047；ADR-A02 / ADR-A05 / ADR-A06 / ADR-A07
 > 依据：SP-07-SRS v1.0 + SP-07-SDD v1.0 + TOGAF 顶层架构 v1.4
@@ -10,7 +12,6 @@
 ---
 
 ## 目录
-
 1. [架构概述](#1-架构概述)
 2. [六层架构总览](#2-六层架构总览)
 3. [组件视图](#3-组件视图)

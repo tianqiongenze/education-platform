@@ -21,7 +21,7 @@ import java.util.Objects;
  * JPA aggregate root for {@code ep_order}.
  * <p>
  * Adapted from {@code com.ep.business.order.Order} for the independent
- * SP-03 Order middle platform. Preserves the schema ({@code ep_order} table,
+ * core-business Order middle platform. Preserves the schema ({@code ep_order} table,
  * identical column names) and the domain behaviour (pay/refund state machine
  * + {@code pullEvents()}). The API-facing DTO is {@link com.ep.order.api.OrderDto};
  * this entity never crosses the Dubbo boundary.

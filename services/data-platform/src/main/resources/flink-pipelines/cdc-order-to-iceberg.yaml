@@ -1,5 +1,5 @@
 # =============================================================================
-# SP-02 Data Middle-Platform — Flink CDC 3.x YAML pipeline
+# data-platform Data Middle-Platform — Flink CDC 3.x YAML pipeline
 # Order CDC: Pulsar (Avro) -> Iceberg ods.ods_order
 # D-028: TiCDC -> Pulsar (Avro + built-in Schema Registry, ns=cdc://) -> Flink -> Iceberg
 # C-02: NO Flink-CDC direct-to-TiDB (GC safepoint block)

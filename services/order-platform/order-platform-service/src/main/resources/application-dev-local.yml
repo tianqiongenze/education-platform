@@ -1,0 +1,90 @@
+# D-216: Standalone local profile — zero external dependencies.
+# Usage: mvn spring-boot:run -Dspring-boot.run.profiles=dev-local
+# Boots entirely against H2 in-memory; no Redis/Nacos/Pulsar/Seata needed.
+spring:
+  aot:
+    enabled: false
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+      - org.apache.seata.spring.boot.autoconfigure.SeataCoreAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+  datasource:
+    url: jdbc:h2:mem:orderdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+dubbo:
+  application:
+    name: order-platform
+  protocol:
+    name: dubbo
+    port: 20884
+  registry:
+    address: N/A
+
+seata:
+  enabled: false
+
+ep:
+  cache:
+    enabled: false
+  pulsar:
+    enabled: false
+    topic:
+      domain-events: domain-events
+  # D-216: ep.data opt-in template (H2 mode, disabled by default).
+  # When enabled=true, EpDataAutoConfiguration creates a dual HikariCP pool
+  # (write + read) wrapped by EpRoutingDataSource + LazyConnectionDataSourceProxy.
+  # In H2 mode the read pool collapses onto the write pool (no read replicas).
+  # Leave disabled in dev-local to preserve the spring.datasource.* H2 setup above.
+  data:
+    enabled: false
+    provider: h2
+    read-replicas: false
+    follower-reads: false
+    write:
+      database: orderdb
+      maximum-pool-size: 10
+    read:
+      database: orderdb
+      maximum-pool-size: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:5173
+
+# D-154 P2-10: Resilience4j rate limiter.
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+    instances:
+      default:
+        base-config: default
+
+logging:
+  level:
+    root: INFO
+    com.ep: DEBUG

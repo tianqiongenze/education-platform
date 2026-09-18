@@ -24,7 +24,7 @@ class DisruptorIngestServiceTest {
     void setup() {
         pulsarFallback = new PulsarFallback();
         // Inject the pulsarEnabled=false default via reflection or test constructor
-        service = new DisruptorIngestService(pulsarFallback);
+        service = new DisruptorIngestService(pulsarFallback, emptyWorkerProvider());
         // Set fields via reflection since @Value won't work in unit test
         try {
             var bfField = DisruptorIngestService.class.getDeclaredField("bufferSize");
@@ -58,7 +58,7 @@ class DisruptorIngestServiceTest {
     @DisplayName("publish returns DROPPED and falls back to Pulsar when RingBuffer is full")
     void publishReturnsDroppedAndFallsBackWhenFull() throws Exception {
         // Use a tiny buffer to force overflow
-        DisruptorIngestService tinyService = new DisruptorIngestService(pulsarFallback);
+        DisruptorIngestService tinyService = new DisruptorIngestService(pulsarFallback, emptyWorkerProvider());
         var bfField = DisruptorIngestService.class.getDeclaredField("bufferSize");
         bfField.setAccessible(true);
         bfField.set(tinyService, 4);
@@ -126,5 +126,29 @@ class DisruptorIngestServiceTest {
         event.setIngestTs(System.currentTimeMillis());
         event.setSourceCell("test-cell");
         return event;
+    }
+    private static org.springframework.beans.factory.ObjectProvider<DisruptorIngestWorker> emptyWorkerProvider() {
+        return new org.springframework.beans.factory.ObjectProvider<>() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public DisruptorIngestWorker getObject(Object... args) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public DisruptorIngestWorker getObject() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public DisruptorIngestWorker getIfAvailable() {
+                return null;
+            }
+
+            @Override
+            public DisruptorIngestWorker getIfUnique() {
+                return null;
+            }
+        };
     }
 }

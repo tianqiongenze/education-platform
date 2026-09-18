@@ -2,7 +2,7 @@ import { View, Text, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { useUserProfile } from '@ep/query';
 import { Loading, Empty } from '@ep/ui-kit';
-import { apiClient } from '@/api/client';
+import { apiClient } from '../../api/client';
 import { STORAGE_KEYS } from '@ep/shared';
 import './index.scss';
 

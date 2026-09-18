@@ -1,0 +1,253 @@
+asyncapi: 3.0.0
+info:
+  title: Senior Care Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for senior-care domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: senior-care service.
+    Subscribers: data-platform.
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  senior-care-events:
+    address: persistent://public/default/senior-care-events
+    description: Topic for senior-care domain events (care plan, health, elder profile lifecycle).
+    messages:
+      CarePlanActivatedEvent:
+        $ref: '#/components/messages/CarePlanActivatedEvent'
+      CarePlanCompletedEvent:
+        $ref: '#/components/messages/CarePlanCompletedEvent'
+      HealthAbnormalDetectedEvent:
+        $ref: '#/components/messages/HealthAbnormalDetectedEvent'
+      ElderActivatedEvent:
+        $ref: '#/components/messages/ElderActivatedEvent'
+      ElderDischargedEvent:
+        $ref: '#/components/messages/ElderDischargedEvent'
+operations:
+  publishCarePlanActivatedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/senior-care-events'
+    messages:
+      - $ref: '#/components/messages/CarePlanActivatedEvent'
+  publishCarePlanCompletedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/senior-care-events'
+    messages:
+      - $ref: '#/components/messages/CarePlanCompletedEvent'
+  publishHealthAbnormalDetectedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/senior-care-events'
+    messages:
+      - $ref: '#/components/messages/HealthAbnormalDetectedEvent'
+  publishElderActivatedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/senior-care-events'
+    messages:
+      - $ref: '#/components/messages/ElderActivatedEvent'
+  publishElderDischargedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/senior-care-events'
+    messages:
+      - $ref: '#/components/messages/ElderDischargedEvent'
+components:
+  messages:
+    CarePlanActivatedEvent:
+      description: Emitted when a CarePlan transitions to ACTIVE.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [CarePlanActivatedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/CarePlanActivatedEventPayload'
+    CarePlanCompletedEvent:
+      description: Emitted when a CarePlan transitions to COMPLETED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [CarePlanCompletedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/CarePlanCompletedEventPayload'
+    HealthAbnormalDetectedEvent:
+      description: Emitted when a HealthRecord is evaluated as abnormal.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [HealthAbnormalDetectedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/HealthAbnormalDetectedEventPayload'
+    ElderActivatedEvent:
+      description: Emitted when an ElderProfile is activated (created or resumed from PAUSED).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [ElderActivatedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/ElderActivatedEventPayload'
+    ElderDischargedEvent:
+      description: Emitted when an ElderProfile transitions to DISCHARGED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [ElderDischargedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/ElderDischargedEventPayload'
+  schemas:
+    CarePlanActivatedEventPayload:
+      type: object
+      required: [aggregateId, planId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (care plan id).
+        planId:
+          type: integer
+          format: int64
+          description: The activated care plan ID.
+        elderId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The elder the care plan is for.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    CarePlanCompletedEventPayload:
+      type: object
+      required: [aggregateId, planId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (care plan id).
+        planId:
+          type: integer
+          format: int64
+          description: The completed care plan ID.
+        elderId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The elder the care plan was for.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    HealthAbnormalDetectedEventPayload:
+      type: object
+      required: [aggregateId, elderId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (health record id).
+        elderId:
+          type: integer
+          format: int64
+          description: The elder whose health record is abnormal.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    ElderActivatedEventPayload:
+      type: object
+      required: [aggregateId, elderId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (elder profile id).
+        elderId:
+          type: integer
+          format: int64
+          description: The activated elder ID.
+        facilityId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The facility the elder belongs to.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    ElderDischargedEventPayload:
+      type: object
+      required: [aggregateId, elderId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (elder profile id).
+        elderId:
+          type: integer
+          format: int64
+          description: The discharged elder ID.
+        facilityId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The facility the elder belonged to.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

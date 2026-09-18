@@ -1,8 +1,10 @@
 package com.ep.grading;
 
+import com.ep.grading.common.DomainEvent;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import jakarta.persistence.Entity;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +81,36 @@ class ArchitectureTest {
     }
 
     // ------------------------------------------------------------------
+    // D-201: DDD guard rules — entity & domain-event package placement
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("@Entity classes must reside in entity, model, or bounded-context root packages")
+    void entitiesMustBeInEntityOrModelPackage() {
+        // grading-service has several aggregate roots that live in their
+        // bounded-context root package (e.g. IdeSession in ..ide.., LiveRoom
+        // in ..live..) rather than a dedicated ..entity.. sub-package. These
+        // are accepted placements; the rule guards against entities leaking
+        // into controller/service/config packages.
+        classes().that().areAnnotatedWith(Entity.class)
+                .should().resideInAnyPackage(
+                        "..entity..", "..model..",
+                        "..homework..", "..grading..",
+                        "..ide..", "..live..")
+                .because("JPA entities are domain aggregates and must live in the entity/model or bounded-context package (DDD)")
+                .check(classes);
+    }
+
+    @Test
+    @DisplayName("Domain event classes must reside in event or common packages")
+    void domainEventsMustBeInEventPackage() {
+        classes().that().areAssignableTo(DomainEvent.class)
+                .should().resideInAnyPackage("..event..", "..common..")
+                .because("Domain events must be isolated in the event/common package (DDD)")
+                .check(classes);
+    }
+
+    // ------------------------------------------------------------------
     // No cycles
     // ------------------------------------------------------------------
 
@@ -103,3 +135,4 @@ class ArchitectureTest {
                 .check(classes);
     }
 }
+

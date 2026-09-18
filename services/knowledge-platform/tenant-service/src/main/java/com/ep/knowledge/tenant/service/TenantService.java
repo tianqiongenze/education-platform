@@ -11,4 +11,13 @@ public interface TenantService {
     Tenant updateQuota(String id, Long quota);
 
     void delete(String id);
+
+    /** D-201: transition a tenant from PENDING to ACTIVE. */
+    Tenant activate(String id);
+
+    /** D-201: transition a tenant from ACTIVE to SUSPENDED. */
+    Tenant suspend(String id);
+
+    /** D-201: transition a tenant from SUSPENDED to ACTIVE. */
+    Tenant reactivate(String id);
 }

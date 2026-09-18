@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * D-119: Consumer-side CDC test for the SP-03 Order &rarr; Payment integration.
+ * D-119: Consumer-side CDC test for the core-business Order &rarr; Payment integration.
  *
  * <p>The order service ({@link com.ep.order.service.OrderServiceImpl}) calls
  * {@link PaymentService} over Dubbo RPC in production. This consumer-side

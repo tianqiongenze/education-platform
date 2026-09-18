@@ -1,0 +1,107 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Layer 2/3 — semantic aliases. The top-level `dark` group overrides selected aliases for dark mode.",
+  "color": {
+    "brand": {
+      "primary": { "$value": "{color.blue.4}", "$description": "Primary brand (light)" },
+      "primary.hover": { "$value": "{color.blue.3}" },
+      "secondary": { "$value": "{color.purple.5}", "$description": "Knowledge BU brand" },
+      "secondary.hover": { "$value": "{color.purple.4}" }
+    },
+    "bg": {
+      "page": { "$value": "{color.gray.2}", "$description": "App / layout background" },
+      "card": { "$value": "{color.gray.0}", "$description": "Card / panel surface" },
+      "container": { "$value": "{color.gray.0}", "$description": "Form control surface" },
+      "secondary": { "$value": "{color.gray.1}", "$description": "Subtle filled areas" },
+      "inverse": { "$value": "{color.gray.11}", "$description": "Background for inverse text" }
+    },
+    "text": {
+      "primary": { "$value": "{color.gray.9}", "$description": "Headings & body copy" },
+      "secondary": { "$value": "{color.gray.6}", "$description": "Captions, meta info" },
+      "tertiary": { "$value": "{color.gray.5}", "$description": "Disabled / placeholder" },
+      "inverse": { "$value": "{color.gray.0}", "$description": "Text on brand/inverse bg" },
+      "link": { "$value": "{color.blue.4}" },
+      "link.hover": { "$value": "{color.blue.3}" }
+    },
+    "border": {
+      "weakest": { "$value": "{color.gray.3}", "$description": "Hairline dividers" },
+      "base": { "$value": "{color.gray.4}", "$description": "Default control border" },
+      "strong": { "$value": "{color.gray.5}", "$description": "Emphasised border" },
+      "brand": { "$value": "{color.blue.4}", "$description": "Focused / branded border" }
+    },
+    "status": {
+      "success": { "$value": "{color.green.3}" },
+      "success.bg": { "$value": "{color.green.1}" },
+      "warning": { "$value": "{color.orange.3}" },
+      "warning.bg": { "$value": "{color.orange.1}" },
+      "error": { "$value": "{color.red.4}" },
+      "error.bg": { "$value": "{color.red.1}" },
+      "info": { "$value": "{color.blue.3}" },
+      "info.bg": { "$value": "{color.blue.1}" }
+    }
+  },
+  "font": {
+    "size": {
+      "sm": { "$value": "{font.size.1}", "$description": "caption" },
+      "md": { "$value": "{font.size.2}", "$description": "body base (14px)" },
+      "lg": { "$value": "{font.size.3}" },
+      "xl": { "$value": "{font.size.5}" },
+      "hero": { "$value": "{font.size.8}" }
+    }
+  },
+  "space": {
+    "inline": { "$value": "{space.2}", "$description": "Gap between inline elements" },
+    "stack": { "$value": "{space.3}", "$description": "Gap between stacked list rows" },
+    "layout": { "$value": "{space.5}", "$description": "Page gutter" }
+  },
+  "radius": {
+    "sm": { "$value": "{radius.1}" },
+    "md": { "$value": "{radius.2}" },
+    "lg": { "$value": "{radius.3}" },
+    "xl": { "$value": "{radius.4}" }
+  },
+  "shadow": {
+    "card": { "$value": "{shadow.1}" },
+    "dropdown": { "$value": "{shadow.2}" },
+    "modal": { "$value": "{shadow.3}" },
+    "heavy": { "$value": "{shadow.4}" }
+  },
+  "dark": {
+    "$description": "Dark-mode overrides applied on top of the light aliases (data-theme=\"dark\").",
+    "color": {
+      "brand": {
+        "primary": { "$value": "{color.blue.3}", "$description": "Lightened for contrast on dark surfaces" },
+        "primary.hover": { "$value": "{color.blue.2}" },
+        "secondary": { "$value": "{color.purple.4}" },
+        "secondary.hover": { "$value": "{color.purple.3}" }
+      },
+      "bg": {
+        "page": { "$value": "{color.gray.11}" },
+        "card": { "$value": "{color.gray.10}" },
+        "container": { "$value": "{color.gray.10}" },
+        "secondary": { "$value": "{color.gray.9}" },
+        "inverse": { "$value": "{color.gray.0}" }
+      },
+      "text": {
+        "primary": { "$value": "{color.gray.12}" },
+        "secondary": { "$value": "{color.gray.6}" },
+        "tertiary": { "$value": "{color.gray.7}" },
+        "inverse": { "$value": "{color.gray.11}" },
+        "link": { "$value": "{color.blue.3}" },
+        "link.hover": { "$value": "{color.blue.2}" }
+      },
+      "border": {
+        "weakest": { "$value": "{color.gray.9}" },
+        "base": { "$value": "{color.gray.8}" },
+        "strong": { "$value": "{color.gray.7}" },
+        "brand": { "$value": "{color.blue.3}" }
+      },
+      "status": {
+        "success": { "$value": "{color.green.3}" },
+        "warning": { "$value": "{color.orange.3}" },
+        "error": { "$value": "{color.red.4}" },
+        "info": { "$value": "{color.blue.3}" }
+      }
+    }
+  }
+}

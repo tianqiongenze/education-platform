@@ -17,7 +17,7 @@ import java.io.IOException;
  * request, and always clears the ThreadLocal afterwards.
  *
  * <p>Security (D-133): enforces multi-tenant isolation for grading-service,
- * closing the inconsistency where only sp07 had a TenantContextFilter. The
+ * closing the inconsistency where only mcp-server had a TenantContextFilter. The
  * ThreadLocal is read by data-access layers (JPA tenant interceptors, Redis
  * key prefixes) to scope grading/homework queries to the caller's tenant.
  *

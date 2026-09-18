@@ -1,5 +1,7 @@
 # SP-06 多端前端骨架 —— 软件需求规格说明书(SRS)
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp06` for reference continuity. Per D-137, sp06 → portal-bff. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP06-SRS-001 | v1.0 | 2026-08-04 | Approved | ZCode(文档工程师) | EP-TOGAF-001 §1/§6 / EP-SPEC-001 §8.1 SP-06 / D-031 |

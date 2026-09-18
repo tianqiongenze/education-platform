@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
  *
  * <p>Mocks the {@link BillingInvoiceMapper} and a {@link MeteringService} stub
  * so the invoice-generation pricing logic and list/get delegations can be
- * exercised without a database, following the sp07 service-test convention.
+ * exercised without a database, following the knowledge-platform service-test convention.
  */
 @ExtendWith(MockitoExtension.class)
 class BillingServiceImplTest {

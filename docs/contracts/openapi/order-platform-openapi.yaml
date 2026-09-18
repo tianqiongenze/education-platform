@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: Order Platform API
+  description: |
+    Education Platform — Order Platform Service (port 8084). Order management
+    with saga orchestration, exposed as a REST façade over the Dubbo
+    OrderService. Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8084
+    description: Local dev
+security:
+  - bearerAuth: []
+tags:
+  - name: orders
+    description: Order management + saga
+
+paths:
+  /api/v1/orders:
+    post:
+      tags: [orders]
+      summary: Create an order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderCmd'
+      responses:
+        '200':
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [orders]
+      summary: List user orders
+      operationId: listUserOrders
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 10
+      responses:
+        '200':
+          description: User orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{orderId}:
+    get:
+      tags: [orders]
+      summary: Get order by id
+      operationId: getOrderById
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{orderId}/pay:
+    post:
+      tags: [orders]
+      summary: Pay an order (triggers payment saga)
+      operationId: payOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payMethod:
+                  type: string
+      responses:
+        '204':
+          description: Paid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{orderId}/refund:
+    post:
+      tags: [orders]
+      summary: Refund an order (admin only)
+      operationId: refundOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '204':
+          description: Refunded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RoleHeader:
+      name: X-Role
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Role for RBAC (admin/super_admin required for refund)
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    CreateOrderCmd:
+      type: object
+      required: [userId, courseId]
+      properties:
+        userId:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        payMethod:
+          type: string
+    OrderDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        status:
+          type: string
+        amount:
+          type: number
+          format: double
+        payMethod:
+          type: string

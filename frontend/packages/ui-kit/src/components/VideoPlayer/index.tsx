@@ -1,4 +1,4 @@
-import { View, Video, LivePlayer } from '@tarojs/components';
+import { View, Video, LivePlayer } from '../../platform';
 import type { VideoEventDetail } from './types';
 import type { VideoPlayerProps } from './types';
 

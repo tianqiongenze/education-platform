@@ -1,0 +1,855 @@
+openapi: 3.0.3
+info:
+  title: Grading Service API
+  description: |
+    Education Platform — Grading Service (port 8085). Assignment, submission,
+    grading pipeline, IDE session, and live room lifecycle management.
+    Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8085
+    description: Local dev
+security:
+  - bearerAuth: []
+tags:
+  - name: assignments
+    description: Assignment management
+  - name: submissions
+    description: Homework submission & grading
+  - name: grading
+    description: Grading pipeline
+  - name: ide
+    description: IDE session lifecycle
+  - name: live
+    description: Live room lifecycle
+
+paths:
+  /api/v1/assignments:
+    post:
+      tags: [assignments]
+      summary: Create an assignment
+      operationId: createAssignment
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentCommand'
+      responses:
+        '201':
+          description: Created assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [assignments]
+      summary: List assignments by course id
+      operationId: listAssignmentsByCourse
+      parameters:
+        - name: courseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assignment'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/assignments/{id}:
+    get:
+      tags: [assignments]
+      summary: Get assignment by id
+      operationId: getAssignmentById
+      parameters:
+        - $ref: '#/components/parameters/AssignmentIdPath'
+      responses:
+        '200':
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/assignments/{id}/publish:
+    post:
+      tags: [assignments]
+      summary: Publish an assignment
+      operationId: publishAssignment
+      parameters:
+        - $ref: '#/components/parameters/AssignmentIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Published assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/assignments/{id}/close:
+    post:
+      tags: [assignments]
+      summary: Close an assignment
+      operationId: closeAssignment
+      parameters:
+        - $ref: '#/components/parameters/AssignmentIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Closed assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/submissions:
+    post:
+      tags: [submissions]
+      summary: Submit homework
+      operationId: submitHomework
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionCommand'
+      responses:
+        '201':
+          description: Created submission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [submissions]
+      summary: List submissions by assignment id
+      operationId: listSubmissionsByAssignment
+      parameters:
+        - name: assignmentId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Submission'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/submissions/{id}:
+    get:
+      tags: [submissions]
+      summary: Get submission by id
+      operationId: getSubmissionById
+      parameters:
+        - $ref: '#/components/parameters/SubmissionIdPath'
+      responses:
+        '200':
+          description: Submission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/submissions/{id}/grade:
+    post:
+      tags: [submissions]
+      summary: Grade a submission
+      operationId: gradeSubmission
+      parameters:
+        - $ref: '#/components/parameters/SubmissionIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeSubmissionCommand'
+      responses:
+        '200':
+          description: Graded submission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/grading/start:
+    post:
+      tags: [grading]
+      summary: Start a grading pipeline
+      operationId: startGrading
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartGradingCmd'
+      responses:
+        '201':
+          description: Grading pipeline started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradePipeline'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/grading/{id}:
+    get:
+      tags: [grading]
+      summary: Get grading pipeline by id
+      operationId: getGradingPipelineById
+      parameters:
+        - $ref: '#/components/parameters/GradingIdPath'
+      responses:
+        '200':
+          description: Grading pipeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradePipeline'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/grading/{id}/stages:
+    get:
+      tags: [grading]
+      summary: Get grading pipeline stages
+      operationId: getGradingStages
+      parameters:
+        - $ref: '#/components/parameters/GradingIdPath'
+      responses:
+        '200':
+          description: Grading stages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GradeStage'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/grading:
+    get:
+      tags: [grading]
+      summary: Find grading pipeline by submission id
+      operationId: findGradingBySubmission
+      parameters:
+        - name: submissionId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Grading pipeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradePipeline'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions:
+    post:
+      tags: [ide]
+      summary: Create an IDE session
+      operationId: createIdeSession
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIdeSessionCmd'
+      responses:
+        '201':
+          description: Created IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions/{sessionId}:
+    get:
+      tags: [ide]
+      summary: Get IDE session by id
+      operationId: getIdeSessionById
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+      responses:
+        '200':
+          description: IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions/{sessionId}/activate:
+    post:
+      tags: [ide]
+      summary: Activate an IDE session
+      operationId: activateIdeSession
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Activated IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions/{sessionId}/suspend:
+    post:
+      tags: [ide]
+      summary: Suspend an IDE session
+      operationId: suspendIdeSession
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Suspended IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions/{sessionId}/close:
+    post:
+      tags: [ide]
+      summary: Close an IDE session
+      operationId: closeIdeSession
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Closed IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/ide/sessions/{sessionId}/touch:
+    post:
+      tags: [ide]
+      summary: Touch (heartbeat) an IDE session
+      operationId: touchIdeSession
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Touched IDE session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms:
+    post:
+      tags: [live]
+      summary: Create a live room
+      operationId: createLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLiveRoomCmd'
+      responses:
+        '201':
+          description: Created live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}:
+    post:
+      tags: [live]
+      summary: Get live room by id
+      operationId: getLiveRoomById
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+      responses:
+        '200':
+          description: Live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/prepare:
+    post:
+      tags: [live]
+      summary: Prepare a live room
+      operationId: prepareLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Prepared live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/live:
+    post:
+      tags: [live]
+      summary: Go live
+      operationId: goLive
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Live room now live
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/pause:
+    post:
+      tags: [live]
+      summary: Pause a live room
+      operationId: pauseLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Paused live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/resume:
+    post:
+      tags: [live]
+      summary: Resume a live room
+      operationId: resumeLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Resumed live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/end:
+    post:
+      tags: [live]
+      summary: End a live room
+      operationId: endLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Ended live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/live/rooms/{roomId}/archive:
+    post:
+      tags: [live]
+      summary: Archive a live room
+      operationId: archiveLiveRoom
+      parameters:
+        - $ref: '#/components/parameters/RoomIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Archived live room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRoom'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    AssignmentIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    SubmissionIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    GradingIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    SessionIdPath:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+    RoomIdPath:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    RoleHeader:
+      name: X-Role
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Role for RBAC
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    AssignmentCommand:
+      type: object
+      properties:
+        courseId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        description:
+          type: string
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+    SubmissionCommand:
+      type: object
+      properties:
+        assignmentId:
+          type: integer
+          format: int64
+        studentId:
+          type: integer
+          format: int64
+        content:
+          type: string
+    GradeSubmissionCommand:
+      type: object
+      properties:
+        submissionId:
+          type: integer
+          format: int64
+        score:
+          type: number
+          format: double
+        feedback:
+          type: string
+        graderId:
+          type: integer
+          format: int64
+        idempotencyKey:
+          type: string
+    Submission:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        assignmentId:
+          type: integer
+          format: int64
+        studentId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        score:
+          type: number
+          format: double
+        feedback:
+          type: string
+        status:
+          type: string
+    StartGradingCmd:
+      type: object
+      properties:
+        submissionId:
+          type: integer
+          format: int64
+        graderId:
+          type: integer
+          format: int64
+    GradePipeline:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        submissionId:
+          type: integer
+          format: int64
+        status:
+          type: string
+    GradeStage:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        pipelineId:
+          type: integer
+          format: int64
+        stageName:
+          type: string
+        status:
+          type: string
+        score:
+          type: number
+          format: double
+    CreateIdeSessionCmd:
+      type: object
+      properties:
+        courseId:
+          type: integer
+          format: int64
+        assignmentId:
+          type: integer
+          format: int64
+        studentId:
+          type: integer
+          format: int64
+    IdeSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        status:
+          type: string
+        courseId:
+          type: integer
+          format: int64
+        assignmentId:
+          type: integer
+          format: int64
+    CreateLiveRoomCmd:
+      type: object
+      properties:
+        courseId:
+          type: integer
+          format: int64
+        teacherId:
+          type: integer
+          format: int64
+        title:
+          type: string
+    LiveRoom:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        teacherId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        status:
+          type: string

@@ -1,4 +1,5 @@
 import { defineConfig, type UserConfigExport } from '@tarojs/cli';
+import { resolve } from 'path';
 import devConfig from './dev';
 import prodConfig from './prod';
 
@@ -16,7 +17,34 @@ export default defineConfig(async (merge) => {
     framework: 'react',
     compiler: 'webpack5',
     cache: { enable: false },
+    // Taro's Config.getConfigWithNamed() cherry-picks known config keys and
+    // merges initialConfig.h5 / initialConfig.mini — it does NOT transfer
+    // top-level `compile` or `webpackChain`. So we put them inside BOTH h5
+    // and mini to ensure they survive to the webpack runner. See ADR-D217.
     mini: {
+      compile: {
+        include: [resolve(__dirname, '../../../packages')],
+      },
+      webpackChain(chain: any) {
+        chain.resolve.extensions
+          .prepend('.js')
+          .prepend('.jsx');
+        // Support @/ path alias (tsconfig paths)
+        chain.resolve.alias
+          .set('@', require('path').resolve(__dirname, '../src'));
+        chain.module
+          .rule('pkg-ts')
+          .test(/\.(ts|tsx)$/)
+          .include.add(resolve(__dirname, '../../../packages'))
+          .end()
+          .use('babel-loader')
+          .loader('babel-loader')
+          .options({
+            presets: [
+              ['babel-preset-taro', { framework: 'react', ts: true }],
+            ],
+          });
+      },
       postcss: {
         pxtransform: { enable: true, config: {} },
         cssModules: {
@@ -28,7 +56,31 @@ export default defineConfig(async (merge) => {
         },
       },
     },
-    h5: {},
+    h5: {
+      compile: {
+        include: [resolve(__dirname, '../../../packages')],
+      },
+      webpackChain(chain: any) {
+        chain.resolve.extensions
+          .prepend('.js')
+          .prepend('.jsx');
+        // Support @/ path alias (tsconfig paths)
+        chain.resolve.alias
+          .set('@', require('path').resolve(__dirname, '../src'));
+        chain.module
+          .rule('pkg-ts')
+          .test(/\.(ts|tsx)$/)
+          .include.add(resolve(__dirname, '../../../packages'))
+          .end()
+          .use('babel-loader')
+          .loader('babel-loader')
+          .options({
+            presets: [
+              ['babel-preset-taro', { framework: 'react', ts: true }],
+            ],
+          });
+      },
+    },
   };
   return merge(
     base,

@@ -184,6 +184,16 @@ class JWTAuthMiddleware:
         # mode within a single process lifetime.
         self._public_key: str | None = os.getenv(_PUBLIC_KEY_ENV)
         if not self._public_key:
+            # D-216 P1-3 fail-closed: in production a missing key must abort
+            # startup (mirrors ws-gateway src/failclosed.go). A silent
+            # permissive fallback would leave the whole site anonymously
+            # open after a config mistake.
+            if os.getenv("APP_ENV", "").lower() == "production":
+                raise RuntimeError(
+                    "JWT_PUBLIC_KEY is not set but APP_ENV=production — "
+                    "refusing to start in permissive mode (fail-closed). "
+                    "Set JWT_PUBLIC_KEY (PEM) for this deployment."
+                )
             logger.info(
                 "D-139 P1-5: %s not set — JWTAuthMiddleware running in "
                 "permissive mode (tokens parsed but not required). Set it in "

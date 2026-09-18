@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
  * Pure Mockito unit test for {@link RagService}.
  *
  * <p>Mocks {@link HybridSearchService} and {@link AiClient} so the RAG
- * pipeline is exercised end-to-end without Redis/Milvus/SP-04. Follows the
+ * pipeline is exercised end-to-end without Redis/Milvus/AI Gateway. Follows the
  * same Mockito-only pattern as {@code AgentServiceApplicationTest} and
  * {@link HybridSearchServiceTest} (D-072/D-075).
  */

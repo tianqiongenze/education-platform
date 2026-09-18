@@ -3,7 +3,7 @@ package com.ep.order.api;
 import java.util.List;
 
 /**
- * SP-03 Order middle-platform Dubbo RPC contract.
+ * core-business Order middle-platform Dubbo RPC contract.
  * <p>
  * Implementations live in {@code order-platform-service} and are exposed over
  * Dubbo (port 20884). Consumers (BFF, other middle platforms) reference this

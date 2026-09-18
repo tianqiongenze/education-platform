@@ -18,13 +18,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /**
- * Minimal client for the SP-04 AI Gateway chat-completion endpoint
+ * Minimal client for the AI Gateway chat-completion endpoint
  * (ADR-D08, §12.4.1).
  *
  * <p>Uses the JDK built-in {@link HttpClient} (Java 21) and Jackson
  * {@link ObjectMapper} — zero new Maven dependencies per D-074/D-075.
  *
- * <p>The actual SP-04 implementation exposes the chat-completion contract at
+ * <p>The actual AI Gateway implementation exposes the chat-completion contract at
  * {@code POST /v1/chat/completions} (this differs from the path documented in
  * SDD §12.7; the implementation is authoritative). Request body:
  * <pre>{@code
@@ -51,7 +51,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
  * <p>EP_DEV_ONLY guard: when {@code EP_DEV_ONLY} is unset, blank, or
  * {@code "true"}, the client skips the HTTP call entirely and returns a
  * template SQL derived from keywords in the user question. This makes the
- * module fully functional in dev/CI without a live SP-04 gateway.
+ * module fully functional in dev/CI without a live AI gateway.
  */
 @Component
 public class AiGatewayClient {
@@ -75,7 +75,7 @@ public class AiGatewayClient {
     /**
      * Construct with an explicit configuration (testable).
      *
-     * @param config SP-04 gateway + LLM configuration
+     * @param config AI gateway + LLM configuration
      */
     public AiGatewayClient(NlQueryConfig config) {
         this(config, new ObjectMapper().registerModule(new JavaTimeModule()), buildHttpClient(config));
@@ -84,7 +84,7 @@ public class AiGatewayClient {
     /**
      * Construct with all collaborators (for tests).
      *
-     * @param config     SP-04 gateway + LLM configuration
+     * @param config     AI gateway + LLM configuration
      * @param mapper     Jackson ObjectMapper
      * @param httpClient JDK HttpClient
      */
@@ -95,7 +95,7 @@ public class AiGatewayClient {
     }
 
     /**
-     * Send a chat-completion request to the SP-04 AI Gateway and return the
+     * Send a chat-completion request to the AI Gateway and return the
      * generated text.
      *
      * <p>In dev/CI (EP_DEV_ONLY guard active), the HTTP call is skipped and a
@@ -148,7 +148,7 @@ public class AiGatewayClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
             if (status < 200 || status >= 300) {
-                log.warn("[AiGatewayClient] HTTP {} from SP-04 gateway — body={}", status,
+                log.warn("[AiGatewayClient] HTTP {} from AI gateway — body={}", status,
                         truncate(response.body()));
                 return "";
             }
@@ -156,21 +156,21 @@ public class AiGatewayClient {
             JsonNode root = mapper.readTree(response.body());
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
-                log.warn("[AiGatewayClient] SP-04 response has no choices — body={}", truncate(response.body()));
+                log.warn("[AiGatewayClient] AI gateway response has no choices — body={}", truncate(response.body()));
                 return "";
             }
             JsonNode content = choices.get(0).path("message").path("content");
             if (content.isMissingNode() || content.asText().isBlank()) {
-                log.warn("[AiGatewayClient] SP-04 response has no content — body={}", truncate(response.body()));
+                log.warn("[AiGatewayClient] AI gateway response has no content — body={}", truncate(response.body()));
                 return "";
             }
             return content.asText();
         } catch (HttpTimeoutException e) {
-            log.warn("[AiGatewayClient] HTTP timeout after {}s calling SP-04 gateway: {}",
+            log.warn("[AiGatewayClient] HTTP timeout after {}s calling AI gateway: {}",
                     config.timeoutSec(), e.getMessage());
             return "";
         } catch (Exception e) {
-            log.warn("[AiGatewayClient] Error calling SP-04 gateway: {}", e.getMessage());
+            log.warn("[AiGatewayClient] Error calling AI gateway: {}", e.getMessage());
             return "";
         }
     }

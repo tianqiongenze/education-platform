@@ -18,7 +18,7 @@ import java.io.IOException;
  *
  * <p>Security (D-160): enforces multi-tenant isolation for senior-care,
  * closing the inconsistency where only core-business / grading-service /
- * sp07 had a TenantContextFilter. The ThreadLocal is read by data-access
+ * mcp-server had a TenantContextFilter. The ThreadLocal is read by data-access
  * layers (MyBatis/JPA tenant interceptors, Redis key prefixes, Pulsar topic
  * routing) to scope elder-care queries to the caller's tenant.
  *

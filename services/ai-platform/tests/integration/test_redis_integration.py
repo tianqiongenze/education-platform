@@ -92,7 +92,7 @@ def memory_config(redis_container):
     """Build a MemoryConfig pointed at the testcontainers Redis URL.
 
     mem0 is disabled so MemoryManager.add() does not attempt to reach a
-    Milvus/SP04-gateway backend — L2 extraction runs against the in-memory
+    Milvus/AI-gateway backend — L2 extraction runs against the in-memory
     fallback, which is sufficient for the L0/L1 real-Redis assertions here.
     """
     from ep_memory.config import MemoryConfig

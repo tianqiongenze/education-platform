@@ -26,6 +26,10 @@
     <dependency><groupId>org.springframework</groupId><artifactId>spring-context-support</artifactId><version>7.0.8</version><scope>provided</scope></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-cache</artifactId><version>4.0.7</version><scope>provided</scope></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-redis</artifactId><version>4.0.7</version><scope>provided</scope></dependency>
+    <!-- Optional metrics export (ep_cache_l1/l2 hit/miss totals). Provided + optional:
+         hosts WITHOUT Micrometer carry no new dependency; hosts WITH it get CacheMetrics
+         auto-registered (CacheMetricsConfig is @ConditionalOnClass(MeterRegistry)). -->
+    <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-core</artifactId><version>1.16.6</version><scope>provided</scope><optional>true</optional></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.14.4</version><scope>test</scope></dependency>
     <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><version>5.18.0</version><scope>test</scope></dependency>
     <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-simple</artifactId><version>2.0.18</version><scope>test</scope></dependency>

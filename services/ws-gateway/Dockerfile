@@ -20,7 +20,7 @@
 # to services/ and uses -f services/ws-gateway/Dockerfile so the replace path
 # resolves.
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25
 ARG ALPINE_VERSION=3.20
 
 # ---------- builder ----------
@@ -44,7 +44,7 @@ WORKDIR /src/ws-gateway
 # GOMODCACHE is cached via the bind mount below when BuildKit is enabled.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
     go build -trimpath -ldflags="-s -w" -o /out/ws-gateway ./src
 
 # ---------- runtime ----------

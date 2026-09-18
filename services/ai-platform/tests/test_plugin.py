@@ -1,4 +1,4 @@
-"""Tests for the SP-04 Plugin system (ai_plugin)."""
+"""Tests for the AI Plugin system (ai_plugin)."""
 
 from __future__ import annotations
 

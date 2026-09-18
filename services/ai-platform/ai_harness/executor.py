@@ -96,6 +96,7 @@ class AgentExecutor:
         graph: Any,
         initial_state: dict[str, Any],
         config: dict[str, Any] | None = None,
+        limits: "ExecutionLimits | None" = None,
     ) -> ExecutionResult:
         """Execute graph with timeout and depth guards.
 
@@ -103,13 +104,19 @@ class AgentExecutor:
             graph: A compiled LangGraph (has .ainvoke method).
             initial_state: Initial agent state dict.
             config: LangGraph config (thread_id, etc.).
+            limits: D-216 P1-8 per-call override of the executor limits.
+                Without it the shared singleton had to be MUTATED per request
+                (``_executor.limits.max_time_sec = ...``), so two concurrent
+                requests overwrote each other's timeout. Passing limits
+                per call keeps the executor stateless and thread-safe.
 
         Returns:
             ExecutionResult with output and metadata.
         """
+        effective = limits or effective
         config = dict(config or {})
         # Enforce recursion_limit at the LangGraph level (hard break #1).
-        config.setdefault("recursion_limit", self.limits.recursion_limit())
+        config.setdefault("recursion_limit", effective.recursion_limit())
 
         start = time.monotonic()
         tenant_id = initial_state.get("tenant_id", "unknown")
@@ -118,7 +125,7 @@ class AgentExecutor:
         try:
             raw_output = await asyncio.wait_for(
                 graph.ainvoke(initial_state, config=config),
-                timeout=self.limits.max_time_sec,
+                timeout=effective.max_time_sec,
             )
         except TimeoutError:
             elapsed = time.monotonic() - start
@@ -127,14 +134,14 @@ class AgentExecutor:
                 tenant=tenant_id,
                 agent=agent_name,
                 elapsed=elapsed,
-                limit=self.limits.max_time_sec,
+                limit=effective.max_time_sec,
             )
             if self._audit:
                 await self._audit.log(AuditEntry(
                     tenant_id=tenant_id,
                     agent=agent_name,
                     event="timeout",
-                    detail=f"Exceeded {self.limits.max_time_sec}s",
+                    detail=f"Exceeded {effective.max_time_sec}s",
                     elapsed_sec=elapsed,
                 ))
             return ExecutionResult(
@@ -143,7 +150,7 @@ class AgentExecutor:
                 node_transitions=0,
                 trials=0,
                 timed_out=True,
-                error=f"Agent timed out after {self.limits.max_time_sec}s",
+                error=f"Agent timed out after {effective.max_time_sec}s",
             )
         except GraphRecursionError as exc:
             # Hard break #2: LangGraph hit recursion_limit (depth/trials).
@@ -153,9 +160,9 @@ class AgentExecutor:
                 tenant=tenant_id,
                 agent=agent_name,
                 elapsed=elapsed,
-                recursion_limit=self.limits.recursion_limit(),
-                max_depth=self.limits.max_depth,
-                max_trials=self.limits.max_trials,
+                recursion_limit=effective.recursion_limit(),
+                max_depth=effective.max_depth,
+                max_trials=effective.max_trials,
             )
             if self._audit:
                 await self._audit.log(AuditEntry(
@@ -163,17 +170,17 @@ class AgentExecutor:
                     agent=agent_name,
                     event="depth_exceeded",
                     detail=(
-                        f"recursion_limit={self.limits.recursion_limit()} "
-                        f"(max_depth={self.limits.max_depth}, "
-                        f"max_trials={self.limits.max_trials})"
+                        f"recursion_limit={effective.recursion_limit()} "
+                        f"(max_depth={effective.max_depth}, "
+                        f"max_trials={effective.max_trials})"
                     ),
                     elapsed_sec=elapsed,
                 ))
             return ExecutionResult(
                 output={},
                 elapsed_sec=elapsed,
-                node_transitions=self.limits.max_depth,
-                trials=self.limits.max_trials,
+                node_transitions=effective.max_depth,
+                trials=effective.max_trials,
                 depth_exceeded=True,
                 error=f"Agent exceeded depth/trial limit: {exc}",
             )
@@ -201,13 +208,13 @@ class AgentExecutor:
         trials = raw_output.get("trial_count", 1) if isinstance(raw_output, dict) else 1
 
         # Hard break #3: post-execution sanity check on trials.
-        if trials > self.limits.max_trials:
+        if trials > effective.max_trials:
             logger.warning(
                 "agent_trials_exceeded_post",
                 tenant=tenant_id,
                 agent=agent_name,
                 trials=trials,
-                limit=self.limits.max_trials,
+                limit=effective.max_trials,
             )
             return ExecutionResult(
                 output=raw_output if isinstance(raw_output, dict) else {"output": raw_output},
@@ -215,7 +222,7 @@ class AgentExecutor:
                 node_transitions=transitions,
                 trials=trials,
                 depth_exceeded=True,
-                error=f"Agent exceeded max_trials={self.limits.max_trials} (actual={trials})",
+                error=f"Agent exceeded max_trials={effective.max_trials} (actual={trials})",
             )
 
         if self._audit:

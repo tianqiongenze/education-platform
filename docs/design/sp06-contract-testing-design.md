@@ -1,5 +1,7 @@
 # SP-06 契约测试设计 (Pact File-Based)
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp06` for reference continuity. Per D-137, sp06 → portal-bff. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 |
 |------|------|------|------|
 | SP06-CT-001 | v1.0 | 2026-08-04 | Approved |

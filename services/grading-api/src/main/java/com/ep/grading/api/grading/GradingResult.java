@@ -6,7 +6,7 @@ import java.time.Instant;
 /**
  * Result of {@link GradingRpcService#gradeSubmission(GradingRequest)}.
  *
- * <p>D-050 P2-5: returned by the sp05 grading Dubbo provider. The MCP
+ * <p>D-050 P2-5: returned by the grading-service grading Dubbo provider. The MCP
  * {@code submission.grade} tool in mcp-server maps this record into its
  * tool response map (status / score / feedback / gradedAt / graderType).
  *
@@ -17,7 +17,7 @@ import java.time.Instant;
  * @param score       numeric score (0-100 unless a custom rubric scale is used)
  * @param feedback    human/AI-readable feedback; never null, may be empty
  * @param gradedAt    instant the grading completed, never null
- * @param graderType  {@code AI} (sp04-assisted subjective) or {@code MANUAL}
+ * @param graderType  {@code AI} (AI-assisted subjective) or {@code MANUAL}
  * @param tenantId    tenant id echoed back from the request for traceability
  */
 public record GradingResult(

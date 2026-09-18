@@ -13,7 +13,7 @@ import java.util.Locale;
 /**
  * RAG pipeline: retrieve -> rerank -> LLM generate -> citation tracing.
  *
- * <p>Generation is delegated to {@link AiClient} (SP-04 AI Gateway via JDK
+ * <p>Generation is delegated to {@link AiClient} (AI Gateway via JDK
  * HttpClient, EP_DEV_ONLY-guarded). Rerank uses a lightweight keyword-overlap
  * scorer so no new dependencies are introduced (D-074/D-075).
  */

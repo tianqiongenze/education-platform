@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>tenant-service</artifactId>
-  <name>SP-07 Tenant Service</name>
+  <name>Knowledge Tenant Service</name>
 
   <!--
     mybatis-plus-spring-boot3-starter 3.5.9 imports spring-boot-dependencies 3.3.4,
@@ -49,6 +49,15 @@
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+    </dependency>
+
+    <!-- D-216: ep-data read/write-split datasource routing (HikariCP dual pool +
+         EpRoutingDataSource + LazyConnectionDataSourceProxy). Opt-in via
+         ep.data.enabled=true; when disabled (default) this service's own
+         DataSource auto-config is untouched. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-data</artifactId>
     </dependency>
 
     <dependency>
@@ -169,6 +178,14 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- D-201: ArchUnit — architecture rule enforcement (DDD layering, no cycles). -->
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>1.3.0</version>
       <scope>test</scope>
     </dependency>
 

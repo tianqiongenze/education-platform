@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
 import com.ep.senior.common.DomainEvent;
@@ -28,7 +29,12 @@ import java.util.Objects;
  * locking, transient domain events pulled post-commit.
  */
 @Entity
-@Table(name = "ep_elder_profile")
+    // D-221: unique constraint applies to freshly created schemas; existing
+    // databases need `ALTER TABLE ep_elder_profile ADD UNIQUE KEY uk_ep_elder_idem (tenant_id, idempotency_key)`.
+    @Table(name = "ep_elder_profile",
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_ep_elder_idem",
+                    columnNames = {"tenant_id", "idempotency_key"}))
 public class ElderProfile implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -75,6 +81,15 @@ public class ElderProfile implements Serializable {
 
     @Column(name = "updated_at", nullable = false)
     private Long updatedAt;
+
+    /**
+     * D-221: caller-supplied business idempotency key for profile creation.
+     * Nullable — legacy callers that omit it keep the old create-always
+     * behaviour. Uniqueness is enforced by the DB unique constraint on fresh
+     * schemas and probed via the repository before insert.
+     */
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
 
     @Version
     @Column(name = "lock_version")
@@ -181,6 +196,9 @@ public class ElderProfile implements Serializable {
     public void setAddress(String address) { this.address = address; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
     public Long getCreatedAt() { return createdAt; }

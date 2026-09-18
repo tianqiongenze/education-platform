@@ -1,5 +1,5 @@
 # =============================================================================
-# SP-02 Data Middle-Platform — Flink CDC 3.x YAML pipeline
+# data-platform Data Middle-Platform — Flink CDC 3.x YAML pipeline
 # User CDC: Pulsar (Avro) -> Iceberg ods.ods_user
 # Low-volume dimension table: parallelism 8
 # D-028 / C-02 / C-03 / C-07

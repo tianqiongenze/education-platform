@@ -8,7 +8,7 @@ spring:
     exclude:
       # D-076/D-108: redisson-spring-boot-starter targets SB3x classpaths; not needed locally.
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
-      # D-076/D-108: BFF is a gateway — no direct DB access. sp03/sp05 JPA jars are on
+      # D-076/D-108: BFF is a gateway — no direct DB access. core-business/grading-service JPA jars are on
       # classpath transitively but BFF must not try to configure a DataSource/Hibernate.
       - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
       - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration

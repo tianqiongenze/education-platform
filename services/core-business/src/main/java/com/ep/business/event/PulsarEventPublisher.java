@@ -1,6 +1,7 @@
 package com.ep.business.event;
 
 import com.ep.business.common.DomainEvent;
+import com.ep.web.common.event.EventSendRetrySupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -11,6 +12,7 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +22,14 @@ import org.springframework.stereotype.Component;
  * Best-effort contract: a publish failure (no client, producer create failure,
  * serialize failure, send failure) is caught and logged — it never propagates
  * to the caller and never rolls back the business transaction.
+ * <p>
+ * D-event-reliability: send failures are retried (bounded, with linear backoff)
+ * via {@link EventSendRetrySupport}; after the last attempt the event is logged
+ * at WARN with the structured fields {@code eventId}/{@code eventType}/
+ * {@code aggregateId}/{@code schemaVersion} (shared-contract envelope). The
+ * failure handler inside {@link EventSendRetrySupport} is the designated hook
+ * for a future transactional outbox — publishers must keep calling
+ * {@link #publish} post-commit only, never inside the business transaction.
  * <p>
  * EP_DEV_ONLY guard: when {@code ep.pulsar.enabled=false} (the dev/test default)
  * the publisher is a no-op and never touches Pulsar. Tests therefore do not
@@ -36,15 +46,29 @@ public class PulsarEventPublisher {
     private final String topic;
     private final ObjectMapper mapper;
     private final boolean pulsarEnabled;
+    private final int sendRetries;
+    private final long sendBackoffMillis;
 
     private volatile Producer<byte[]> producer;
 
     public PulsarEventPublisher(ObjectProvider<PulsarClient> clientProvider,
                                 PulsarClientProperties properties,
                                 @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled) {
+        this(clientProvider, properties, pulsarEnabled,
+                EventSendRetrySupport.DEFAULT_MAX_RETRIES, EventSendRetrySupport.DEFAULT_BACKOFF_MILLIS);
+    }
+
+    @Autowired
+    public PulsarEventPublisher(ObjectProvider<PulsarClient> clientProvider,
+                                PulsarClientProperties properties,
+                                @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled,
+                                @Value("${ep.pulsar.send-retries:2}") int sendRetries,
+                                @Value("${ep.pulsar.send-backoff-millis:200}") long sendBackoffMillis) {
         this.clientProvider = clientProvider;
         this.topic = properties.getTopic().getDomainEvents();
         this.pulsarEnabled = pulsarEnabled;
+        this.sendRetries = sendRetries;
+        this.sendBackoffMillis = sendBackoffMillis;
         this.mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -85,11 +109,11 @@ public class PulsarEventPublisher {
         }
         try {
             byte[] payload = mapper.writeValueAsBytes(event);
-            producer.sendAsync(payload)
-                    .exceptionally(e -> {
-                        log.warn("Pulsar send failed for {}: {}", event.getClass().getSimpleName(), e.getMessage());
-                        return null;
-                    });
+            // D-event-reliability: bounded retries with backoff; on terminal
+            // failure the shared-contract envelope fields are logged at WARN
+            // (outbox hook lives in EventSendRetrySupport).
+            EventSendRetrySupport.sendWithRetry(() -> producer.sendAsync(payload), event.envelope(),
+                    sendRetries, sendBackoffMillis);
         } catch (Exception e) {
             log.warn("Pulsar publish failed for {}: {}", event.getClass().getSimpleName(), e.getMessage());
         }

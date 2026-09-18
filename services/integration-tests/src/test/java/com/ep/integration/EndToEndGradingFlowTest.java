@@ -24,6 +24,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -211,6 +213,7 @@ class EndToEndGradingFlowTest {
         private final FakeGradingService gradingService;
         private final AiGradingGateway aiGradingGateway;
         private final GradeEventBus gradeEventBus;
+        private final Set<String> seenIdempotencyKeys = ConcurrentHashMap.newKeySet();
 
         BffGradingFacade(FakeAssignmentService assignmentService,
                          FakeSubmissionService submissionService,
@@ -241,13 +244,26 @@ class EndToEndGradingFlowTest {
         }
 
         GradePipeline startGrading(Long submissionId, Long gradedBy, String idempotencyKey) {
-            // Invoke the AI gateway for the auto_check score BEFORE starting
-            // the pipeline, mirroring the production BFF orchestration.
-            Submission submission = submissionService.findById(submissionId);
-            AiScore ai = aiGradingGateway.score(submissionId, submission.content);
+            // Call the grading service FIRST so its idempotency dedup short-
+            // circuits duplicate calls before we invoke the AI gateway.
+            // The BFF tracks seen idempotency keys so it can skip the (expensive)
+            // AI-grading gateway call on duplicate submissions.
+            boolean isNew = idempotencyKey == null
+                    || seenIdempotencyKeys.add(idempotencyKey);
+            if (!isNew) {
+                // Duplicate call: return the existing pipeline without re-scoring.
+                return gradingService.startGrading(
+                        TestDataBuilder.buildGrading(submissionId, gradedBy, idempotencyKey));
+            }
 
             GradePipeline pipeline = gradingService.startGrading(
                     TestDataBuilder.buildGrading(submissionId, gradedBy, idempotencyKey));
+
+            // Only invoke the AI gateway for a brand-new pipeline, mirroring
+            // the production BFF orchestration (auto_check score is fed in
+            // after the pipeline has been created).
+            Submission submission = submissionService.findById(submissionId);
+            aiGradingGateway.score(submissionId, submission.content);
 
             if (pipeline.status == GradePipelineStatus.COMPLETED) {
                 gradeEventBus.publishGradeCompleted(pipeline.id);

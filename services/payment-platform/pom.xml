@@ -14,7 +14,7 @@
   <artifactId>payment-platform</artifactId>
   <version>1.0.0</version>
   <packaging>pom</packaging>
-  <name>SP03 Payment Middle Platform Parent</name>
+  <name>Payment Platform Parent</name>
 
   <modules>
     <module>payment-platform-api</module>

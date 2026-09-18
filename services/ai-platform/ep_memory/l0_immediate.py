@@ -96,7 +96,7 @@ class ImmediateMemory:
         self._fallback.pop(session_id, None)
 
     def summarize(self, messages: list[dict]) -> str:
-        """Mock LLM summarization. In production this delegates to the SP04
+        """Mock LLM summarization. In production this delegates to the AI
         gateway LLM. Returns a deterministic placeholder summary."""
         n = len(messages)
         roles = [m.get("role", "?") for m in messages]

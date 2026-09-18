@@ -1,0 +1,149 @@
+asyncapi: 3.0.0
+info:
+  title: Tenant Service Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for tenant-service domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: tenant-service.
+    Subscribers: all services (tenant lifecycle — activation/suspension/reactivation).
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  tenant-service-events:
+    address: persistent://public/default/tenant-service-events
+    description: Topic for tenant-service domain events (tenant lifecycle).
+    messages:
+      TenantActivatedEvent:
+        $ref: '#/components/messages/TenantActivatedEvent'
+      TenantSuspendedEvent:
+        $ref: '#/components/messages/TenantSuspendedEvent'
+      TenantReactivatedEvent:
+        $ref: '#/components/messages/TenantReactivatedEvent'
+operations:
+  publishTenantActivatedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/tenant-service-events'
+    messages:
+      - $ref: '#/components/messages/TenantActivatedEvent'
+  publishTenantSuspendedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/tenant-service-events'
+    messages:
+      - $ref: '#/components/messages/TenantSuspendedEvent'
+  publishTenantReactivatedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/tenant-service-events'
+    messages:
+      - $ref: '#/components/messages/TenantReactivatedEvent'
+components:
+  messages:
+    TenantActivatedEvent:
+      description: Emitted when a Tenant transitions from PENDING to ACTIVE (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [TenantActivatedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+      payload:
+        $ref: '#/components/schemas/TenantActivatedEventPayload'
+    TenantSuspendedEvent:
+      description: Emitted when a Tenant transitions from ACTIVE to SUSPENDED (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [TenantSuspendedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+      payload:
+        $ref: '#/components/schemas/TenantSuspendedEventPayload'
+    TenantReactivatedEvent:
+      description: Emitted when a Tenant transitions from SUSPENDED to ACTIVE (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [TenantReactivatedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+      payload:
+        $ref: '#/components/schemas/TenantReactivatedEventPayload'
+  schemas:
+    TenantActivatedEventPayload:
+      type: object
+      required: [aggregateId, tenantId, plan, occurredAt]
+      properties:
+        aggregateId:
+          type: string
+          description: Aggregate root ID (tenant id, String per MyBatis-Plus ASSIGN_ID).
+        tenantId:
+          type: string
+          description: The activated tenant ID.
+        plan:
+          type: string
+          description: Subscription plan of the tenant.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    TenantSuspendedEventPayload:
+      type: object
+      required: [aggregateId, tenantId, plan, occurredAt]
+      properties:
+        aggregateId:
+          type: string
+          description: Aggregate root ID (tenant id, String per MyBatis-Plus ASSIGN_ID).
+        tenantId:
+          type: string
+          description: The suspended tenant ID.
+        plan:
+          type: string
+          description: Subscription plan of the tenant.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    TenantReactivatedEventPayload:
+      type: object
+      required: [aggregateId, tenantId, plan, occurredAt]
+      properties:
+        aggregateId:
+          type: string
+          description: Aggregate root ID (tenant id, String per MyBatis-Plus ASSIGN_ID).
+        tenantId:
+          type: string
+          description: The reactivated tenant ID.
+        plan:
+          type: string
+          description: Subscription plan of the tenant.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

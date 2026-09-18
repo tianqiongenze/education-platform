@@ -1,5 +1,7 @@
 # SP-01 技术中台 —— 部署与运维文档
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp01` for reference continuity. Per D-137, sp01 → user. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP01-DEPLOY-001 | v1.0 | 2026-08-03 | Approved | ZCode(文档工程师) | SP01-SAD-001 / ADR-T05 / G-01~G-10 SLO |

@@ -1,5 +1,7 @@
 # SP-07 多地多中心部署方案
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp07` for reference continuity. Per D-137, sp07 → knowledge-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP07-DEPLOY-001 | v1.0 | 2026-08-04 | Approved | ZCode(DevOps架构师) | SP07-SAD-001 / D-032 / D-004 / D-012 / G-01~G-10 SLO |

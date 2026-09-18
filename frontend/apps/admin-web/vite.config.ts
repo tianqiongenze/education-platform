@@ -1,9 +1,45 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
+import { resolve, normalize, dirname } from 'path';
+
+/**
+ * Redirect the ui-kit Taro platform adapter (`platform/taro.ts`) to the web
+ * adapter (`platform/web.ts`) during Vite/Rollup builds.
+ *
+ * `platform/index.ts` contains `import * as taro from './taro'`.  Rollup
+ * statically analyses every imported module — including unused namespace
+ * imports — and `taro.ts` re-exports from `@tarojs/components` whose Stencil
+ * H5 build has incomplete named exports under pnpm dual-instance resolution.
+ *
+ * A plain `resolve.alias` does not work because the specifier `'./taro'` is
+ * relative and already resolved to an absolute path before the alias plugin
+ * runs.  This plugin intercepts at the `resolveId` phase (`enforce: 'pre'`).
+ *
+ * See ADR-D217.
+ */
+function redirectTaroToWeb(uiKitSrcDir: string): Plugin {
+  const taroNoExt = normalize(resolve(uiKitSrcDir, 'platform/taro')).replace(/\.(ts|tsx|js|jsx)$/, '');
+  const webPath = resolve(uiKitSrcDir, 'platform/web.ts');
+  return {
+    name: 'redirect-taro-to-web',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer) return null;
+      // `resolve(importer, source)` treats `importer` as a file path, so for a
+      // relative import like './taro' we must resolve against the importer's
+      // directory — not the importer file itself.
+      const resolved = normalize(resolve(dirname(importer), source)).replace(/\.(ts|tsx|js|jsx)$/, '');
+      if (resolved === taroNoExt) return webPath;
+      return null;
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    redirectTaroToWeb(resolve(__dirname, '../../packages/ui-kit/src')),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

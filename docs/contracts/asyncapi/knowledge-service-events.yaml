@@ -1,0 +1,110 @@
+asyncapi: 3.0.0
+info:
+  title: Knowledge Service Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for knowledge-service domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: knowledge-service.
+    Subscribers: retrieval-service, agent-service.
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  knowledge-service-events:
+    address: persistent://public/default/knowledge-service-events
+    description: Topic for knowledge-service domain events (document lifecycle).
+    messages:
+      DocumentParsedEvent:
+        $ref: '#/components/messages/DocumentParsedEvent'
+      DocumentFailedEvent:
+        $ref: '#/components/messages/DocumentFailedEvent'
+operations:
+  publishDocumentParsedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/knowledge-service-events'
+    messages:
+      - $ref: '#/components/messages/DocumentParsedEvent'
+  publishDocumentFailedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/knowledge-service-events'
+    messages:
+      - $ref: '#/components/messages/DocumentFailedEvent'
+components:
+  messages:
+    DocumentParsedEvent:
+      description: Emitted when a Document transitions from UPLOADED to PARSED (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [DocumentParsedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+      payload:
+        $ref: '#/components/schemas/DocumentParsedEventPayload'
+    DocumentFailedEvent:
+      description: Emitted when a Document transitions from UPLOADED to FAILED (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [DocumentFailedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+      payload:
+        $ref: '#/components/schemas/DocumentFailedEventPayload'
+  schemas:
+    DocumentParsedEventPayload:
+      type: object
+      required: [aggregateId, documentId, tenantId, chunkCount, occurredAt]
+      properties:
+        aggregateId:
+          type: string
+          description: Aggregate root ID (document id, String per MyBatis-Plus ASSIGN_ID).
+        documentId:
+          type: string
+          description: The parsed document ID.
+        tenantId:
+          type: string
+          description: Owning tenant ID.
+        chunkCount:
+          type: integer
+          description: Number of chunks produced during parsing.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    DocumentFailedEventPayload:
+      type: object
+      required: [aggregateId, documentId, tenantId, occurredAt]
+      properties:
+        aggregateId:
+          type: string
+          description: Aggregate root ID (document id, String per MyBatis-Plus ASSIGN_ID).
+        documentId:
+          type: string
+          description: The failed document ID.
+        tenantId:
+          type: string
+          description: Owning tenant ID.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

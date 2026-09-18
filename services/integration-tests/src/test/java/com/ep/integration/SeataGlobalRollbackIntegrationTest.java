@@ -34,8 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   grading-service.GradingService.startGrading(cmd)    // branch 2: write grade pipeline
  *      └─ if startGrading throws → global rollback must undo the order insert too
  * </pre>
- * Both {@code OrderServiceImpl#createOrder} (sp03) and
- * {@code GradingServiceImpl#startGrading} (sp05) are already annotated with
+ * Both {@code OrderServiceImpl#createOrder} (core-business) and
+ * {@code GradingServiceImpl#startGrading} (grading-service) are already annotated with
  * {@code @GlobalTransactional(name = "ep-create-order" / "ep-start-grading",
  * rollbackFor = Exception.class)} in the production code, and both services
  * declare {@code seata-spring-boot-starter 2.0.0} + a Nacos-backed
@@ -87,11 +87,11 @@ class SeataGlobalRollbackIntegrationTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("Seata rollback simulation: grading failure undoes the sp03 order write")
+    @DisplayName("Seata rollback simulation: grading failure undoes the core-business order write")
     void test_global_rollback_undoes_order_on_grading_failure() {
         FakeGlobalTransaction gtx = new FakeGlobalTransaction();
 
-        // Branch 1 — sp03 OrderService.createOrder (would be @GlobalTransactional).
+        // Branch 1 — core-business OrderService.createOrder (would be @GlobalTransactional).
         final long[] idHolder = new long[1];
         gtx.branch(
                 () -> {
@@ -107,11 +107,11 @@ class SeataGlobalRollbackIntegrationTest {
         assertEquals(OrderStatus.PENDING.getCode(),
                 orderService.getOrderById(orderId).getStatus());
 
-        // Branch 2 — sp05 GradingService.startGrading, forced to throw.
-        RuntimeException boom = new RuntimeException("sp05 grading infra down");
+        // Branch 2 — grading-service GradingService.startGrading, forced to throw.
+        RuntimeException boom = new RuntimeException("grading-service grading infra down");
         try {
             gtx.branch(
-                    () -> { throw boom; },   // simulate sp05 throwing during the global tx
+                    () -> { throw boom; },   // simulate grading-service throwing during the global tx
                     () -> { /* grading wrote nothing before throwing */ }
             );
         } catch (RuntimeException expected) {
@@ -124,7 +124,7 @@ class SeataGlobalRollbackIntegrationTest {
         assertTrue(gtx.isRolledBack(), "global transaction must be marked rolled back");
         assertFalse(gtx.isCommitted(), "rollback and commit are mutually exclusive");
         assertNull(orderService.getOrderById(orderId),
-                "Seata undo must remove the sp03 order row on rollback");
+                "Seata undo must remove the core-business order row on rollback");
     }
 
     @Test
@@ -158,19 +158,19 @@ class SeataGlobalRollbackIntegrationTest {
     }
 
     @Test
-    @DisplayName("D-113: sp03 Saga wiring present; sp05 @GlobalTransactional retained")
+    @DisplayName("D-113: core-business Saga wiring present; grading-service @GlobalTransactional retained")
     void test_production_global_transactional_wiring() {
-        // D-113: sp03 Order migrated from @GlobalTransactional(AT) to Saga state
+        // D-113: core-business Order migrated from @GlobalTransactional(AT) to Saga state
         // machine. This contract guard now verifies the Saga wiring instead.
         String orderImplSrc = readProductionSource(
                 "services/order-platform/order-platform-service/src/main/java/com/ep/order/service/OrderServiceImpl.java");
 
         assertTrue(orderImplSrc.contains("StateMachineEngine"),
-                "D-113: sp03 OrderServiceImpl must use Saga StateMachineEngine");
+                "D-113: core-business OrderServiceImpl must use Saga StateMachineEngine");
         assertFalse(orderImplSrc.contains("import io.seata.spring.annotation.GlobalTransactional;"),
-                "D-113: sp03 OrderServiceImpl must NOT import GlobalTransactional (migrated to Saga)");
+                "D-113: core-business OrderServiceImpl must NOT import GlobalTransactional (migrated to Saga)");
 
-        // sp05 grading: @GlobalTransactional was removed in D-077 (requires live TC).
+        // grading-service grading: @GlobalTransactional was removed in D-077 (requires live TC).
         // The service uses @SentinelResource for rate limiting instead.
         String gradingImplSrc = readProductionSource(
                 "services/grading-service/src/main/java/com/ep/grading/grading/impl/GradingServiceImpl.java");

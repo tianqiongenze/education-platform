@@ -2,6 +2,10 @@ server:
   port: 8084
 
 spring:
+  # D-216 (P1-1): virtual threads (was missing — Iron Law: no platform-thread pools for IO)
+  threads:
+    virtual:
+      enabled: true
   application:
     name: order-platform
   # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).

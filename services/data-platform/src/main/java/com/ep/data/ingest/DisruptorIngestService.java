@@ -42,12 +42,17 @@ public class DisruptorIngestService {
     private String waitStrategyName;
 
     private final PulsarFallback pulsarFallback;
+    private final DisruptorIngestWorker ingestWorker;
 
     private DisruptorWorker<IngestEvent> disruptorWorker;
 
     @Autowired
-    public DisruptorIngestService(PulsarFallback pulsarFallback) {
+    public DisruptorIngestService(PulsarFallback pulsarFallback,
+            org.springframework.beans.factory.ObjectProvider<DisruptorIngestWorker> workerProvider) {
         this.pulsarFallback = pulsarFallback;
+        // D-216 (audit P0-3): wire the REAL worker — the handler used to be a
+        // debug no-op that silently consumed and discarded every event.
+        this.ingestWorker = workerProvider.getIfAvailable();
     }
 
     @PostConstruct
@@ -65,12 +70,14 @@ public class DisruptorIngestService {
                     slot.setSourceCell(src.getSourceCell());
                 })
                 .handler((evt, seq, endOfBatch) -> {
-                    // Worker role handler — activated when ep.role=worker.
-                    // In API role (default), events are still consumed but
-                    // the handler is a no-op (the worker deployment overrides this).
-                    // The actual worker handler is wired via DisruptorIngestWorker.
-                    if (evt.getEnvelope() != null) {
-                        log.debug("[Ingest] Consumed event seq={} table={}", seq,
+                    if (evt.getEnvelope() == null) {
+                        return;
+                    }
+                    if (ingestWorker != null) {
+                        // batch (size/time triggered) → TiDB → retry → fallback
+                        ingestWorker.onEvent(evt);
+                    } else {
+                        log.error("[Ingest] DisruptorIngestWorker unavailable — event DROPPED table={}",
                                 evt.getEnvelope().getTable());
                     }
                 })

@@ -1,0 +1,180 @@
+# D-225: Kustomize overlay for the "applications-cluster" deployment target.
+#
+# TOPOLOGY (user-provided; cluster-level verification PENDING — see
+# docs/deployment/applications-cluster-runbook.md):
+#   - K8s cluster "applications-cluster", reachable via nodes
+#     10.167.2.175 / 10.167.2.176 (SSH key auth intended but currently broken).
+#   - Shared middleware ALREADY RUNNING — REUSED, never redeployed:
+#       namespace `infra`     : TiDB, Pulsar, Milvus, Nacos (registry)
+#       namespace `dify-plus` : Redis Cluster
+#   - Project services deploy into dedicated namespace `education-platform`.
+#
+# D-215 constraints honored here:
+#   - ClusterIP Services only, no NodePort (base is already all ClusterIP).
+#   - Exactly 3 Traefik Ingresses (base unified-ingress / unified-ws-ingress /
+#     portal-ingress patched nginx → traefik).
+#   - Dependency-ordered deployment is implemented by
+#     scripts/deploy-applications-cluster.sh (infra/middleware exist already,
+#     so ordering covers config → observability → foundation → domain → edge).
+#
+# Excluded from this overlay (deleted via $patch: delete below) because the
+# middleware already exists in shared namespaces or the CRDs are absent:
+#   TidbCluster / TidbMonitor / BackupSchedule / TidbInitializer (infra ns TiDB)
+#   NebulaCluster + its Services (no nebula-operator on this cluster; PENDING)
+#   PropagationPolicy / OverridePolicy (single cluster — no Karmada)
+#   ServiceMonitor * (Prometheus Operator CRD presence unverified; PENDING)
+#   SandboxWarmPool CRD (Firecracker backend not provisioned; MVP uses
+#   ProcessBuilder per D-185)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: education-platform-applications-cluster
+
+resources:
+  - ../../base
+
+# D-215: dedicated project namespace. Also fixes a base gap — boardgame-service,
+# live-go and senior-care Deployment/Service docs carry no metadata.namespace
+# and would land in `default` on apply without this.
+namespace: education-platform
+
+patches:
+  # File-based deletion of shared middleware / CRD-dependent resources
+  # (see delete-shared-infra.yaml header). File-based `$patch: delete` is
+  # required because kubectl's embedded kustomize v4 fails on list-style SMC
+  # delete patches for unknown CRD kinds ("Unexpected kind: unknown").
+  - path: delete-shared-infra.yaml
+  # ======================================================================
+  # 1. Middleware endpoints — cross-namespace FQDNs to shared infra.
+  #    Checked-in file holds PLACEHOLDER service FQDNs; the deploy script
+  #    DISCOVERS real Service names (kubectl -n infra get svc /
+  #    kubectl -n dify-plus get svc) and REWRITES this file before apply.
+  #    Static placeholder FQDNs keep `kubectl kustomize` green without
+  #    cluster access. See middleware-endpoints.yaml header.
+  # ======================================================================
+  - path: middleware-endpoints.yaml
+    target:
+      kind: ConfigMap
+      name: common-config
+  - path: dubbo-middleware-endpoints.yaml
+    target:
+      kind: ConfigMap
+      name: dubbo-config
+
+  # ======================================================================
+  # 2. Two-node cluster adaptations (10.167.2.175 / 10.167.2.176):
+  #    - base sets topologySpreadConstraints on topology.kubernetes.io/zone
+  #      with whenUnsatisfiable: DoNotSchedule — nodes carry no zone labels,
+  #      so pods would never schedule. Remove (null deletes the list).
+  #    - replicas normalized to 2 (one pod per node) for all deployments.
+  # ======================================================================
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: all-deployments
+      spec:
+        replicas: 2
+        template:
+          spec:
+            topologySpreadConstraints: null
+
+  # ======================================================================
+  # 3. Ingress: Traefik only (D-215). Base uses ingressClassName: nginx +
+  #    nginx-specific annotations + TLS. Patch to traefik, drop TLS (no
+  #    certs provisioned on this cluster yet — PENDING) and drop nginx
+  #    annotations (same treatment as overlays/local-verify).
+  # ======================================================================
+  - target:
+      kind: Ingress
+      name: unified-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+  - target:
+      kind: Ingress
+      name: unified-ws-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+  - target:
+      kind: Ingress
+      name: portal-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: traefik
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations
+
+  # ======================================================================
+  # 4. NetworkPolicy: allow the Traefik ingress controller namespace.
+  #    base/networkpolicy-internal.yaml allows ingress from namespace
+  #    `ingress-nginx` only; on this cluster Traefik is the ingress
+  #    controller (k3s default runs it in `kube-system`). Append an
+  #    additional allowed peer. PENDING: confirm the actual namespace +
+  #    that the namespace carries the kubernetes.io/metadata.name label.
+  # ======================================================================
+  - target:
+      kind: NetworkPolicy
+      name: portal-bff-ingress
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+  - target:
+      kind: NetworkPolicy
+      name: ws-gateway-ingress
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+  - target:
+      kind: NetworkPolicy
+      name: frontend-portal-ingress
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+
+# ======================================================================
+# 6. Single-cluster cell metadata (D-041 fields are inert here but kept
+#    consistent): no cross-cell CRDT, single Pulsar replication cluster.
+#    PENDING: PULSAR_REPLICATION_CLUSTERS must equal the Pulsar cluster's
+#    configured clusterName (verify: pulsar-admin clusters list).
+# ======================================================================
+configMapGenerator:
+  - name: common-config
+    namespace: education-platform
+    behavior: merge
+    literals:
+      - CELL_NAME=applications-cluster
+      - CELL_REGION=on-prem
+      - CELL_ZONE=apps-a
+      - REDIS_CLUSTER_LOCAL_CELL=applications-cluster
+      - REDIS_CLUSTER_CRDT_ENABLED=false
+      - PULSAR_REPLICATION_CLUSTERS=applications-cluster

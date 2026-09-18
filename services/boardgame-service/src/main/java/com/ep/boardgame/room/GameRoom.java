@@ -9,6 +9,7 @@ import jakarta.persistence.Version;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -79,6 +80,15 @@ public class GameRoom implements Serializable {
 
     @Column(name = "updated_at", nullable = false)
     private Long updatedAt;
+
+    /**
+     * D-221: caller-supplied business idempotency key for room creation.
+     * Nullable — legacy callers that omit it keep the old create-always
+     * behaviour. Probed via the repository before insert; unique constraint
+     * applies to freshly created schemas.
+     */
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
 
     @Version
     @Column(name = "lock_version")
@@ -260,6 +270,9 @@ public class GameRoom implements Serializable {
     public void setCourseId(Long courseId) { this.courseId = courseId; }
     public Long getLessonId() { return lessonId; }
     public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+
     public String getRoomName() { return roomName; }
     public void setRoomName(String roomName) { this.roomName = roomName; }
     public Long getRedPlayerId() { return redPlayerId; }

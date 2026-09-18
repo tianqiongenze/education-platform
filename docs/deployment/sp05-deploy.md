@@ -1,5 +1,7 @@
 # SP-05 IT 后端 MVP 部署方案
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp05` for reference continuity. Per D-137, sp05 → grading-service. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP-05-DEPLOY | v1.0 | 2026-08-03 | Draft(待评审) | 文档工程师 | SP-05-SAD v1.0 + SP-05-SDD v1.0 + ADR-I01..I05 |

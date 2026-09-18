@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * REST fa\u00e7ade for the SP-03 Order middle platform.
+ * REST fa\u00e7ade for the core-business Order middle platform.
  * <p>
  * Mirrors the legacy {@code /api/v1/orders} surface from core-business so the
  * BFF and existing clients keep working; delegates to the Dubbo-exposed

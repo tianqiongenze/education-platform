@@ -1,4 +1,4 @@
-"""Tests for the SP-04 MCP protocol layer (ai_mcp)."""
+"""Tests for the AI MCP protocol layer (ai_mcp)."""
 
 from __future__ import annotations
 
@@ -139,8 +139,8 @@ async def test_registry_register_and_list():
     redis = FakeRedis()
     reg = MCPServerRegistry(redis=redis)
     info = MCPServerInfo(
-        server_id="sp07-kb",
-        name="SP-07 Knowledge MCP",
+        server_id="knowledge-platform-kb",
+        name="knowledge-platform Knowledge MCP",
         url="https://knowledge-bff/mcp",
         transport="http",
         tenant_id="t1",
@@ -148,7 +148,7 @@ async def test_registry_register_and_list():
     await reg.register("t1", info)
     servers = await reg.list_servers("t1")
     assert len(servers) == 1
-    assert servers[0].server_id == "sp07-kb"
+    assert servers[0].server_id == "knowledge-platform-kb"
     # Redis key follows D-033 iron-rule template.
     assert "mcp:servers:t1" in redis.store
 

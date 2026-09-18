@@ -8,7 +8,7 @@ spring:
       # the removed org.springframework.boot.autoconfigure.data.redis.RedisProperties class.
       # ep-cache provides its own RedisTemplate/ConnectionFactory; redisson auto-config not needed in dev.
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
-      # D-076: BFF is a gateway — no direct DB access. sp03/sp05 JPA jars are on classpath
+      # D-076: BFF is a gateway — no direct DB access. core-business/grading-service JPA jars are on classpath
       # transitively but BFF must not try to configure a DataSource/Hibernate.
       # D-077: SB4 restructured autoconfigure packages — classes moved from spring-boot-autoconfigure
       # into dedicated spring-boot-jdbc and spring-boot-hibernate modules with new package names.

@@ -11,13 +11,13 @@ import java.util.List;
 
 /**
  * BFF 聚合控制器 — 课程域.
- * D-032: @DubboReference 调用 SP-03 CourseService, 列表/搜索/发布/归档走远程.
+ * D-032: @DubboReference 调用 core-business CourseService, 列表/搜索/发布/归档走远程.
  * 查询型调用使用较长 timeout 以容忍分页扫描.
  *
  * D-070: Trace correlation — before each @DubboReference invocation, the MDC traceId
  * (populated by com.ep.bff.config.TraceIdFilter) must be propagated to the Dubbo RPC
  * context via com.ep.bff.config.TracePropagationUtil.propagateToRpc(), so downstream
- * SP-03 services can pick up the same traceId from RpcContext and bind it into their MDC.
+ * core-business services can pick up the same traceId from RpcContext and bind it into their MDC.
  */
 @RestController
 @RequestMapping("/api/v1/courses")

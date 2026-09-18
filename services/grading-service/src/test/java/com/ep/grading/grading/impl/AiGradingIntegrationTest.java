@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * ai-platform integration tests for {@link GradingRpcServiceImpl}'s AI grading
- * wiring (closes the TODO(sp04) gap).
+ * wiring (closes the TODO(ai-grading) gap).
  *
  * <p>Covers:
  * <ul>
@@ -99,7 +99,7 @@ class AiGradingIntegrationTest {
     @Test
     void aiEnabled_throws_fallbackPending_returnsManualPending() {
         when(aiGrading.grade(any(AiGradingRequest.class)))
-                .thenThrow(new RuntimeException("sp04 down"));
+                .thenThrow(new RuntimeException("ai-grading provider down"));
         GradingRpcService rpc = new GradingRpcServiceImpl(
                 gradingService, aiGrading, true, "pending");
 
@@ -114,7 +114,7 @@ class AiGradingIntegrationTest {
     @Test
     void aiEnabled_throws_fallbackFail_rethrows() {
         when(aiGrading.grade(any(AiGradingRequest.class)))
-                .thenThrow(new RuntimeException("sp04 down"));
+                .thenThrow(new RuntimeException("ai-grading provider down"));
         GradingRpcService rpc = new GradingRpcServiceImpl(
                 gradingService, aiGrading, true, "fail");
 

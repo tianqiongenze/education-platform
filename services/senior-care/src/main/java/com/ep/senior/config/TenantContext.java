@@ -11,7 +11,7 @@ package com.ep.senior.config;
  *
  * <p>This mirrors {@code com.ep.business.config.TenantContext},
  * {@code com.ep.grading.config.TenantContext} and
- * {@code com.ep.sp07.mcp.context.TenantContext}; duplicated per service so
+ * {@code com.ep.mcp.context.TenantContext}; duplicated per service so
  * each deployment unit is self-contained for a ThreadLocal holder.
  */
 public final class TenantContext {

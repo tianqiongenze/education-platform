@@ -10,8 +10,8 @@ import java.util.List;
 /**
  * D-045 Dubbo RPC interface for the multi-level memory service.
  *
- * <p>Implemented by SP-04 AI Gateway / a dedicated ep-memory provider and
- * consumed by SP-07/SP-02/SP-03 via Dubbo registry (Nacos).</p>
+ * <p>Implemented by AI Gateway / a dedicated ep-memory provider and
+ * consumed by knowledge-platform/data-platform/core-business via Dubbo registry (Nacos).</p>
  *
  * <p>All operations are scoped by {@code tenantId} to enforce D-044 SaaS
  * multi-tenant isolation.</p>

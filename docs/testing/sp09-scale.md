@@ -1,5 +1,7 @@
 # SP-09 容量天花板验证方案
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp09` for reference continuity. Per D-137, sp09 → boardgame-service. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP09-SCALE-001 | v1.0 | 2026-08-04 | Draft | ZCode(性能架构师) | SP01-SAD-001 / SP01-DEPLOY-001 / D-032 / EP-TOGAF-001 §6 / G-01~G-10 SLO |

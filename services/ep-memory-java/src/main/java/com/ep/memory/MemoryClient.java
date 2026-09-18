@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * HTTP fallback client for the memory service.
  *
  * <p>Used when {@code ep.memory.use-rpc=false} or when the Dubbo registry is
- * unavailable. Targets the SP-04 AI Gateway REST surface
+ * unavailable. Targets the AI Gateway REST surface
  * ({@code /v1/memory/*}).</p>
  *
  * <p>Uses {@link java.net.http.HttpClient} which is virtual-thread friendly

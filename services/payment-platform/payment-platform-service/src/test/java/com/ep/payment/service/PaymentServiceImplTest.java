@@ -239,19 +239,37 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void createPayment_sameOrderIdDifferentTenants_distinctPayments() {
+    void createPayment_duplicateOrderId_returnsExistingPayment_idempotent() {
+        // D-090: a second create for the same orderId must return the existing
+        // payment (same paymentId) instead of minting a duplicate.
+        PaymentRequest req = new PaymentRequest("order-dup-idem", "tenant-A", PaymentChannel.MOCK,
+                new BigDecimal("50.00"), "CNY");
+        PaymentResult r1 = service.createPayment(req);
+        PaymentResult r2 = service.createPayment(req);
+
+        assertEquals(r1.paymentId(), r2.paymentId(),
+                "duplicate create for the same orderId must return the existing paymentId");
+        // Only one payment is stored under the order.
+        Payment stored = service.getPaymentByOrder("order-dup-idem");
+        assertEquals(r1.paymentId(), stored.getPaymentId());
+    }
+
+    @Test
+    void createPayment_sameOrderIdDifferentTenants_returnsFirstTenant_idempotent() {
+        // D-090: with per-orderId idempotency, the second create (same orderId,
+        // different tenant) returns the FIRST payment — the tenant of record is
+        // the one that created the payment, not the duplicate caller.
         PaymentRequest reqT1 = new PaymentRequest("order-dup", "tenant-A", PaymentChannel.MOCK,
                 new BigDecimal("50.00"), "CNY");
         PaymentRequest reqT2 = new PaymentRequest("order-dup", "tenant-B", PaymentChannel.MOCK,
                 new BigDecimal("50.00"), "CNY");
         PaymentResult r1 = service.createPayment(reqT1);
         PaymentResult r2 = service.createPayment(reqT2);
-        assertFalse(r1.paymentId().equals(r2.paymentId()),
-                "two payments for the same order id must have distinct payment ids");
-        Payment p1 = service.getPayment(r1.paymentId());
-        Payment p2 = service.getPayment(r2.paymentId());
-        assertEquals("tenant-A", p1.getTenantId());
-        assertEquals("tenant-B", p2.getTenantId());
+        assertEquals(r1.paymentId(), r2.paymentId(),
+                "duplicate create for the same orderId must return the existing paymentId");
+        Payment stored = service.getPayment(r1.paymentId());
+        assertEquals("tenant-A", stored.getTenantId(),
+                "the original payment (tenant-A) is retained, not overwritten by the duplicate");
     }
 
     @Test

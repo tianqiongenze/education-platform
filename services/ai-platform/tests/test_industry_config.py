@@ -1,4 +1,4 @@
-"""IndustryConfig unit tests (SP-04 industry-agnostic refactoring).
+"""IndustryConfig unit tests (AI industry-agnostic refactoring).
 
 These tests verify the YAML-driven industry configuration:
 - loading from education.yaml populates all fields

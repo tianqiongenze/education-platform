@@ -1,7 +1,7 @@
 """D-191: AI Review Agent for boardgame post-game analysis.
 
 This module implements a LangGraph-based agent that reviews a completed game
-(Xiangqi PGN or Go SGF) and produces move-by-move annotations via the SP04
+(Xiangqi PGN or Go SGF) and produces move-by-move annotations via the AI
 AI Gateway OpenAI-compatible endpoint.
 
 Flow:

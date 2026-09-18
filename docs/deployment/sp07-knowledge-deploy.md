@@ -1,5 +1,7 @@
 # SP-07 知识中台 部署方案
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp07` for reference continuity. Per D-137, sp07 → knowledge-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP-07-KDEPLOY | v1.0 | 2026-08-05 | Draft(待评审) | 知识中台架构组 | SP-07-SRS/SAD/SDD v1.0 + SP-04-AI 中台 + D-032/D-041/D-042 + G-01~G-10 SLO |

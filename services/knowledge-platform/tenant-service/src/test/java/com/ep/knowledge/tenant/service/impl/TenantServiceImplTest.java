@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
  *
  * <p>Mocks the {@link TenantMapper} MyBatis-Plus interface so the tenant CRUD
  * logic (default plan/quota, created-at stamping, quota update, delete) can be
- * exercised without a database. Follows the sp07 service-test convention.
+ * exercised without a database. Follows the knowledge-platform service-test convention.
  */
 @ExtendWith(MockitoExtension.class)
 class TenantServiceImplTest {

@@ -1,0 +1,80 @@
+# D-216: Production profile — CockroachDB dual-pool read/write split.
+# Extends application.yml with the ep.data opt-in block.
+# All secrets from environment variables. NEVER commit real credentials.
+spring:
+  aot:
+    enabled: true
+  datasource:
+    url: ${TIDB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:50}
+      minimum-idle: 10
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+      connection-test-query: SELECT 1
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-cluster}
+      port: ${REDIS_PORT:6379}
+      database: 0
+
+dubbo:
+  registry:
+    address: nacos://${NACOS_ADDR}
+
+csp:
+  sentinel:
+    transport:
+      dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+
+seata:
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      namespace: ""
+      group: SEATA_GROUP
+
+logging:
+  level:
+    root: WARN
+    com.ep: INFO
+
+ep:
+  pulsar:
+    enabled: true
+    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
+    topic:
+      domain-events: persistent://public/default/senior-care-events
+  # D-216: production read/write split. senior-care targets CockroachDB in the
+  # overseas deployment; read pool uses follower reads for nearest-replica latency.
+  # Set ep.data.enabled=true (or EP_DATA_ENABLED=true) to activate the dual pool;
+  # when false, the spring.datasource.* block above remains authoritative.
+  data:
+    enabled: ${EP_DATA_ENABLED:false}
+    provider: cockroachdb
+    read-replicas: true
+    follower-reads: true
+    write:
+      host: ${CRDB_PRIMARY:crdb-primary:26257}
+      database: ep_senior
+      username: ${DB_USERNAME:root}
+      password: ${DB_PASSWORD:}
+      maximum-pool-size: 10
+    read:
+      host: ${CRDB_FOLLOWER:crdb-follower:26257}
+      database: ep_senior
+      username: ${DB_USERNAME:root}
+      password: ${DB_PASSWORD:}
+      maximum-pool-size: 20

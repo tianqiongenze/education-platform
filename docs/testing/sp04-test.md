@@ -1,8 +1,10 @@
+# SP-04 AI中台 测试方案
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp04` for reference continuity. Per D-137, sp04 → ai-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP04-TEST | v1.0 | 2026-08-03 | 评审通过 | AI中台QA组 | 架构委员会 |
-
-# SP-04 AI中台 测试方案
 
 > 关联：SRS `sp04-srs.md`、SAD `sp04-sad.md`、SDD `sp04-sdd.md`；ADR-A01..A04
 

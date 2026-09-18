@@ -1,6 +1,7 @@
 package com.ep.cache;
 
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
@@ -37,6 +38,15 @@ class CacheServiceTest {
         when(bP.getIfAvailable()).thenReturn(broadcast);
 
         svc = new CacheService(cmP, redisP, bP);
+    }
+
+    /**
+     * TTLs now carry a random 0.8x~1.2x jitter (anti-avalanche), so exact-TTL
+     * assertions are replaced by range assertions around the requested base.
+     */
+    private static void assertTtlJitteredAround(long base, long actual) {
+        assertTrue(actual >= Math.floor(base * 0.8) && actual <= Math.ceil(base * 1.2),
+                "TTL " + actual + " should stay within [0.8x, 1.2x] of " + base);
     }
 
     @Test
@@ -110,7 +120,9 @@ class CacheServiceTest {
 
         svc.put("course:detail", "k1", "val", 60);
 
-        verify(vops).set("course:detail:k1", "val", 60L, TimeUnit.SECONDS);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+        verify(vops).set(eq("course:detail:k1"), eq("val"), ttl.capture(), eq(TimeUnit.SECONDS));
+        assertTtlJitteredAround(60, ttl.getValue());
     }
 
     @Test
@@ -121,7 +133,9 @@ class CacheServiceTest {
 
         svc.getOrLoad("course:detail", "loaded", () -> "fresh", 120, true);
 
-        verify(vops).set("course:detail:loaded", "fresh", 120L, TimeUnit.SECONDS);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+        verify(vops).set(eq("course:detail:loaded"), eq("fresh"), ttl.capture(), eq(TimeUnit.SECONDS));
+        assertTtlJitteredAround(120, ttl.getValue());
     }
 
     @Test
@@ -133,7 +147,10 @@ class CacheServiceTest {
         String r = svc.getOrLoad("course:detail", "empty", () -> null, 30, true);
 
         assertNull(r);
-        verify(vops).set(eq("course:detail:empty"), eq(CacheService.EMPTY_SENTINEL), eq(30L), eq(TimeUnit.SECONDS));
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+        verify(vops).set(eq("course:detail:empty"), eq(CacheService.EMPTY_SENTINEL),
+                ttl.capture(), eq(TimeUnit.SECONDS));
+        assertTtlJitteredAround(30, ttl.getValue());
     }
 
     @Test

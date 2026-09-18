@@ -20,12 +20,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * D-050 P2-5: unit tests for the sp05 grading Dubbo provider.
+ * D-050 P2-5: unit tests for the grading-service grading Dubbo provider.
  *
  * <p>Covers:
  * <ul>
  *   <li>Objective path: blank rubricId → {@code graderType=MANUAL}, deterministic score.</li>
- *   <li>Subjective path: non-blank rubricId → placeholder manual score pending sp04.</li>
+ *   <li>Subjective path: non-blank rubricId → placeholder manual score pending AI integration.</li>
  *   <li>Validation: null request / null submissionId / null tenantId → throws.</li>
  *   <li>Pipeline traceability: {@link GradingService#startGrading} invoked when
  *       the grading service is present; failures are swallowed (result returned).</li>

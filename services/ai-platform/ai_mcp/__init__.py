@@ -1,6 +1,6 @@
-"""MCP (Model Context Protocol) layer for SP-04 AI Middle-Platform.
+"""MCP (Model Context Protocol) layer for AI AI Middle-Platform.
 
-Provides the protocol-level primitives for exposing SP-04 AI capabilities as
+Provides the protocol-level primitives for exposing AI AI capabilities as
 MCP tools, discovering remote MCP servers, and routing calls across multiple
 transports (stdio / Streamable HTTP) in a multi-tenant environment.
 """

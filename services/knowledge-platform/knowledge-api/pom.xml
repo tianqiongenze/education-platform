@@ -11,7 +11,7 @@
 
   <artifactId>knowledge-api</artifactId>
   <packaging>jar</packaging>
-  <name>SP-07 API (Dubbo Interfaces &amp; DTOs)</name>
+  <name>Knowledge API (Dubbo Interfaces &amp; DTOs)</name>
 
   <dependencies>
     <dependency>

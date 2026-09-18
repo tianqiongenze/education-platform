@@ -9,11 +9,11 @@ package com.ep.business.config;
  * request from the {@code X-Tenant-Id} header (D-133 multi-tenant SaaS
  * isolation).
  *
- * <p>This mirrors {@code com.ep.sp07.mcp.context.TenantContext} and
+ * <p>This mirrors {@code com.ep.mcp.context.TenantContext} and
  * {@code com.ep.knowledge.tenant.context.TenantContext}; duplicated per
  * service so each deployment unit is self-contained for a ThreadLocal
  * holder. See D-133 for the consistency fix that added tenant isolation to
- * core-business and grading-service (sp07 already had it).
+ * core-business and grading-service (mcp-server already had it).
  */
 public final class TenantContext {
 

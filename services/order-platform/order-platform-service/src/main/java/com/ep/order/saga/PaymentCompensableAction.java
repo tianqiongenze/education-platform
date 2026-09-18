@@ -1,6 +1,7 @@
 package com.ep.order.saga;
 
 import com.ep.order.model.OrderModel;
+import com.ep.order.service.PaymentCompensationReconcileService;
 import com.ep.payment.api.PaymentChannel;
 import com.ep.payment.api.PaymentRequest;
 import com.ep.payment.api.PaymentResult;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -32,13 +34,17 @@ import java.util.Objects;
  * the Saga engine maps the failure to {@code CompensationTrigger} so the
  * already-reserved stock is released.
  *
- * <h3>Best-effort semantics preserved</h3>
+ * <h3>Best-effort semantics with a durable money gap record (D-222)</h3>
  * The pre-Saga {@code payOrder}/{@code refundOrder} methods in
  * {@code OrderServiceImpl} treated Payment as best-effort (an OPM failure was
  * logged but did not roll back the order status flip). The Saga keeps that
- * contract for the <em>refund</em> compensation: a refund failure is logged
- * and reconciled out-of-band, so the Saga can still complete the cancellation
- * flow rather than blocking on a transient OPM outage.
+ * contract for the <em>refund</em> compensation: propagating a refund failure
+ * would abort the LIFO compensation chain and strand the reserved stock, so
+ * the Saga can still complete the cancellation flow. Since D-222 the gap is
+ * no longer silent: a failed refund is persisted as an open
+ * {@code PaymentCompensationFailure} row (reconciled via
+ * {@code PaymentCompensationController}) and announced with a structured
+ * {@code [ALERT][PAYMENT_COMPENSATION_FAILED]} log.
  */
 @Component("paymentCompensableAction")
 public class PaymentCompensableAction {
@@ -53,6 +59,12 @@ public class PaymentCompensableAction {
      */
     @DubboReference(check = false, timeout = 10000)
     private PaymentService paymentService;
+
+    private final PaymentCompensationReconcileService compensationReconcileService;
+
+    public PaymentCompensableAction(PaymentCompensationReconcileService compensationReconcileService) {
+        this.compensationReconcileService = compensationReconcileService;
+    }
 
     /**
      * Forward action: instruct OPM to create a Payment for the order.
@@ -99,12 +111,14 @@ public class PaymentCompensableAction {
     /**
      * Compensation action: instruct OPM to refund the order's Payment.
      *
-     * <p>Best-effort: a refund failure is logged but does NOT propagate — the
-     * Saga must still be able to reach a consistent end state. Operators
-     * reconcile the gap out-of-band (mirroring the pre-Saga {@code refundOrder}
-     * semantics).
+     * <p>Best-effort with a durable gap record (D-222): a refund failure does
+     * NOT propagate (the LIFO compensation chain must reach
+     * {@code ReleaseStock}), but it is persisted as an open
+     * {@code PaymentCompensationFailure} row and announced with a structured
+     * alert log, so the money gap cannot go unnoticed. The returned context
+     * map carries {@code compensationFailed=true} for downstream visibility.
      *
-     * @param context the Saga state machine context (orderId, amount)
+     * @param context the Saga state machine context (orderId, amount, tenantId)
      * @return a result map describing the refund
      */
     public Map<String, Object> compensateCreatePayment(Map<String, Object> context) {
@@ -114,22 +128,46 @@ public class PaymentCompensableAction {
         if (amount == null) {
             amount = BigDecimal.ZERO;
         }
+        String tenantId = context.get("tenantId") == null
+                ? OrderModel.DEFAULT_TENANT : String.valueOf(context.get("tenantId"));
         try {
             Refund refund = paymentService.refund(orderId, amount, "D-113 saga compensation");
             log.info("D-113: saga compensateCreatePayment refunded orderId={}: refundId={}, status={}",
                     orderId, refund.getRefundId(), refund.getStatus());
-            return Map.of(
-                    "orderId", orderId,
-                    "refundId", refund.getRefundId(),
-                    "status", String.valueOf(refund.getStatus()));
+            Map<String, Object> result = new HashMap<>(4);
+            result.put("orderId", orderId);
+            result.put("refundId", refund.getRefundId());
+            result.put("status", String.valueOf(refund.getStatus()));
+            result.put("compensationFailed", false);
+            return result;
         } catch (RuntimeException e) {
-            // Best-effort: do not propagate. Reconciliation catches the gap.
-            log.error("D-113: saga compensateCreatePayment failed for orderId={} (stays best-effort): {}",
-                    orderId, e.getMessage(), e);
-            return Map.of(
-                    "orderId", orderId,
-                    "refundId", "",
-                    "status", "REFUND_FAILED_BEST_EFFORT");
+            // Best-effort: do not propagate (LIFO chain must continue to
+            // ReleaseStock). D-222: make the money gap durable + alertable.
+            String reason = e.getClass().getSimpleName() + ": " + e.getMessage();
+            String failureId;
+            try {
+                failureId = compensationReconcileService
+                        .recordFailure(orderId, tenantId, amount, reason).getFailureId();
+            } catch (RuntimeException recordError) {
+                // Persistence of the gap record itself failed — the alert log
+                // above/below is then the only trace, so escalate loudly.
+                log.error("[ALERT][PAYMENT_COMPENSATION_FAILED] orderId={} tenantId={} amount={}"
+                                + " reason={} — refund failed AND failure record could not be"
+                                + " persisted ({}): immediate manual reconciliation required",
+                        orderId, tenantId, amount, reason, recordError.getMessage(), recordError);
+                failureId = "";
+            }
+            log.error("[ALERT][PAYMENT_COMPENSATION_FAILED] saga compensateCreatePayment failed for"
+                            + " orderId={} tenantId={} amount={} failureId={}: {} — manual refund"
+                            + " required via reconciliation endpoint",
+                    orderId, tenantId, amount, failureId, e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>(5);
+            result.put("orderId", orderId);
+            result.put("refundId", "");
+            result.put("status", "REFUND_FAILED_REQUIRES_MANUAL_INTERVENTION");
+            result.put("compensationFailed", true);
+            result.put("failureId", failureId);
+            return result;
         }
     }
 

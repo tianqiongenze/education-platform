@@ -1,5 +1,7 @@
 # SP-01 技术中台 M0 核心底座 实现计划（批次1）
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp01` for reference continuity. Per D-137, sp01 → user. The subproject has been renamed in all source code, configs, and directory structure.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 搭建技术中台 M0 核心底座 —— 3 个 Java SDK（读写分离/Disruptor/缓存）+ BFF 骨架（JWT/AuthFilter/路由）+ Go WS 网关骨架（jwt/cache/hub），作为所有后续事业群与中台服务的依赖根，全部 TDD 验证。

@@ -11,7 +11,7 @@
 
   <artifactId>payment-platform-service</artifactId>
   <packaging>jar</packaging>
-  <name>SP03 Payment Service</name>
+  <name>Payment Service</name>
 
   <properties>
     <!-- D-115: JIB build port (payment-platform-service listens on 8087). -->
@@ -30,6 +30,35 @@
     <dependency>
       <groupId>com.ep</groupId>
       <artifactId>ep-web-common</artifactId>
+    </dependency>
+
+    <!-- D-216: Disruptor multi-stage pipeline (payment-events outbox). Default
+         OFF via ep.disruptor.enabled=false so synchronous behaviour is
+         unchanged until production opts in. The publish stage is paired with a
+         PaymentEventFallback (disk-spool) so a Pulsar outage can never drop a
+         financial event. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-disruptor</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
+    <!-- D-216: ep-data read/write-split datasource routing (HikariCP dual pool +
+         EpRoutingDataSource + LazyConnectionDataSourceProxy). Opt-in via
+         ep.data.enabled=true; when disabled (default) this service's own
+         DataSource auto-config is untouched. -->
+    <dependency>
+      <groupId>com.ep</groupId>
+      <artifactId>ep-data</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
+    <!-- Pulsar client (payment-event publishing + fallback). EP_DEV_ONLY-guarded:
+         absent in dev/CI; only loaded in prod where ep.pulsar.enabled=true. -->
+    <dependency>
+      <groupId>org.apache.pulsar</groupId>
+      <artifactId>pulsar-client</artifactId>
+      <version>3.3.9</version>
     </dependency>
 
     <!-- D-182: Multi-level cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast).
@@ -243,6 +272,13 @@
       <groupId>io.rest-assured</groupId>
       <artifactId>spring-mock-mvc</artifactId>
       <scope>test</scope>
+    </dependency>
+    <!-- D-225: PostgreSQL driver for CockroachDB (PG wire) on the
+         applications-cluster (TiDB absent; jdbc:postgresql URL via env). -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 

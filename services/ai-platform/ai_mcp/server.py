@@ -1,4 +1,4 @@
-"""EPMCPServer — exposes SP-04 AI capabilities as MCP tools.
+"""EPMCPServer — exposes AI AI capabilities as MCP tools.
 
 Uses the **official MCP Python SDK** (``mcp.server.Server`` / FastMCP) to
 define tools via the ``@server.tool()`` decorator. The SDK introspects each
@@ -32,7 +32,7 @@ class _ToolEntry:
 
 
 class EPMCPServer:
-    """Host-side MCP server exposing SP-04 AI tools.
+    """Host-side MCP server exposing AI AI tools.
 
     Tools are registered via :meth:`tool` (which mirrors the SDK's decorator
     API) and forwarded to the underlying ``mcp.server.Server`` so they are

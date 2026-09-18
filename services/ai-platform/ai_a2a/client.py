@@ -1,11 +1,11 @@
-"""A2A client backed by the official ``a2a-sdk``.
+"""A2A client backed by the official ``a2a-sdk`` (v0.3.x, pydantic models).
 
-The hand-written JSON-RPC framing is gone. Protocol semantics (transport,
-framing, task/message lifecycle) are delegated to ``a2a.client.Client``.
-The public ``A2AClient`` surface (``send_task``/``get_task``/``cancel_task``/
-``subscribe_task``/``send_notification``) is preserved as a compatibility
-shim that converts between the local :class:`~ai_a2a.task.Task` dataclasses
-and the SDK's protobuf types.
+Protocol semantics (transport, framing, task/message lifecycle) are delegated
+to ``a2a.client.A2AClient``. The public ``A2AClient`` surface
+(``send_task``/``get_task``/``cancel_task``/``subscribe_task``/
+``send_notification``) is preserved as a compatibility shim that converts
+between the local :class:`~ai_a2a.task.Task` dataclasses and the SDK's
+pydantic types.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Any, AsyncIterator
 
 import httpx
 import structlog
-from google.protobuf.json_format import MessageToDict, ParseDict
 
 from .message import Message
 from .task import Task, TaskStatus
@@ -32,7 +31,7 @@ def _import_a2a_client_factory() -> Any:
 
 
 def _import_a2a_types() -> Any:
-    """Lazy import of the SDK protobuf types module."""
+    """Lazy import of the SDK pydantic types module."""
     from a2a import types
 
     return types
@@ -41,49 +40,52 @@ def _import_a2a_types() -> Any:
 # --- mapping between local TaskStatus and SDK TaskState ---------------------
 
 _STATUS_TO_STATE: dict[TaskStatus, str] = {
-    TaskStatus.SUBMITTED: "TASK_STATE_SUBMITTED",
-    TaskStatus.WORKING: "TASK_STATE_WORKING",
-    TaskStatus.INPUT_REQUIRED: "TASK_STATE_INPUT_REQUIRED",
-    TaskStatus.COMPLETED: "TASK_STATE_COMPLETED",
-    TaskStatus.CANCELED: "TASK_STATE_CANCELED",
-    TaskStatus.FAILED: "TASK_STATE_FAILED",
-    TaskStatus.REJECTED: "TASK_STATE_REJECTED",
+    TaskStatus.SUBMITTED: "submitted",
+    TaskStatus.WORKING: "working",
+    TaskStatus.INPUT_REQUIRED: "input_required",
+    TaskStatus.COMPLETED: "completed",
+    TaskStatus.CANCELED: "canceled",
+    TaskStatus.FAILED: "failed",
+    TaskStatus.REJECTED: "rejected",
 }
 
 _STATE_TO_STATUS: dict[str, TaskStatus] = {v: k for k, v in _STATUS_TO_STATE.items()}
 
 
 def _sdk_task_to_local(sdk_task: Any) -> Task:
-    """Convert an a2a-sdk protobuf ``Task`` to the local ``Task`` dataclass."""
-    d = MessageToDict(sdk_task, preserving_proto_field_name=True)
-    state_name = d.get("status", {}).get("state", "TASK_STATE_SUBMITTED")
+    """Convert an a2a-sdk pydantic ``Task`` to the local ``Task`` dataclass."""
+    state_name = getattr(sdk_task.status.state, "value", str(sdk_task.status.state))
     status = _STATE_TO_STATUS.get(state_name, TaskStatus.SUBMITTED)
+
     message = None
-    if d.get("status", {}).get("message"):
-        message = Message.from_dict(d["status"]["message"])
+    if sdk_task.status.message:
+        message = Message.from_dict(sdk_task.status.message.model_dump())
+
     from .message import Artifact
 
-    artifacts = [Artifact.from_dict(a) for a in d.get("artifacts", [])]
-    error = d.get("status", {}).get("message", {}).get("metadata", {}).get("error")
+    artifacts = []
+    for a in (sdk_task.artifacts or []):
+        artifacts.append(Artifact.from_dict(a.model_dump()))
+
     return Task(
-        id=d.get("id", uuid.uuid4().hex),
+        id=sdk_task.id,
         status=status,
         message=message,
         artifacts=artifacts,
-        error=error,
     )
 
 
 def _local_message_to_sdk(local_msg: Message) -> Any:
-    """Convert a local ``Message`` dataclass to an a2a-sdk ``Message``."""
+    """Convert a local ``Message`` dataclass to an a2a-sdk pydantic ``Message``."""
     types = _import_a2a_types()
     from .message import DataPart, FilePart, TextPart
 
-    role = "ROLE_AGENT" if local_msg.role == "agent" else "ROLE_USER"
-    parts_pb: list[dict[str, Any]] = []
+    role = types.Role.agent if local_msg.role == "agent" else types.Role.user
+
+    parts: list[Any] = []
     for part in local_msg.parts:
         if isinstance(part, TextPart):
-            parts_pb.append({"text": part.text})
+            parts.append(types.Part(root=types.TextPart(text=part.text)))
         elif isinstance(part, FilePart):
             file_payload: dict[str, Any] = {}
             if part.mime_type:
@@ -92,15 +94,15 @@ def _local_message_to_sdk(local_msg: Message) -> Any:
                 file_payload["bytesWithTrailingData"] = part.bytes_b64
             if part.uri:
                 file_payload["uri"] = part.uri
-            parts_pb.append({"file": file_payload})
+            parts.append(types.Part(root=types.FilePart(**file_payload)))
         elif isinstance(part, DataPart):
-            parts_pb.append({"data": part.json_data})
-    msg_dict = {
-        "messageId": uuid.uuid4().hex,
-        "role": role,
-        "parts": parts_pb or [{"text": ""}],
-    }
-    return ParseDict(msg_dict, types.Message())
+            parts.append(types.Part(root=types.DataPart(data=part.json_data)))
+
+    return types.Message(
+        messageId=uuid.uuid4().hex,
+        role=role,
+        parts=parts or [types.Part(root=types.TextPart(text=""))],
+    )
 
 
 class A2AClient:
@@ -157,56 +159,59 @@ class A2AClient:
         local_msg = task.message or Message(role="user", parts=[])
         sdk_msg = _local_message_to_sdk(local_msg)
         req = types.SendMessageRequest(
-            tenant=task.tenant_id or "",
-            message=sdk_msg,
+            id=uuid.uuid4().hex,
+            params=types.MessageSendParams(message=sdk_msg),
         )
-        # ``send_message`` is an async iterator over StreamResponse events.
-        final_task: Task | None = None
-        async for event in sdk.send_message(req):
-            kind = event.WhichOneof("payload") if hasattr(event, "WhichOneof") else None
-            if kind == "task":
-                final_task = _sdk_task_to_local(event.task)
-            elif kind == "status_update":
-                state_name = (
-                    MessageToDict(event.status_update, preserving_proto_field_name=True)
-                    .get("status", {})
-                    .get("state", "TASK_STATE_WORKING")
-                )
-                status = _STATE_TO_STATUS.get(state_name, TaskStatus.WORKING)
-                final_task = Task(id=task.id, status=status, tenant_id=task.tenant_id)
-            # artifact-only updates don't replace the task; ignore here.
-        if final_task is None:
-            final_task = Task(id=task.id, status=TaskStatus.SUBMITTED, tenant_id=task.tenant_id)
-        return final_task
+        resp = await sdk.send_message(req)
+        # SendMessageResponse.root is a union: JSONRPCErrorResponse | SendMessageSuccessResponse
+        root = resp.root
+        if isinstance(root, types.SendMessageSuccessResponse):
+            result = root.result
+            if isinstance(result, types.Task):
+                return _sdk_task_to_local(result)
+        # Error or message-only response — return a submitted task
+        return Task(id=task.id, status=TaskStatus.SUBMITTED, tenant_id=task.tenant_id)
 
     async def get_task(self, agent_url: str, task_id: str) -> Task:
         sdk = await self._get_sdk_client(agent_url)
         types = _import_a2a_types()
-        req = types.GetTaskRequest(id=task_id)
-        sdk_task = await sdk.get_task(req)
-        return _sdk_task_to_local(sdk_task)
+        req = types.GetTaskRequest(
+            id=uuid.uuid4().hex,
+            params=types.TaskQueryParams(id=task_id),
+        )
+        resp = await sdk.get_task(req)
+        root = resp.root
+        if isinstance(root, types.GetTaskSuccessResponse):
+            return _sdk_task_to_local(root.result)
+        return Task(id=task_id, status=TaskStatus.SUBMITTED)
 
     async def cancel_task(self, agent_url: str, task_id: str) -> Task:
         sdk = await self._get_sdk_client(agent_url)
         types = _import_a2a_types()
-        req = types.CancelTaskRequest(id=task_id)
-        sdk_task = await sdk.cancel_task(req)
-        return _sdk_task_to_local(sdk_task)
+        req = types.CancelTaskRequest(
+            id=uuid.uuid4().hex,
+            params=types.TaskIdParams(id=task_id),
+        )
+        resp = await sdk.cancel_task(req)
+        root = resp.root
+        if isinstance(root, types.CancelTaskSuccessResponse):
+            return _sdk_task_to_local(root.result)
+        return Task(id=task_id, status=TaskStatus.CANCELED)
 
     async def subscribe_task(self, agent_url: str, task_id: str) -> AsyncIterator[Task]:
-        """Stream task updates via the SDK's ``subscribe`` method."""
+        """Stream task updates via the SDK's ``resubscribe`` method."""
         sdk = await self._get_sdk_client(agent_url)
         types = _import_a2a_types()
-        req = types.SubscribeToTaskRequest(id=task_id)
-        async for event in sdk.subscribe(req):
-            kind = event.WhichOneof("payload") if hasattr(event, "WhichOneof") else None
-            if kind == "task":
-                yield _sdk_task_to_local(event.task)
-            elif kind == "status_update":
-                d = MessageToDict(event.status_update, preserving_proto_field_name=True)
-                state_name = d.get("status", {}).get("state", "TASK_STATE_WORKING")
-                status = _STATE_TO_STATUS.get(state_name, TaskStatus.WORKING)
-                yield Task(id=task_id, status=status)
+        req = types.TaskResubscriptionRequest(
+            id=uuid.uuid4().hex,
+            params=types.TaskIdParams(id=task_id),
+        )
+        async for event in sdk.resubscribe(req):
+            root = event.root
+            if isinstance(root, types.SendStreamingMessageSuccessResponse):
+                result = root.result
+                if isinstance(result, types.Task):
+                    yield _sdk_task_to_local(result)
 
     async def send_notification(self, webhook_url: str, task: Task) -> None:
         """POST a task status update to a registered webhook.

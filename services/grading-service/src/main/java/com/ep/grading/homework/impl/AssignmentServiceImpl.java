@@ -78,12 +78,8 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Transactional
     public Assignment publish(Long id) {
         Assignment assignment = requireById(id);
-        if (assignment.getStatus() != AssignmentStatus.DRAFT) {
-            throw new IllegalStateException(
-                    "Assignment must be in DRAFT status to publish, current: " + assignment.getStatus());
-        }
-        assignment.setStatus(AssignmentStatus.PUBLISHED);
-        assignment.setUpdatedAt(LocalDateTime.now());
+        // D-201: delegate to the aggregate's state machine instead of setStatus().
+        assignment.publish();
         Assignment saved = assignmentRepository.save(assignment);
         cacheService.evict(CACHE_ASSIGNMENT, String.valueOf(id));
         cacheService.evict(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(assignment.getCourseId()));
@@ -94,12 +90,8 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Transactional
     public Assignment close(Long id) {
         Assignment assignment = requireById(id);
-        if (assignment.getStatus() != AssignmentStatus.PUBLISHED) {
-            throw new IllegalStateException(
-                    "Assignment must be in PUBLISHED status to close, current: " + assignment.getStatus());
-        }
-        assignment.setStatus(AssignmentStatus.CLOSED);
-        assignment.setUpdatedAt(LocalDateTime.now());
+        // D-201: delegate to the aggregate's state machine instead of setStatus().
+        assignment.close();
         Assignment saved = assignmentRepository.save(assignment);
         cacheService.evict(CACHE_ASSIGNMENT, String.valueOf(id));
         cacheService.evict(CACHE_ASSIGNMENT_BY_COURSE, String.valueOf(assignment.getCourseId()));

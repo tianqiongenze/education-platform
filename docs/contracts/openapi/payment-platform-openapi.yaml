@@ -1,0 +1,146 @@
+openapi: 3.0.3
+info:
+  title: Payment Platform API
+  description: |
+    Education Platform — Payment Platform Service (port 8087). Payment
+    creation and refund REST façade over the Dubbo PaymentService, used for
+    Spring Cloud Contract verification. Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8087
+    description: Local dev
+security:
+  - bearerAuth: []
+tags:
+  - name: payments
+    description: Payment processing
+
+paths:
+  /api/payments:
+    post:
+      tags: [payments]
+      summary: Create a payment
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/payments/{orderId}/refund:
+    post:
+      tags: [payments]
+      summary: Refund an order's payment
+      operationId: refundPayment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '200':
+          description: Refund result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    CreatePaymentRequest:
+      type: object
+      required: [orderId, amount]
+      properties:
+        orderId:
+          type: string
+        tenantId:
+          type: string
+        channel:
+          type: string
+          description: Payment channel (e.g. MOCK, WECHAT, ALIPAY)
+        amount:
+          type: string
+          description: Decimal amount as string
+        currency:
+          type: string
+          default: CNY
+    PaymentResult:
+      type: object
+      properties:
+        paymentId:
+          type: string
+        status:
+          type: string
+        channelTxId:
+          type: string
+        orderId:
+          type: string
+    RefundRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: string
+        reason:
+          type: string
+    RefundResult:
+      type: object
+      properties:
+        refundId:
+          type: string
+        orderId:
+          type: string
+        status:
+          type: string
+        amount:
+          type: string

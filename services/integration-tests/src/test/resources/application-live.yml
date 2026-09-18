@@ -12,7 +12,7 @@ ep:
       database: 15  # ISOLATED from production (production uses DB 0)
     seata:
       tc-url: http://127.0.0.1:7091
-    sp03:
+    core-business:
       base-url: http://localhost:8083
-    sp05:
+    grading-service:
       base-url: http://localhost:8085

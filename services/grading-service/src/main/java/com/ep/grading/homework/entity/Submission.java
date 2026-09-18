@@ -80,6 +80,55 @@ public class Submission implements Serializable {
     public LocalDateTime getGradedAt() { return gradedAt; }
     public void setGradedAt(LocalDateTime gradedAt) { this.gradedAt = gradedAt; }
 
+    // ------------------------------------------------------------------
+    // D-224: rich aggregate behaviour. State transitions are owned by the
+    // aggregate (not the service layer) — the same convention as the
+    // Assignment/Tenant aggregates (D-200): guards live next to the state
+    // they protect, transitions are all-or-nothing, and each transition
+    // stamps the audit timestamps.
+    // ------------------------------------------------------------------
+
+    /**
+     * Marks the submission as SUBMITTED (initial lifecycle transition).
+     *
+     * @param studentId submitter — must match the aggregate owner (IDOR guard)
+     * @param content   submission content
+     * @param idempotencyKey client idempotency key (nullable)
+     * @throws IllegalStateException when the submission is not in its pristine
+     *                               (pre-submitted) state
+     */
+    public void submit(Long studentId, String content, String idempotencyKey) {
+        if (this.status != null) {
+            throw new IllegalStateException(
+                    "Submission already submitted (id=" + id + ", status=" + status + ")");
+        }
+        if (studentId == null || !studentId.equals(this.studentId)) {
+            throw new IllegalStateException("Submitter does not own this submission");
+        }
+        this.content = content;
+        this.status = SubmissionStatus.SUBMITTED;
+        this.submittedAt = LocalDateTime.now();
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    /**
+     * Records a grade (SUBMITTED → GRADED).
+     *
+     * @param score    graded score (0..maxScore enforced by the caller's rubric)
+     * @param feedback teacher/AI feedback
+     * @throws IllegalStateException when the submission is not SUBMITTED
+     */
+    public void grade(Integer score, String feedback) {
+        if (this.status != SubmissionStatus.SUBMITTED) {
+            throw new IllegalStateException(
+                    "Submission must be SUBMITTED to grade, current: " + status);
+        }
+        this.score = score;
+        this.feedback = feedback;
+        this.status = SubmissionStatus.GRADED;
+        this.gradedAt = LocalDateTime.now();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

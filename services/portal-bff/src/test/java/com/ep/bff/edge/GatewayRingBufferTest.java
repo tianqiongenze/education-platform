@@ -63,8 +63,11 @@ class GatewayRingBufferTest {
     }
 
     private GatewayEvent makeEvent(String rawRequest) {
+        // D-216: structured form — raw request line kept only to derive the path
+        String path = rawRequest.split(" ").length > 1 ? rawRequest.split(" ")[1] : "/";
         GatewayEvent event = new GatewayEvent();
-        event.setRawBytes(rawRequest.getBytes());
+        event.setMethod("GET");
+        event.setPath(path);
         event.setRemoteAddr("127.0.0.1");
         event.setTimestamp(System.nanoTime());
         return event;

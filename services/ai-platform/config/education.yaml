@@ -18,22 +18,22 @@ agent_graphs:
     builder: build_debate_subgraph
 tool_catalog:
   - name: rag_search
-    server: sp04-rag
+    server: ai-rag
     description: Search the RAG knowledge base
   - name: grade_submission
-    server: sp04-grading
+    server: ai-grading
     description: Grade a student submission
   - name: generate_quiz
-    server: sp04-quiz
+    server: ai-quiz
     description: Generate a quiz from course material
   - name: memory_search
-    server: sp04-memory
+    server: ai-memory
     description: Search long-term memory
   - name: memory_add
-    server: sp04-memory
+    server: ai-memory
     description: Add to long-term memory
   - name: create_learnpath
-    server: sp04-learnpath
+    server: ai-learnpath
     description: Create a personalized learning path
 intent_keywords:
   grading_agent: [grade, grading, 批改, 评分, rubric, score essay]

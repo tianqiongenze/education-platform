@@ -1,5 +1,7 @@
 # SP-08 单元测试框架规范
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp08` for reference continuity. Per D-137, sp08 → senior-care. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP08-TEST-001 | v1.0 | 2026-08-04 | Approved | ZCode(测试架构师) | SP01-TEST-001 / SP06-TEST-001 / D-032 / D-031 / G-01~G-10 SLO |

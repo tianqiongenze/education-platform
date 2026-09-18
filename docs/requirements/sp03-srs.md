@@ -1,5 +1,7 @@
 # SP-03 业务中台 需求分析说明书(SRS)
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp03` for reference continuity. Per D-137, sp03 → core-business. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP-03-SRS | v1.0 | 2026-08-03 | Released | 文档工程师组 | EP-SPEC-001 §1/§2/§5；ADR-B01/B02；D-008/D-009/D-011/D-012/D-014 |

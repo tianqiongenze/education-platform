@@ -159,18 +159,31 @@ class CacheService:
                 self._pubsub_stop.wait(1.0)
 
     def _handle_invalidate(self, raw: Any) -> None:
-        """Parse an invalidate message and evict the L1 entry."""
+        """Parse an invalidate message and evict the L1 entry.
+
+        D-216 cross-language wire contract: unified JSON is
+        ``{"cacheName": "...", "key": "..."}`` (matches Java ep-cache
+        InvalidateMsg). Legacy formats accepted during rolling upgrades:
+        Python ``{"cache": ...}`` and the raw Go ``"cache:key"`` string.
+        """
         if raw is None:
             return
         try:
             if isinstance(raw, (bytes, bytearray)):
                 raw = raw.decode("utf-8")
-            payload = json.loads(raw) if isinstance(raw, str) else raw
-            cache_name = payload.get("cache")
-            key = payload.get("key")
-            if not cache_name or not key:
-                return
-            self._l1_evict(self._full_key(cache_name, key))
+            try:
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+            except json.JSONDecodeError:
+                payload = raw  # legacy Go raw "cache:key" full key
+            if isinstance(payload, dict):
+                cache_name = payload.get("cacheName") or payload.get("cache")
+                key = payload.get("key")
+                if not cache_name or not key:
+                    return
+                self._l1_evict(self._full_key(cache_name, key))
+            elif isinstance(payload, str) and payload:
+                # legacy Go raw "cache:key" full key
+                self._l1_evict(payload)
         except Exception as exc:  # noqa: BLE001 — a bad message must not kill the thread
             logger.warning("cache: ignoring malformed invalidate message: %s", exc)
 
@@ -179,20 +192,21 @@ class CacheService:
         if self._redis is None:
             return
         try:
-            payload = json.dumps({"cache": cache_name, "key": key})
+            # D-216: "cacheName" is the cross-language field (Java/Go/Python).
+            payload = json.dumps({"cacheName": cache_name, "key": key})
             self._redis.publish(INVALIDATE_CHANNEL, payload)
         except Exception as exc:  # noqa: BLE001 — broadcast failure is non-fatal
             logger.warning("cache: failed to publish invalidate: %s", exc)
 
     def close(self) -> None:
-        """Stop the Pub/Sub thread. Safe to call multiple times."""
+        """Stop the Pub/Sub thread. Safe to call multiple times.
+
+        D-216: the injected redis client is NOT closed here — it is shared
+        with the caller (Hub, gateway routes, ...); closing it used to take
+        down unrelated Redis users in the same process. Callers that own the
+        client close it themselves.
+        """
         self._pubsub_stop.set()
-        # Closing the redis connection (if we own it) unblocks pubsub.listen().
-        if self._redis is not None:
-            try:
-                self._redis.close()
-            except Exception:  # noqa: BLE001 — best-effort
-                pass
         thread = self._pubsub_thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=2.0)

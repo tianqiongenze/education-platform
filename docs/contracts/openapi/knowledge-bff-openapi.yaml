@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: Knowledge BFF API
+  description: |
+    Education Platform — Knowledge BFF (port 8070). Aggregation controller
+    that calls retrieval-service and agent-service via Dubbo. Exposes
+    knowledge overview, agent dashboard, and RAG passthrough.
+    Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8070
+    description: Local dev
+security:
+  - tenantAuth: []
+tags:
+  - name: bff
+    description: Knowledge BFF aggregation
+
+paths:
+  /api/v1/bff/knowledge/overview:
+    get:
+      tags: [bff]
+      summary: Knowledge overview (top documents + sample search)
+      operationId: knowledgeOverview
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      responses:
+        '200':
+          description: Knowledge overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeOverview'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/bff/agent/dashboard:
+    post:
+      tags: [bff]
+      summary: Agent dashboard (run a sample chat)
+      operationId: agentDashboard
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDashboardCmd'
+      responses:
+        '200':
+          description: Agent dashboard result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDashboardResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/bff/knowledge/rag:
+    post:
+      tags: [bff]
+      summary: RAG query passthrough
+      operationId: ragQuery
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RagCmd'
+      responses:
+        '200':
+          description: RAG result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RagResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    tenantAuth:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+  parameters:
+    TenantIdHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+  responses:
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    AgentDashboardCmd:
+      type: object
+      properties:
+        agentId:
+          type: string
+        message:
+          type: string
+          default: Hello
+    KnowledgeOverview:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        topDocuments:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+          format: int64
+        error:
+          type: string
+    AgentDashboardResult:
+      type: object
+      properties:
+        answer:
+          type: string
+        sessionId:
+          type: string
+        elapsedMillis:
+          type: integer
+          format: int64
+        error:
+          type: string
+    RagCmd:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        knowledgeBaseIds:
+          type: array
+          items:
+            type: string
+        agentId:
+          type: string
+        topK:
+          type: integer
+          default: 5
+        enableRerank:
+          type: boolean
+          default: true
+    RagResult:
+      type: object
+      properties:
+        answer:
+          type: string
+        hits:
+          type: array
+          items:
+            type: object
+        elapsedMillis:
+          type: integer
+          format: int64

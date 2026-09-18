@@ -1,13 +1,14 @@
+# SP-04 AI中台 部署方案
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp04` for reference continuity. Per D-137, sp04 → ai-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP04-DEPLOY | v1.0 | 2026-08-03 | 评审通过 | AI中台SRE组 | 架构委员会 |
 
-# SP-04 AI中台 部署方案
-
 > 关联：SAD `sp04-sad.md`、SDD `sp04-sdd.md`；D-004/009/018；ADR-A01..A04
 
 ## 1. 部署总览
-
 ```
 ┌────────────── 国内主集群(异地多活 2 cell) ──────────────┐
 │ K8s namespace: ai-platform                              │

@@ -13,19 +13,19 @@ import java.util.Objects;
 
 /**
  * BFF 聚合控制器 — 用户域.
- * D-032: 通过 @DubboReference 调用 SP-03 暴露的 UserService, 而非本地 HTTP.
- * 路由前缀 /api/users 走 BFF, 由 Dubbo 远程调用 SP-03 provider.
+ * D-032: 通过 @DubboReference 调用 core-business 暴露的 UserService, 而非本地 HTTP.
+ * 路由前缀 /api/users 走 BFF, 由 Dubbo 远程调用 core-business provider.
  *
  * D-070: Trace correlation — before each @DubboReference invocation, the MDC traceId
  * (populated by com.ep.bff.config.TraceIdFilter) must be propagated to the Dubbo RPC
  * context via com.ep.bff.config.TracePropagationUtil.propagateToRpc(), so downstream
- * SP-03 services can pick up the same traceId from RpcContext and bind it into their MDC.
+ * core-business services can pick up the same traceId from RpcContext and bind it into their MDC.
  */
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserDubboController {
 
-    @DubboReference(check = false, timeout = 10000)  // P2: 3000→5000, 匹配sp03 provider超时
+    @DubboReference(check = false, timeout = 10000)  // P2: 3000→5000, 匹配core-business provider超时
     private UserService userService;
 
     @PostMapping

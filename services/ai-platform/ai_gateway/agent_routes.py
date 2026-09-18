@@ -61,12 +61,11 @@ async def run_agent(data: AgentRunRequest) -> AgentRunResponse:
     request_id = str(uuid.uuid4())
     graph = _get_graph()
 
-    # Override executor timeout if requested.
-    if data.max_time_sec != _executor.limits.max_time_sec:
-        _executor.limits.max_time_sec = data.max_time_sec
-
+    # D-216 P1-8: per-call limits instead of mutating the shared executor —
+    # concurrent requests used to overwrite each other's timeout.
     result = await _executor.execute(
         graph,
+        limits=ExecutionLimits(max_time_sec=data.max_time_sec),
         initial_state={
             "messages": data.messages,
             "tenant_id": data.tenant_id,

@@ -29,10 +29,12 @@ describe('theme tokens', () => {
 
   it('all token values are non-empty strings', () => {
     for (const key of REQUIRED_KEYS) {
-      expect(typeof lightTheme[key as keyof typeof lightTheme]).toBe('string');
-      expect(lightTheme[key as keyof typeof lightTheme].length).toBeGreaterThan(0);
-      expect(typeof darkTheme[key as keyof typeof darkTheme]).toBe('string');
-      expect(darkTheme[key as keyof typeof darkTheme].length).toBeGreaterThan(0);
+      const lightValue = lightTheme[key as keyof typeof lightTheme] ?? '';
+      const darkValue = darkTheme[key as keyof typeof darkTheme] ?? '';
+      expect(typeof lightValue).toBe('string');
+      expect(lightValue.length).toBeGreaterThan(0);
+      expect(typeof darkValue).toBe('string');
+      expect(darkValue.length).toBeGreaterThan(0);
     }
   });
 });

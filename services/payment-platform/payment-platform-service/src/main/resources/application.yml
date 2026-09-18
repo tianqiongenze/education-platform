@@ -1,6 +1,10 @@
 server:
   port: 8087
 spring:
+  # D-216 (P1-1): virtual threads (was missing — Iron Law: no platform-thread pools for IO)
+  threads:
+    virtual:
+      enabled: true
   application:
     name: payment-platform
   # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).

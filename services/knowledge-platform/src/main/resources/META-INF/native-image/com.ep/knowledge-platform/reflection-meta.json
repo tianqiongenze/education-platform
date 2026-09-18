@@ -113,7 +113,7 @@
       "allPublicMethods": true
     },
     {
-      "name": "com.ep.sp07.mcp.McpServerApplication",
+      "name": "com.ep.mcp.McpServerApplication",
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true
     }

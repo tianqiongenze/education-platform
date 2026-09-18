@@ -36,9 +36,9 @@ export interface CreateIdeSessionParams {
   tenantId: number;
   userId: number;
   mode: IdeSessionMode;
-  courseId?: number;
-  lessonId?: number;
-  idleTimeoutMin?: number;
+  courseId?: number | undefined;
+  lessonId?: number | undefined;
+  idleTimeoutMin?: number | undefined;
 }
 
 export interface UseIdeSessionResult {

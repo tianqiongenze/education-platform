@@ -21,6 +21,8 @@ public class CreateElderCmd implements Serializable {
     private String emergencyContact;
     private String address;
     private String notes;
+    /** D-221: optional business idempotency key for create dedup. */
+    private String idempotencyKey;
 
     public CreateElderCmd() {
     }
@@ -55,4 +57,6 @@ public class CreateElderCmd implements Serializable {
     public void setAddress(String address) { this.address = address; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 }

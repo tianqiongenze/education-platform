@@ -1,0 +1,16 @@
+# D-225: Dubbo registry endpoint overrides for the applications-cluster.
+# Companion to middleware-endpoints.yaml (same discovery contract):
+#   * Checked-in value is a cross-namespace FQDN PLACEHOLDER.
+#   * scripts/deploy-applications-cluster.sh discovers the real Nacos
+#     Service (`kubectl -n infra get svc`) and rewrites both files.
+#   * If Nacos cannot be discovered at deploy time the script ABORTS.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dubbo-config
+  namespace: education-platform
+data:
+  # Dubbo 3.3.6 registry/metadata/config — Nacos in infra namespace.
+  DUBBO_REGISTRY_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"
+  DUBBO_METADATA_REPORT_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"
+  DUBBO_CONFIG_CENTER_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"

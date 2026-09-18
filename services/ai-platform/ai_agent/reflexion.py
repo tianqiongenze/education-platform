@@ -1,6 +1,6 @@
 """Reflexion reflection loop.
 
-The evaluator uses an **LLM-as-judge** (via the SP04 gateway OpenAI-compatible
+The evaluator uses an **LLM-as-judge** (via the AI gateway OpenAI-compatible
 endpoint) to score answer quality. When no LLM endpoint is configured the
 evaluator falls back to a minimal length/placeholder sanity check (test mode).
 
@@ -55,7 +55,7 @@ _JUDGE_SYSTEM_PROMPT = (
 
 
 def _call_llm_judge(question: str, answer: str) -> tuple[bool, str, float] | None:
-    """Call the SP04 gateway LLM to judge answer quality.
+    """Call the AI gateway LLM to judge answer quality.
 
     Returns ``(passed, feedback, score)`` or ``None`` when the LLM is
     unavailable (no gateway URL configured or call failed). Callers fall
@@ -150,7 +150,7 @@ def evaluate_node(state: AgentState) -> dict:
 def reflect_node(state: AgentState) -> dict:
     """Generate an actionable reflection based on feedback + current answer.
 
-    Appends to state.reflections and resets current_node. When the SP04
+    Appends to state.reflections and resets current_node. When the AI
     gateway LLM is available this node can be upgraded to call it for richer
     reflections; the deterministic template is the safe default.
     """

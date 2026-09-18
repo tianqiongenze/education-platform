@@ -1,5 +1,11 @@
 #!/bin/bash
 #
+# NOTE (D-206): This script is now used for DRIFT DETECTION, not contract generation.
+# The contract-first specs live in docs/contracts/openapi/*.yaml and are the
+# source-of-truth. This script fetches runtime specs from running services so
+# they can be diffed against the contract specs to detect implementation drift.
+# Contract linting: ./scripts/lint-openapi.sh
+#
 # D-094: Fetch OpenAPI specs from all running services and save to schemas/.
 #
 # Usage: ./scripts/generate-openapi-specs.sh [base-url]

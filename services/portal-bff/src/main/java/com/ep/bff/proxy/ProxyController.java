@@ -4,14 +4,19 @@ import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ep.bff.config.ProxyConfig;
 import com.ep.cache.CacheService;
+import com.ep.web.common.tenant.TenantContext;
+import com.ep.web.common.tenant.TenantContextFilter;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
@@ -45,6 +50,10 @@ import java.util.Set;
  *   <li>D-039: stateless per-request handling, no synchronized blocks.</li>
  *   <li>D-040: only JDK + Spring built-ins, GraalVM friendly.</li>
  *   <li>D-182: GET responses cached 120s via ep-cache SDK (L1+L2+Pub/Sub).</li>
+ *   <li>Cache audit fix (BFF 聚合缓存串号): only whitelisted public read-only
+ *       GET paths ({@code ep.bff.cache-paths}) are cached, and the cache key
+ *       carries the tenant dimension — personalized responses are never
+ *       cached.</li>
  * </ul>
  */
 @RestController
@@ -54,6 +63,19 @@ public class ProxyController {
 
     private static final String CACHE_AGGREGATION = "bff:aggregation";
     private static final long AGGREGATION_TTL_SEC = 120;
+
+    /**
+     * Default cache whitelist: public read-only GET endpoints (Swagger docs
+     * for every route + course list/detail style resources). Override with
+     * {@code ep.bff.cache-paths} (comma-separated ANT patterns); set it to
+     * {@code none} to disable response caching entirely.
+     */
+    static final List<String> DEFAULT_CACHE_PATHS = List.of(
+        "/proxy/*/v3/api-docs",
+        "/proxy/*/api/courses/**",
+        "/proxy/*/api/course/**");
+
+    private static final String CACHE_PATHS_DISABLE = "none";
 
     /**
      * Hop-by-hop headers (RFC 7230 §6.1) that must not be forwarded by a
@@ -72,13 +94,66 @@ public class ProxyController {
     private final boolean enabled;
     private final Map<String, String> routes;
     private final CacheService cacheService;
+    private final List<String> cachePaths;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
+    @Autowired
     public ProxyController(RestClient proxyRestClient, ProxyConfig.ProxyProps props,
-                           CacheService cacheService) {
+                           CacheService cacheService,
+                           @Value("${ep.bff.cache-paths:}") List<String> cachePaths) {
         this.proxyRestClient = proxyRestClient;
         this.enabled = props.enabled();
         this.routes = props.routes() == null ? Map.of() : props.routes();
         this.cacheService = cacheService;
+        this.cachePaths = normalizeCachePaths(cachePaths);
+    }
+
+    /** Convenience/test constructor using the default cache whitelist. */
+    public ProxyController(RestClient proxyRestClient, ProxyConfig.ProxyProps props,
+                           CacheService cacheService) {
+        this(proxyRestClient, props, cacheService, DEFAULT_CACHE_PATHS);
+    }
+
+    private static List<String> normalizeCachePaths(List<String> configured) {
+        if (configured == null || configured.isEmpty()) {
+            return DEFAULT_CACHE_PATHS;
+        }
+        List<String> trimmed = configured.stream()
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
+        if (trimmed.isEmpty()) {
+            return DEFAULT_CACHE_PATHS;
+        }
+        if (trimmed.size() == 1 && CACHE_PATHS_DISABLE.equalsIgnoreCase(trimmed.get(0))) {
+            return List.of();
+        }
+        return trimmed;
+    }
+
+    /**
+     * Cache audit fix: a GET is only cacheable when its request path matches
+     * the configured whitelist. Non-GET methods are never cacheable.
+     */
+    public boolean shouldCache(HttpMethod method, String requestPath) {
+        if (method != HttpMethod.GET || requestPath == null) {
+            return false;
+        }
+        for (String pattern : cachePaths) {
+            if (pathMatcher.match(pattern, requestPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Tenant for the cache key: X-Tenant-Id header first, then TenantContext. */
+    static String currentTenant(HttpServletRequest request) {
+        String header = request != null ? request.getHeader(TenantContextFilter.TENANT_ID_HEADER) : null;
+        if (header != null && !header.isBlank()) {
+            return header;
+        }
+        return TenantContext.getTenantIdOrDefault();
     }
 
     /**
@@ -112,12 +187,13 @@ public class ProxyController {
         URI target = URI.create(match.baseUrl() + match.downstreamPath());
         HttpMethod method = HttpMethod.valueOf(request.getMethod() != null ? request.getMethod() : "GET");
 
-        // D-182: cache GET aggregation responses (120s, cacheEmpty=false).
-        // Only safe to cache idempotent GETs; writes bypass the cache.
-        if (method == HttpMethod.GET) {
+        // Cache audit fix: only whitelisted public read-only GETs are cached,
+        // and the key carries the tenant dimension so one tenant can never be
+        // served another tenant's aggregated response.
+        if (shouldCache(method, path)) {
             String cacheKey = method.name() + ":" + target.toString();
             ResponseEntity<byte[]> cached = cacheService.getOrLoad(
-                    CACHE_AGGREGATION, cacheKey,
+                    CACHE_AGGREGATION, currentTenant(request), cacheKey,
                     () -> doForward(method, target, request),
                     AGGREGATION_TTL_SEC, false);
             if (cached != null) {

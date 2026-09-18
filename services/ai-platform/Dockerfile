@@ -29,11 +29,11 @@ RUN pip install --no-cache-dir "poetry==2.0.1"
 
 WORKDIR /src
 
-# Copy the sp04-ai project and its local path dependency.
-COPY sp04-ai/ ./sp04-ai/
-COPY ep-python-common/ ./ep-python-common/
+# Copy the ai-platform project and its local path dependency.
+COPY ai-platform/ ./ai-platform/
+COPY ep-common-python/ ./ep-common-python/
 
-WORKDIR /src/sp04-ai
+WORKDIR /src/ai-platform
 
 # Export a requirements.txt from Poetry (resolves the local path dep) and
 # install all wheels into /install so the runtime stage stays small.
@@ -56,7 +56,7 @@ WORKDIR /app
 
 # Copy the application source (ai_gateway + sibling ai_* packages declared in
 # pyproject.toml [tool.poetry.packages]).
-COPY --from=builder /src/sp04-ai/ ./
+COPY --from=builder /src/ai-platform/ ./
 
 # Non-root user.
 USER app

@@ -1,5 +1,7 @@
 # SP-03 业务中台 详细设计说明书(SDD)
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp03` for reference continuity. Per D-137, sp03 → core-business. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP-03-SDD | v1.0 | 2026-08-03 | Released | 研发组 | SP-03-SRS/SAD；ADR-B01..B05；D-008/D-015/D-016/D-019 |

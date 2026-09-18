@@ -34,7 +34,7 @@ def test_agent_card_roundtrip():
         name="grading-agent",
         description="Grades student submissions",
         version="1.2.0",
-        url="https://sp04.example.com",
+        url="https://ai-platform.example.com",
         capabilities=["tasks/send", "tasks/get"],
         skills=[Skill(id="grade", name="Grade", description="auto-grade", tags=["edu"])],
         authentication={"type": "bearer"},
@@ -168,16 +168,8 @@ async def test_registry_register_list_unregister():
 # via the ``_sdk_clients`` cache so no real HTTP/agent-card resolution occurs.
 
 
-class _FakeStreamResponse:
-    def __init__(self, task_proto) -> None:
-        self.task = task_proto
-
-    def WhichOneof(self, name: str) -> str:  # noqa: D414
-        return "task"
-
-
 class _FakeSdkClient:
-    """Stand-in for ``a2a.client.Client`` used by A2AClient."""
+    """Stand-in for ``a2a.client.A2AClient`` used by A2AClient."""
 
     def __init__(self) -> None:
         self.send_calls: list[Any] = []
@@ -185,41 +177,94 @@ class _FakeSdkClient:
         self.cancel_calls: list[str] = []
 
     async def send_message(self, request):
-        from a2a.types import Task as A2ATask, TaskState, TaskStatus as A2AStatus
+        from a2a.types import (
+            Task as A2ATask,
+            TaskState,
+            TaskStatus as A2AStatus,
+            SendMessageResponse,
+            SendMessageSuccessResponse,
+        )
 
         self.send_calls.append(request)
         sdk_task = A2ATask(
             id="echoed",
-            status=A2AStatus(state=TaskState.TASK_STATE_COMPLETED),
+            contextId="ctx-1",
+            status=A2AStatus(state=TaskState.completed),
         )
-        yield _FakeStreamResponse(sdk_task)
+        return SendMessageResponse(
+            root=SendMessageSuccessResponse(id="1", result=sdk_task)
+        )
 
     async def get_task(self, request):
-        from a2a.types import Task as A2ATask, TaskState, TaskStatus as A2AStatus
+        from a2a.types import (
+            Task as A2ATask,
+            TaskState,
+            TaskStatus as A2AStatus,
+            GetTaskResponse,
+            GetTaskSuccessResponse,
+        )
 
-        self.get_calls.append(request.id)
-        return A2ATask(
-            id=request.id,
-            status=A2AStatus(state=TaskState.TASK_STATE_COMPLETED),
+        self.get_calls.append(request.params.id)
+        return GetTaskResponse(
+            root=GetTaskSuccessResponse(
+                id="1",
+                result=A2ATask(
+                    id=request.params.id,
+                    contextId="ctx-1",
+                    status=A2AStatus(state=TaskState.completed),
+                ),
+            )
         )
 
     async def cancel_task(self, request):
-        from a2a.types import Task as A2ATask, TaskState, TaskStatus as A2AStatus
-
-        self.cancel_calls.append(request.id)
-        return A2ATask(
-            id=request.id,
-            status=A2AStatus(state=TaskState.TASK_STATE_CANCELED),
+        from a2a.types import (
+            Task as A2ATask,
+            TaskState,
+            TaskStatus as A2AStatus,
+            CancelTaskResponse,
+            CancelTaskSuccessResponse,
         )
 
-    async def subscribe(self, request):
-        from a2a.types import Task as A2ATask, TaskState, TaskStatus as A2AStatus
-
-        yield _FakeStreamResponse(
-            A2ATask(id=request.id, status=A2AStatus(state=TaskState.TASK_STATE_WORKING))
+        self.cancel_calls.append(request.params.id)
+        return CancelTaskResponse(
+            root=CancelTaskSuccessResponse(
+                id="1",
+                result=A2ATask(
+                    id=request.params.id,
+                    contextId="ctx-1",
+                    status=A2AStatus(state=TaskState.canceled),
+                ),
+            )
         )
-        yield _FakeStreamResponse(
-            A2ATask(id=request.id, status=A2AStatus(state=TaskState.TASK_STATE_COMPLETED))
+
+    async def resubscribe(self, request):
+        from a2a.types import (
+            Task as A2ATask,
+            TaskState,
+            TaskStatus as A2AStatus,
+            SendStreamingMessageResponse,
+            SendStreamingMessageSuccessResponse,
+        )
+
+        yield SendStreamingMessageResponse(
+            root=SendStreamingMessageSuccessResponse(
+                id="1",
+                result=A2ATask(
+                    id=request.params.id,
+                    contextId="ctx-1",
+                    status=A2AStatus(state=TaskState.working),
+                ),
+            )
+        )
+        yield SendStreamingMessageResponse(
+            root=SendStreamingMessageSuccessResponse(
+                id="2",
+                result=A2ATask(
+                    id=request.params.id,
+                    contextId="ctx-1",
+                    status=A2AStatus(state=TaskState.completed),
+                ),
+            )
         )
 
     async def close(self) -> None:

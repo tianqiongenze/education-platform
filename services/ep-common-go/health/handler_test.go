@@ -52,7 +52,7 @@ func TestHandlerAlways200(t *testing.T) {
 	cases := []struct{ name, svc, ver string }{
 		{"empty", "", ""},
 		{"svc-only", "portal-bff", ""},
-		{"full", "sp01-user", "0.0.1"},
+		{"full", "ep-test-user", "0.0.1"},
 	}
 	for _, c := range cases {
 		h := Handler(c.svc, c.ver)

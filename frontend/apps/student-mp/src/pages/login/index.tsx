@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { View, Text, Input, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
-import { wxLogin } from '@/utils/wx-login';
+import { wxLogin } from '../../utils/wx-login';
 import { useLogin } from '@ep/query';
-import { apiClient } from '@/api/client';
+import { apiClient } from '../../api/client';
 import { STORAGE_KEYS } from '@ep/shared';
 import './index.scss';
 

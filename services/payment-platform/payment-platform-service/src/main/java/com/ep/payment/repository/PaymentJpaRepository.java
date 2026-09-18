@@ -17,4 +17,12 @@ public interface PaymentJpaRepository extends JpaRepository<PaymentEntity, Strin
 
     /** Lookup the (latest) payment for an order — backs {@code getPaymentByOrder}. */
     Optional<PaymentEntity> findFirstByOrderId(String orderId);
+
+    /**
+     * D-090: idempotency guard — whether a payment already exists for an order.
+     * Backs the dedup check in {@code PaymentServiceImpl#createPayment} so a
+     * duplicate create request for the same {@code orderId} returns the existing
+     * payment instead of minting a second record.
+     */
+    boolean existsByOrderId(String orderId);
 }

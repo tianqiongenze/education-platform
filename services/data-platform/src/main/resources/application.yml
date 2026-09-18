@@ -2,6 +2,10 @@ server:
   port: 8082
 
 spring:
+  # D-216 (P1-1): virtual threads — data-platform was one of 3 services missing them
+  threads:
+    virtual:
+      enabled: true
   application:
     name: data-platform
   main:
@@ -10,12 +14,12 @@ spring:
 # EP_DEV_ONLY guard — dev/CI default true (Iron Law 0)
 EP_DEV_ONLY: true
 
-# SP-04 AI Gateway configuration (NL Query)
-SP04_GATEWAY_URL: http://localhost:8000
-SP04_LLM_MODEL: gpt-4o
-SP04_LLM_TEMPERATURE: "0.0"
-SP04_LLM_TIMEOUT_SEC: "10"
-SP04_LLM_MAX_TOKENS: "4096"
+# AI Gateway configuration (NL Query)
+EP_AI_GATEWAY_URL: http://localhost:8000
+EP_AI_LLM_MODEL: gpt-4o
+EP_AI_LLM_TEMPERATURE: "0.0"
+EP_AI_LLM_TIMEOUT_SEC: "10"
+EP_AI_LLM_MAX_TOKENS: "4096"
 
 # OpenAPI / springdoc
 springdoc:

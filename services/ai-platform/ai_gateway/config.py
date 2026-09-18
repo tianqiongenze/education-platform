@@ -13,6 +13,11 @@ class Settings:
     llm_api_key: str | None = None
     llm_model: str = "gpt-4o"
     llm_timeout_sec: int = 30
+    # D-216 P1-9 — LLM concurrency caps (backpressure) enforced by
+    # ProviderFallback: global in-flight LLM call limit across all providers,
+    # and per-provider limit so one slow vendor cannot eat the whole budget.
+    llm_max_concurrency: int = 8
+    llm_provider_max_concurrency: int = 4
     max_tokens: int = 4096
     temperature: float = 0.7
     pulsar_url: str | None = None
@@ -31,6 +36,8 @@ class Settings:
             llm_api_key=_get("LLM_API_KEY"),
             llm_model=_get("LLM_MODEL", "gpt-4o") or "gpt-4o",
             llm_timeout_sec=int(_get("LLM_TIMEOUT_SEC", "30") or 30),
+            llm_max_concurrency=int(_get("LLM_MAX_CONCURRENCY", "8") or 8),
+            llm_provider_max_concurrency=int(_get("LLM_PROVIDER_MAX_CONCURRENCY", "4") or 4),
             max_tokens=int(_get("MAX_TOKENS", "4096") or 4096),
             temperature=float(_get("TEMPERATURE", "0.7") or 0.7),
             pulsar_url=_get("PULSAR_URL"),

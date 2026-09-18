@@ -5,13 +5,13 @@ import java.io.Serializable;
 /**
  * Request payload for {@link AiGradingRpcService#grade(AiGradingRequest)}.
  *
- * <p>ai-platform integration (TODO sp04 closure): the sp05 grading pipeline builds
- * this record for subjective questions and invokes the sp04 AI grading Dubbo
- * provider. sp04 runs the RAG + LLM rubric scoring and returns an
+ * <p>ai-platform integration (TODO AI closure): the grading pipeline builds
+ * this record for subjective questions and invokes the AI grading Dubbo
+ * provider. the AI gateway runs the RAG + LLM rubric scoring and returns an
  * {@link AiGradingResult}.
  *
  * <p>Iron Law 7 (GraalVM AOT): record + {@link Serializable}, no reflection,
- * no runtime resource lookups. Field names match the sp04 AI grading agent
+ * no runtime resource lookups. Field names match the AI grading agent
  * contract (see {@code services/ai-platform/ai_agent/graphs/grading_agent.py}).
  *
  * @param submissionId     logical submission id (ep_submission.id), never null

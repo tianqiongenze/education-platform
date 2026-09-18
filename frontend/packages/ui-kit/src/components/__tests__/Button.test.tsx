@@ -1,18 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-
-vi.mock('@tarojs/components', () => ({
-  Button: ({ children, className, onClick, ...rest }: any) =>
-    React.createElement('button', { className, onClick, ...rest }, children),
-  View: ({ children, className, ...rest }: any) =>
-    React.createElement('div', { className, ...rest }, children),
-  Video: (props: any) => React.createElement('div', props),
-  LivePlayer: (props: any) => React.createElement('div', props),
-  Image: (props: any) => React.createElement('img', props),
-  Text: ({ children, ...rest }: any) =>
-    React.createElement('span', rest, children),
-}));
 
 import { Button } from '../Button';
 

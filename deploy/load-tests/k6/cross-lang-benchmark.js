@@ -7,7 +7,7 @@
  *
  * 服务:
  *   java_bff   (8090) Java Spring Boot  → GET /actuator/health
- *   java_sp05  (8085) Java Spring Boot  → GET /actuator/health
+ *   java_grading  (8085) Java Spring Boot  → GET /actuator/health
  *   python_ai  (8086) Python Litestar   → GET /health
  *   go_ws      (8081) Go net/http       → GET /healthz
  *
@@ -26,7 +26,7 @@ import { Trend, Rate } from 'k6/metrics';
 // Service URLs (configurable via env)
 // ---------------------------------------------------------------------------
 const JAVA_BFF_URL  = __ENV.K6_JAVA_BFF_URL  || 'http://127.0.0.1:8090';
-const JAVA_SP05_URL = __ENV.K6_JAVA_SP05_URL || 'http://127.0.0.1:8085';
+const JAVA_GRADING_URL = __ENV.K6_JAVA_GRADING_URL || 'http://127.0.0.1:8085';
 const PYTHON_AI_URL = __ENV.K6_PYTHON_AI_URL || 'http://127.0.0.1:8086';
 const GO_WS_URL     = __ENV.K6_GO_WS_URL     || 'http://127.0.0.1:8081';
 
@@ -34,12 +34,12 @@ const GO_WS_URL     = __ENV.K6_GO_WS_URL     || 'http://127.0.0.1:8081';
 // Custom Metrics — per-language latency and error rate
 // ---------------------------------------------------------------------------
 const java_bff_latency  = new Trend('java_bff_latency', true);
-const java_sp05_latency = new Trend('java_sp05_latency', true);
+const java_grading_latency = new Trend('java_grading_latency', true);
 const python_ai_latency = new Trend('python_ai_latency', true);
 const go_ws_latency     = new Trend('go_ws_latency', true);
 
 const java_bff_errors   = new Rate('java_bff_errors');
-const java_sp05_errors  = new Rate('java_sp05_errors');
+const java_grading_errors  = new Rate('java_grading_errors');
 const python_ai_errors  = new Rate('python_ai_errors');
 const go_ws_errors      = new Rate('go_ws_errors');
 
@@ -57,7 +57,7 @@ export const options = {
       maxVUs: 500,
       exec: 'javaBff',
     },
-    java_sp05: {
+    java_grading: {
       executor: 'constant-arrival-rate',
       rate: 250,
       timeUnit: '1s',
@@ -87,11 +87,11 @@ export const options = {
   },
   thresholds: {
     'java_bff_latency':  ['p(95)<500', 'p(99)<1000'],
-    'java_sp05_latency': ['p(95)<500', 'p(99)<1000'],
+    'java_grading_latency': ['p(95)<500', 'p(99)<1000'],
     'python_ai_latency': ['p(95)<500', 'p(99)<1000'],
     'go_ws_latency':     ['p(95)<500', 'p(99)<1000'],
     'java_bff_errors':   ['rate<0.01'],
-    'java_sp05_errors':  ['rate<0.01'],
+    'java_grading_errors':  ['rate<0.01'],
     'python_ai_errors':  ['rate<0.01'],
     'go_ws_errors':      ['rate<0.01'],
   },
@@ -112,12 +112,12 @@ export function javaBff() {
   java_bff_errors.add(!ok);
 }
 
-/** Java sp05 (Spring Boot, IT backend) health check. */
+/** Java grading-service (Spring Boot, IT backend) health check. */
 export function javaSp05() {
-  const r = http.get(`${JAVA_SP05_URL}/actuator/health`);
-  java_sp05_latency.add(r.timings.duration);
-  const ok = check(r, { 'java sp05 200': (r) => r.status === 200 });
-  java_sp05_errors.add(!ok);
+  const r = http.get(`${JAVA_GRADING_URL}/actuator/health`);
+  java_grading_latency.add(r.timings.duration);
+  const ok = check(r, { 'java grading-service 200': (r) => r.status === 200 });
+  java_grading_errors.add(!ok);
 }
 
 /** Python AI Gateway (Litestar+Granian) health check. */
@@ -144,7 +144,7 @@ export function setup() {
 
   const services = [
     { name: 'java_bff',  url: `${JAVA_BFF_URL}/actuator/health` },
-    { name: 'java_sp05', url: `${JAVA_SP05_URL}/actuator/health` },
+    { name: 'java_grading', url: `${JAVA_GRADING_URL}/actuator/health` },
     { name: 'python_ai', url: `${PYTHON_AI_URL}/health` },
     { name: 'go_ws',     url: `${GO_WS_URL}/healthz` },
   ];

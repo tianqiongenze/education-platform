@@ -25,6 +25,7 @@
         <dubbo.version>3.3.6</dubbo.version>
         <seata.version>2.0.0</seata.version>
         <redisson.version>3.51.0</redisson.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -93,11 +94,67 @@
             <version>1.0.0</version>
             <scope>test</scope>
         </dependency>
-        <!-- D-138: order-platform — OrderController referenced by CrossServiceContractTest -->
         <dependency>
             <groupId>com.ep</groupId>
             <artifactId>order-platform-service</artifactId>
             <version>1.0.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- D-197+: Pact consumer-driven contract tests (file-exchange mode,
+             no broker). Used by OrderPaymentPactTest and GradingAssignmentPactTest.
+             Pact JVM 4.6.x uses sub-module groupId layout:
+               au.com.dius.pact:consumer (consumer core)
+               au.com.dius.pact.consumer:junit5 (JUnit 5 extension)
+               au.com.dius.pact.core:model (pact model)
+               au.com.dius.pact.core:matchers (matchers)
+               au.com.dius.pact.core:support (support) -->
+        <dependency>
+            <groupId>au.com.dius.pact</groupId>
+            <artifactId>consumer</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact</groupId>
+            <artifactId>consumer</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.consumer</groupId>
+            <artifactId>junit5</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.core</groupId>
+            <artifactId>model</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.core</groupId>
+            <artifactId>matchers</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.core</groupId>
+            <artifactId>support</artifactId>
+            <version>4.6.16</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- D-211: Testcontainers for cross-service DB tests (Course, Order, Knowledge) -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

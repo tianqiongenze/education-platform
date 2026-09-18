@@ -14,6 +14,7 @@
 package yjs
 
 import (
+	"log"
 	"sync"
 )
 
@@ -164,6 +165,53 @@ type Client struct {
 	ID     string
 	UserID string
 	Send   func([]byte) bool // outbound send callback
+}
+
+// clientState holds the send-channel and close coordination for a yjs
+// connection. It is referenced by the Client.Send closure and the read pump's
+// shutdown path. Mirrors the ws.Connection closed/mu/send pattern so that
+// broadcasting to a closed client never panics on "send on closed channel".
+type clientState struct {
+	mu     sync.Mutex
+	sendCh chan []byte
+	closed bool
+}
+
+// newClientState creates a clientState with the standard 256-entry buffer.
+func newClientState() *clientState {
+	return &clientState{sendCh: make(chan []byte, 256)}
+}
+
+// trySend attempts to enqueue msg onto the send channel. Returns false if the
+// connection is closed or the buffer is full (message dropped). Safe to call
+// concurrently with closeAndDrain.
+func (s *clientState) trySend(msg []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return false
+	}
+	select {
+	case s.sendCh <- msg:
+		return true
+	default:
+		log.Printf("yjs: send buffer full, dropping message")
+		return false
+	}
+}
+
+// closeAndDrain marks the connection closed and closes the send channel so the
+// write pump exits. Safe to call multiple times. The mutex guarantees that no
+// trySend is in flight between the closed check and the channel send, which is
+// what prevents "send on closed channel" panics from concurrent broadcasts.
+func (s *clientState) closeAndDrain() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
+	close(s.sendCh)
 }
 
 // YjsRoom is a collaborative editing room keyed by session id. It owns one

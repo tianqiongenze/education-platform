@@ -17,6 +17,7 @@ import {
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useMemo, useState, type ReactNode } from 'react';
+import { ThemeToggle } from '@ep/ui-kit';
 import { useUserStore } from '../stores/UserContext';
 
 const { Header, Sider, Content } = Layout;
@@ -167,10 +168,14 @@ export default function AdminLayout() {
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center',
+            gap: 16,
             padding: '0 24px',
-            background: '#fff',
+            // Token-driven so the chrome flips with the persisted theme
+            // (light: card white, dark: gray-10) instead of hardcoded #fff.
+            background: 'var(--ep-color-bg-card, #fff)',
           }}
         >
+          <ThemeToggle />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar src={user?.avatar} icon={<UserOutlined />} />
@@ -178,7 +183,14 @@ export default function AdminLayout() {
             </div>
           </Dropdown>
         </Header>
-        <Content style={{ margin: '24px', padding: '24px', background: '#fff', borderRadius: 8 }}>
+        <Content
+          style={{
+            margin: '24px',
+            padding: '24px',
+            background: 'var(--ep-color-bg-card, #fff)',
+            borderRadius: 8,
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>

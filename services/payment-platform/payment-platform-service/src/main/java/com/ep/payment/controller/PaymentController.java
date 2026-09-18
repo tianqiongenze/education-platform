@@ -22,7 +22,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 /**
- * D-119: REST fa&ccedil;ade for the SP-03 Payment service, exposing the
+ * D-119: REST fa&ccedil;ade for the core-business Payment service, exposing the
  * {@link PaymentService} over HTTP so that Spring Cloud Contract can define
  * consumer-driven contracts against a real HTTP surface.
  *

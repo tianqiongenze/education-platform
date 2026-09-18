@@ -6,7 +6,7 @@ import java.io.Serializable;
  * Identifies who/what produced a {@link GradingResult}.
  *
  * <ul>
- *   <li>{@code AI} — subjective answer graded via the sp04 AI grading service
+ *   <li>{@code AI} — subjective answer graded via the AI grading service
  *       (RAG + LLM rubric scoring). Objective questions are never tagged AI;
  *       they use exact-match scoring and are tagged {@code MANUAL}.</li>
  *   <li>{@code MANUAL} — objective exact-match grading, or a human-graded

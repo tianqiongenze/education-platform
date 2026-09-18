@@ -105,8 +105,13 @@ class VirtualThreadDbSemaphoreTest {
      *
      * <p>D-139 调优说明：原 taskCount=1000 在 CI 环境（QEMU 模拟 arm64 JVM）
      * 上因虚拟线程调度抖动导致 5s/15s 内部分任务来不及获取 permit。
-     * 降至 200 并发 + 30s 超时，在保证"并发不超过 permits"核心断言语义
-     * 不变的前提下提升 CI 稳定性。
+     * 降至 200 并发，在保证"并发不超过 permits"核心断言语义不变的前提下
+     * 提升 CI 稳定性。
+     *
+     * <p>D-216 稳定性修复：原 30s 内层获取超时在 -T 1C 并行构建的高负载下
+     * 被 JVM 停顿击穿（观测 30.10s 处超时）。内层超时不承载断言语义，仅作
+     * 死锁保险，放宽至 100s，由外层 f.get(120s) 统一兜底；同时修复许可泄漏
+     * ——tryAcquire 超时返回 false 时不再 release 未获取的 permit。
      */
     @Test
     void virtualThreadsLargeConcurrency_shouldNeverExceedPermits() throws Exception {
@@ -125,9 +130,10 @@ class VirtualThreadDbSemaphoreTest {
 
             for (int i = 0; i < taskCount; i++) {
                 futures.add(vthreads.submit(() -> {
+                    boolean acquired = false;
                     try {
-                        assertTrue(semaphore.tryAcquire(30, TimeUnit.SECONDS),
-                                "虚拟线程应在 30s 内拿到 permit");
+                        acquired = semaphore.tryAcquire(100, TimeUnit.SECONDS);
+                        assertTrue(acquired, "虚拟线程应在 100s 死锁保险窗口内拿到 permit");
                         int cur = inFlight.incrementAndGet();
                         // 记录历史峰值
                         maxInFlight.accumulateAndGet(cur, Math::max);
@@ -138,7 +144,9 @@ class VirtualThreadDbSemaphoreTest {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     } finally {
-                        semaphore.release();
+                        if (acquired) {
+                            semaphore.release();
+                        }
                     }
                     return null;
                 }));

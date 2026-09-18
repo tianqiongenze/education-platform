@@ -43,9 +43,16 @@ public class PulsarEventPublisher {
                 log.debug("PulsarClient not available, skipping event: {}", event.getClass().getSimpleName());
                 return;
             }
-            log.info("Publishing domain event: {}", event.getClass().getSimpleName());
+            // D-event-shared: structured fields from the shared-contract envelope.
+            log.info("Publishing domain event: eventType={} aggregateId={}",
+                    event.envelope().eventType(), event.envelope().aggregateId());
         } catch (Exception e) {
-            log.warn("Failed to publish event {}: {}", event.getClass().getSimpleName(), e.getMessage());
+            // D-event-reliability: structured WARN fields so lost events are
+            // reconstructable from logs. This stub publisher performs no real
+            // send yet; when it gains a producer, route sends through
+            // ep-web-common EventSendRetrySupport (bounded retries + outbox hook).
+            log.warn("Failed to publish event: eventType={} aggregateId={}: {}",
+                    event.envelope().eventType(), event.envelope().aggregateId(), e.getMessage());
         }
     }
 }

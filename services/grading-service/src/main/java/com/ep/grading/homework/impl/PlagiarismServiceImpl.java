@@ -58,22 +58,12 @@ public class PlagiarismServiceImpl implements PlagiarismService, PlagiarismCheck
 
         double similarityScore = (contentLength % 100) / 100.0;
 
-        PlagiarismStatus status;
-        if (similarityScore < 0.3) {
-            status = PlagiarismStatus.CLEAN;
-        } else if (similarityScore >= 0.7) {
-            status = PlagiarismStatus.FLAGGED;
-        } else {
-            status = PlagiarismStatus.REVIEWING;
-        }
-
+        // D-224: the aggregate owns the similarity→verdict classification.
         PlagiarismCheck check = new PlagiarismCheck();
         check.setId(SnowflakeIdGenerator.getInstance().nextId());
         check.setSubmissionId(submissionId);
-        check.setSimilarityScore(similarityScore);
+        check.classify(similarityScore);
         check.setMatchedSources("[]");
-        check.setStatus(status);
-        check.setCheckedAt(LocalDateTime.now());
         return plagiarismCheckRepository.save(check);
     }
 

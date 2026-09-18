@@ -25,14 +25,14 @@
 
 | 路径 | 后端 | 说明 |
 |------|------|------|
-| `/api/v1/users/**`, `/api/v1/courses/**` | sp03-business (Dubbo) | 课程/用户 |
-| `/api/v1/orders/**` | sp03-order (Dubbo) | 订单中台 |
-| `/proxy/data/**` | sp02-data (HTTP代理) | 数据中台 |
-| `/proxy/ai/**` | sp04-ai (HTTP代理) | AI中台 |
-| `/proxy/itbackend/**` | sp05-itbackend (HTTP代理) | IT后端 |
-| `/proxy/knowledge/**` | sp07-bff (HTTP代理) | 知识中台 |
-| `/proxy/order/**` | sp03-order-service (HTTP代理) | 订单REST |
-| `/proxy/payment/**` | sp03-payment-service (HTTP代理) | 支付REST |
+| `/api/v1/users/**`, `/api/v1/courses/**` | core-business (Dubbo) | 课程/用户 |
+| `/api/v1/orders/**` | order (Dubbo) | 订单中台 |
+| `/proxy/data/**` | data-platform (HTTP代理) | 数据中台 |
+| `/proxy/ai/**` | ai-platform (HTTP代理) | AI中台 |
+| `/proxy/itbackend/**` | grading-service (HTTP代理) | IT后端 |
+| `/proxy/knowledge/**` | portal-bff (HTTP代理) | 知识中台 |
+| `/proxy/order/**` | order-service (HTTP代理) | 订单REST |
+| `/proxy/payment/**` | payment-service (HTTP代理) | 支付REST |
 | `/ws/**` | gateway-go (WebSocket) | WS实时推送 |
 | `/swagger-ui.html` | bff-java (聚合) | **统一API在线测试** |
 
@@ -48,46 +48,46 @@
 |------|-----------|--------------|------|
 | BFF Java | http://localhost:8090/swagger-ui.html | http://localhost:8090/v3/api-docs | 8090 |
 | Portal Web | — | — | 3004 |
-| SP03 Business | http://localhost:8083/swagger-ui.html | http://localhost:8083/v3/api-docs | 8083 |
-| SP03 Order | http://localhost:8084/swagger-ui.html | http://localhost:8084/v3/api-docs | 8084 |
-| SP03 Payment | http://localhost:8087/swagger-ui.html | http://localhost:8087/v3/api-docs | 8087 |
-| SP05 IT-Backend | http://localhost:8085/swagger-ui.html | http://localhost:8085/v3/api-docs | 8085 |
-| SP07 BFF (Gateway) | http://localhost:8070/swagger-ui.html | http://localhost:8070/v3/api-docs | 8070 |
-| SP07 Knowledge | http://localhost:8071/swagger-ui.html | http://localhost:8071/v3/api-docs | 8071 |
-| SP07 Retrieval | http://localhost:8072/swagger-ui.html | http://localhost:8072/v3/api-docs | 8072 |
-| SP07 Agent | http://localhost:8073/swagger-ui.html | http://localhost:8073/v3/api-docs | 8073 |
-| SP07 Tenant | http://localhost:8074/swagger-ui.html | http://localhost:8074/v3/api-docs | 8074 |
-| SP02 Data | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs | 8082 |
+| Core Business | http://localhost:8083/swagger-ui.html | http://localhost:8083/v3/api-docs | 8083 |
+| Order | http://localhost:8084/swagger-ui.html | http://localhost:8084/v3/api-docs | 8084 |
+| Payment | http://localhost:8087/swagger-ui.html | http://localhost:8087/v3/api-docs | 8087 |
+| Grading Service | http://localhost:8085/swagger-ui.html | http://localhost:8085/v3/api-docs | 8085 |
+| Portal BFF (Gateway) | http://localhost:8070/swagger-ui.html | http://localhost:8070/v3/api-docs | 8070 |
+| Knowledge | http://localhost:8071/swagger-ui.html | http://localhost:8071/v3/api-docs | 8071 |
+| Knowledge Retrieval | http://localhost:8072/swagger-ui.html | http://localhost:8072/v3/api-docs | 8072 |
+| Knowledge Agent | http://localhost:8073/swagger-ui.html | http://localhost:8073/v3/api-docs | 8073 |
+| Knowledge Tenant | http://localhost:8074/swagger-ui.html | http://localhost:8074/v3/api-docs | 8074 |
+| Data Platform | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs | 8082 |
 
-> 注：SP02-Data 的 `application.yml` 当前未在仓库内提交 `server.port`，端口 `8082` 为约定值。若实际部署不同，请以运行时 `server.port` 为准。
+> 注：data-platform 的 `application.yml` 当前未在仓库内提交 `server.port`，端口 `8082` 为约定值。若实际部署不同，请以运行时 `server.port` 为准。
 
 ## 安全认证
 
 所有 API 使用 `X-Tenant-Id` Header 进行租户隔离认证（SecurityScheme: `TenantAuth`，APIKEY in HEADER）。
-- BFF Java / SP03 Business / SP05 IT-Backend 使用 `bearerAuth`（JWT / HTTP Bearer）。
-- SP07 系列服务与 SP02-Data 使用 `TenantAuth`（`X-Tenant-Id` Header）。
+- BFF Java / core-business / grading-service 使用 `bearerAuth`（JWT / HTTP Bearer）。
+- knowledge-platform 系列服务与 data-platform 使用 `TenantAuth`（`X-Tenant-Id` Header）。
 - 部分管理 API 额外使用 `X-Role` Header 进行 RBAC 控制（D-068）。
 
 ## API 分组
 
 ### BFF 层
 - **bff-java**: 前端聚合 BFF，统一入口（含 Dubbo 透传 Controller、JWKS）
-- **sp07-bff**: 知识中台 BFF（Gateway + 聚合，调用 retrieval / agent）
+- **portal-bff**: 知识中台 BFF（Gateway + 聚合，调用 retrieval / agent）
 
 ### 业务中台
-- **sp03-business**: 课程管理、用户管理（D-104/D-105 瘦身后保留 Course/User 域）
-- **sp03-order**: 订单中台（独立，D-104 抽取 — Order 聚合根、状态机、Dubbo RPC 调 Payment）
-- **sp03-payment**: 支付中台（独立，D-105 抽取 — Payment/Refund、PaymentChannelSpi 策略、Mock Channel）
-- **sp05-itbackend**: IT 后端 BU 用户管理、学习记录、作业 / 提交 / 评分
+- **core-business**: 课程管理、用户管理（D-104/D-105 瘦身后保留 Course/User 域）
+- **order**: 订单中台（独立，D-104 抽取 — Order 聚合根、状态机、Dubbo RPC 调 Payment）
+- **payment**: 支付中台（独立，D-105 抽取 — Payment/Refund、PaymentChannelSpi 策略、Mock Channel）
+- **grading-service**: IT 后端 BU 用户管理、学习记录、作业 / 提交 / 评分
 
 ### 知识中台
-- **sp07-knowledge-service**: 文档上传/查询/分类（@Tag「知识库管理」）
-- **sp07-agent-service**: Agent 编排 ROUTER / PIPELINE / DEBATE（@Tag「智能体管理」）
-- **sp07-tenant-service**: 多租户管理、配额、API Key（@Tag「租户管理」）
-- **sp07-retrieval-service**: 混合检索 + RAG 问答（@Tag「知识检索」）
+- **knowledge-service**: 文档上传/查询/分类（@Tag「知识库管理」）
+- **agent-service**: Agent 编排 ROUTER / PIPELINE / DEBATE（@Tag「智能体管理」）
+- **tenant-service**: 多租户管理、配额、API Key（@Tag「租户管理」）
+- **retrieval-service**: 混合检索 + RAG 问答（@Tag「知识检索」）
 
 ### 数据中台
-- **sp02-data**: 元数据查询、数据目录（@Tag「元数据管理」）
+- **data-platform**: 元数据查询、数据目录（@Tag「元数据管理」）
 
 ## 前端对接
 
@@ -130,20 +130,20 @@ D-094 建立了跨语言 OpenAPI 契约生成流水线：把各服务运行时�
 | 服务 | 端口 |
 |------|------|
 | bff-java | 8090 |
-| sp03-business | 8083 |
-| sp03-order | 8084 |
-| sp03-payment | 8087 |
-| sp05-itbackend | 8085 |
-| sp07-knowledge | 8071 |
-| sp07-bff (Gateway) | 8070 |
-| sp07-retrieval | 8072 |
-| sp07-agent | 8073 |
-| sp07-tenant | 8074 |
-| sp02-data | 8082 |
+| core-business | 8083 |
+| order | 8084 |
+| payment | 8087 |
+| grading-service | 8085 |
+| knowledge | 8071 |
+| portal-bff (Gateway) | 8070 |
+| retrieval | 8072 |
+| agent | 8073 |
+| tenant | 8074 |
+| data-platform | 8082 |
 
-> 注：`sp07-mcp-server` 的 `application.yml` 默认端口也是 **8090**，与
+> 注：`mcp-server` 的 `application.yml` 默认端口也是 **8090**，与
 > `bff-java` 冲突，二者不能在同一主机同时运行。默认按 `bff-java`
-> 占用 8090 处理；若实际是 `sp07-mcp-server` 在 8090，请用
+> 占用 8090 处理；若实际是 `mcp-server` 在 8090，请用
 > `BFF_PORT=<其他端口> ./scripts/generate-openapi-specs.sh` 覆盖。
 
 ### 推荐工作流

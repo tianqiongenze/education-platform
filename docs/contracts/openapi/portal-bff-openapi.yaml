@@ -1,0 +1,666 @@
+openapi: 3.0.3
+info:
+  title: Portal BFF API
+  description: |
+    Education Platform — Portal BFF aggregation layer (port 8090).
+    Exposes Dubbo-backed core-business/order services over HTTP, issues JWTs
+    (JWKS endpoint), and proxies downstream services via the unified gateway
+    (`/proxy/**`). Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8090
+    description: Local dev
+security:
+  - bearerAuth: []
+tags:
+  - name: users
+    description: User domain (Dubbo → core-business)
+  - name: courses
+    description: Course domain (Dubbo → core-business)
+  - name: orders
+    description: Order domain (Dubbo → order-platform)
+  - name: dubbo
+    description: Dubbo connectivity probes
+  - name: jwks
+    description: JWT verification keys
+  - name: proxy
+    description: Unified API gateway proxy
+
+paths:
+  /.well-known/jwks.json:
+    get:
+      tags: [jwks]
+      summary: Get JWKS public keys
+      operationId: getJwks
+      security: []
+      responses:
+        '200':
+          description: JWKS document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jwks'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/users:
+    post:
+      tags: [users]
+      summary: Create a user
+      operationId: bffCreateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserCmd'
+      responses:
+        '200':
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/users/{id}:
+    get:
+      tags: [users]
+      summary: Get user by id
+      operationId: bffGetUserById
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [users]
+      summary: Update user
+      operationId: bffUpdateUser
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserCmd'
+      responses:
+        '204':
+          description: Updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/users/phone/{phone}:
+    get:
+      tags: [users]
+      summary: Get user by phone
+      operationId: bffGetUserByPhone
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/users/{id}/freeze:
+    post:
+      tags: [users]
+      summary: Freeze a user
+      operationId: bffFreezeUser
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '204':
+          description: Frozen
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/courses:
+    get:
+      tags: [courses]
+      summary: List courses
+      operationId: bffListCourses
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '200':
+          description: Course list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Course'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [courses]
+      summary: Create a course
+      operationId: bffCreateCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCourseCmd'
+      responses:
+        '200':
+          description: Created course
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/courses/{id}:
+    get:
+      tags: [courses]
+      summary: Get course by id
+      operationId: bffGetCourseById
+      parameters:
+        - $ref: '#/components/parameters/CourseIdPath'
+      responses:
+        '200':
+          description: Course found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/courses/search:
+    get:
+      tags: [courses]
+      summary: Search courses by keyword
+      operationId: bffSearchCourses
+      parameters:
+        - name: keyword
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Course'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/courses/{id}/publish:
+    post:
+      tags: [courses]
+      summary: Publish a course
+      operationId: bffPublishCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseIdPath'
+      responses:
+        '204':
+          description: Published
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/courses/{id}/archive:
+    post:
+      tags: [courses]
+      summary: Archive a course
+      operationId: bffArchiveCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseIdPath'
+      responses:
+        '204':
+          description: Archived
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders:
+    post:
+      tags: [orders]
+      summary: Create an order
+      operationId: bffCreateOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderCmd'
+      responses:
+        '200':
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{id}:
+    get:
+      tags: [orders]
+      summary: Get order by id
+      operationId: bffGetOrderById
+      parameters:
+        - $ref: '#/components/parameters/OrderIdPath'
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/by-user-course:
+    get:
+      tags: [orders]
+      summary: Get order by user and course
+      operationId: bffGetOrderByUserAndCourse
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: courseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/user/{userId}:
+    get:
+      tags: [orders]
+      summary: List user orders
+      operationId: bffListUserOrders
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '200':
+          description: User orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderDto'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{id}/pay:
+    post:
+      tags: [orders]
+      summary: Pay an order
+      operationId: bffPayOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderIdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payMethod:
+                  type: string
+      responses:
+        '204':
+          description: Paid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/orders/{id}/refund:
+    post:
+      tags: [orders]
+      summary: Refund an order
+      operationId: bffRefundOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderIdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '204':
+          description: Refunded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/dubbo/health:
+    get:
+      tags: [dubbo]
+      summary: Dubbo connectivity probe
+      operationId: bffDubboHealth
+      responses:
+        '200':
+          description: Dubbo health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DubboHealth'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /proxy/{prefix}:
+    get:
+      tags: [proxy]
+      summary: Gateway proxy (catch-all)
+      operationId: bffProxyGet
+      description: |
+        Catch-all proxy forwarding `/proxy/**` to downstream services by
+        configured route prefix (data, ai, itbackend, knowledge, order,
+        payment). The matched `/proxy/<name>` prefix is stripped before
+        forwarding. Disabled by default (set `EP_PROXY_ENABLED=true`).
+      security: []
+      parameters:
+        - name: prefix
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '.*'
+      responses:
+        '200':
+          description: Proxied response
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Upstream unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Proxy disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CourseIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    OrderIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        hint:
+          type: string
+        detail:
+          type: string
+    Jwks:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kty:
+                type: string
+              alg:
+                type: string
+              use:
+                type: string
+              kid:
+                type: string
+              n:
+                type: string
+              e:
+                type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        phone:
+          type: string
+        nickname:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+    CreateUserCmd:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+        nickname:
+          type: string
+        role:
+          type: string
+    UpdateUserCmd:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        nickname:
+          type: string
+        role:
+          type: string
+    Course:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+    CreateCourseCmd:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+    OrderDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        status:
+          type: string
+        amount:
+          type: number
+          format: double
+        payMethod:
+          type: string
+    CreateOrderCmd:
+      type: object
+      required: [userId, courseId]
+      properties:
+        userId:
+          type: integer
+          format: int64
+        courseId:
+          type: integer
+          format: int64
+        payMethod:
+          type: string
+    DubboHealth:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+        service:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        error:
+          type: string
+        provider:
+          type: string

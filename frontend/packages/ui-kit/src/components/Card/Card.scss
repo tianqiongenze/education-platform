@@ -1,0 +1,44 @@
+// Card styles — values come from @ep/design-tokens (--ep-* CSS variables).
+// Each var() has a fallback so the card still renders if tokens are absent.
+.ep-card {
+  display: block;
+  background-color: var(--ep-color-bg-card, #ffffff);
+  border-radius: var(--ep-card-border-radius, 6px);
+  box-shadow: var(--ep-card-shadow, 0 1px 2px 0 rgba(0, 0, 0, 0.03));
+  overflow: hidden;
+
+  &--bordered {
+    border: 1px solid var(--ep-color-border-weakest, #f0f0f0);
+  }
+
+  &--no-padding {
+    .ep-card__body {
+      padding: 0;
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--ep-card-padding, 16px);
+    padding-bottom: var(--ep-space-2, 8px);
+    border-bottom: 1px solid var(--ep-color-border-weakest, #f0f0f0);
+  }
+
+  &__title {
+    font-size: var(--ep-font-size-lg, 16px);
+    font-weight: var(--ep-font-weight-medium, 500);
+    color: var(--ep-color-text-primary, #262626);
+  }
+
+  &__extra {
+    font-size: var(--ep-font-size-md, 14px);
+    color: var(--ep-color-text-link, #1890ff);
+  }
+
+  &__body {
+    padding: var(--ep-card-padding, 16px);
+    color: var(--ep-color-text-primary, #262626);
+  }
+}

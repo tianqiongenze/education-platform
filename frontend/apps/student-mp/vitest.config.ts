@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 export default defineConfig({
   plugins: [react()],
   test: {
+    exclude: ['node_modules', 'dist', 'e2e/**'],
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}'],

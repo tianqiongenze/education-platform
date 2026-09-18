@@ -1,4 +1,4 @@
-"""Plugin system for SP-04 AI Middle-Platform.
+"""Plugin system for AI AI Middle-Platform.
 
 A plugin bundles an MCP server URL with a manifest (permissions, tenant
 whitelist, skills) so the host agent can safely load third-party capabilities

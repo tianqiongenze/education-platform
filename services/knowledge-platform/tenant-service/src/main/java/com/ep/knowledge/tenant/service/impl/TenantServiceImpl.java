@@ -1,6 +1,7 @@
 package com.ep.knowledge.tenant.service.impl;
 
 import com.ep.knowledge.tenant.entity.Tenant;
+import com.ep.knowledge.tenant.entity.TenantStatus;
 import com.ep.knowledge.tenant.mapper.TenantMapper;
 import com.ep.knowledge.tenant.service.TenantService;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,10 @@ public class TenantServiceImpl implements TenantService {
         if (tenant.getQuota() == null) {
             tenant.setQuota(1000L);
         }
+        // D-201: new tenants start in PENDING; activate() transitions to ACTIVE.
+        if (tenant.getStatus() == null) {
+            tenant.setStatus(TenantStatus.PENDING.code());
+        }
         tenantMapper.insert(tenant);
         return tenant;
     }
@@ -51,4 +56,43 @@ public class TenantServiceImpl implements TenantService {
     public void delete(String id) {
         tenantMapper.deleteById(id);
     }
+
+    // ----- D-201: lifecycle state-machine delegation -----
+
+    @Override
+    public Tenant activate(String id) {
+        Tenant t = tenantMapper.selectById(id);
+        if (t == null) {
+            throw new IllegalArgumentException("Tenant not found: " + id);
+        }
+        // D-201: delegate to the aggregate's state machine instead of setStatus().
+        t.activate();
+        tenantMapper.updateById(t);
+        return t;
+    }
+
+    @Override
+    public Tenant suspend(String id) {
+        Tenant t = tenantMapper.selectById(id);
+        if (t == null) {
+            throw new IllegalArgumentException("Tenant not found: " + id);
+        }
+        // D-201: delegate to the aggregate's state machine instead of setStatus().
+        t.suspend();
+        tenantMapper.updateById(t);
+        return t;
+    }
+
+    @Override
+    public Tenant reactivate(String id) {
+        Tenant t = tenantMapper.selectById(id);
+        if (t == null) {
+            throw new IllegalArgumentException("Tenant not found: " + id);
+        }
+        // D-201: delegate to the aggregate's state machine instead of setStatus().
+        t.reactivate();
+        tenantMapper.updateById(t);
+        return t;
+    }
 }
+

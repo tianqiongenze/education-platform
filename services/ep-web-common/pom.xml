@@ -107,6 +107,27 @@
       <version>2.2.0</version>
       <scope>provided</scope>
     </dependency>
+    <!-- Spring Data Redis: used by RedisWindowCounter (risk-control cluster-wide
+         rate limit counter). provided by consumers that have spring-data-redis. -->
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-redis</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- AspectJ: used by AuditLogAspect (@Around audit logging). provided by
+         consumers that have spring-boot-starter-aop. -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Spring AOP infrastructure: used by AuditLogAutoConfiguration to register
+         the AuditLogAspect bean. provided by consumers. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-aop</artifactId>
+      <scope>provided</scope>
+    </dependency>
 
     <!-- test -->
     <dependency>
@@ -119,6 +140,12 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
       <version>5.18.0</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- P0-3/P1-8 tests: MockHttpServletRequest/MockHttpServletResponse. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-test</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

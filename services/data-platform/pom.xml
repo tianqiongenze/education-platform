@@ -172,6 +172,39 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
+    <!-- D-199: ArchUnit architecture tests (matches other services' archunit-junit5 coordinate) -->
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>1.3.0</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- D-202: H2 in-memory DB for DualDbConfigIT routing tests (no Docker needed). -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- D-202: Testcontainers CockroachDB for real CRDB integration tests.
+         Versions managed by root BOM (testcontainers.version=1.20.4). -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>cockroachdb</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -183,6 +216,12 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
+        <configuration>
+          <!-- D-202: EP_LIVE-guarded IT tests (CockroachDbIntegrationIT) and
+               other live/testcontainers tests skip by default; enable with
+               -Dgroups=live or EP_LIVE=1 in CI. -->
+          <excludedGroups>live</excludedGroups>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.jacoco</groupId>

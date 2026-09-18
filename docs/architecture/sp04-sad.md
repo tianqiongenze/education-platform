@@ -1,13 +1,14 @@
+# SP-04 AI中台 软件架构设计(SAD)
+
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp04` for reference continuity. Per D-137, sp04 → ai-platform. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 作者 | 审阅 |
 |------|------|------|------|------|------|
 | SP04-SAD | v1.0 | 2026-08-03 | 评审通过 | AI中台架构组 | 架构委员会 |
 
-# SP-04 AI中台 软件架构设计(SAD)
-
 > 关联：顶层 spec §6；决策 D-010 / D-018 / D-019 / D-020；ADR-A01..A04
 
 ## 1. 架构目标与原则
-
 ### 1.1 目标
 - 全栈 AI 能力：模型网关 / RAG / 5 Agent / 数据底座一站式（D-010）。
 - 成本最优：成本栈 cache→route→cascade→fallback，单调用成本降 ≥45%（ADR-A01）。

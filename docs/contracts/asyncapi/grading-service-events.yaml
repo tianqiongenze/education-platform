@@ -1,0 +1,129 @@
+asyncapi: 3.0.0
+info:
+  title: Grading Service Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for grading-service domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: grading-service.
+    Subscribers: data-platform.
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  grading-service-events:
+    address: persistent://public/default/grading-service-events
+    description: Topic for grading-service domain events (assignment lifecycle).
+    messages:
+      AssignmentPublishedEvent:
+        $ref: '#/components/messages/AssignmentPublishedEvent'
+      AssignmentClosedEvent:
+        $ref: '#/components/messages/AssignmentClosedEvent'
+operations:
+  publishAssignmentPublishedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/grading-service-events'
+    messages:
+      - $ref: '#/components/messages/AssignmentPublishedEvent'
+  publishAssignmentClosedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/grading-service-events'
+    messages:
+      - $ref: '#/components/messages/AssignmentClosedEvent'
+components:
+  messages:
+    AssignmentPublishedEvent:
+      description: Emitted when an Assignment transitions from DRAFT to PUBLISHED (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [AssignmentPublishedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/AssignmentPublishedEventPayload'
+    AssignmentClosedEvent:
+      description: Emitted when an Assignment transitions from PUBLISHED to CLOSED (D-201).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [AssignmentClosedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/AssignmentClosedEventPayload'
+  schemas:
+    AssignmentPublishedEventPayload:
+      type: object
+      required: [aggregateId, assignmentId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (assignment id).
+        assignmentId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The published assignment ID.
+        courseId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The course the assignment belongs to.
+        teacherId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The teacher who published the assignment.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    AssignmentClosedEventPayload:
+      type: object
+      required: [aggregateId, assignmentId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (assignment id).
+        assignmentId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The closed assignment ID.
+        courseId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The course the assignment belongs to.
+        teacherId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The teacher who closed the assignment.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

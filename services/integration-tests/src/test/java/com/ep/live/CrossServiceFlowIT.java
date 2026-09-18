@@ -44,10 +44,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class CrossServiceFlowIT {
 
     private static final String EP_LIVE = System.getenv("EP_LIVE");
-    private static final String SP03_BASE_URL = System.getenv().getOrDefault(
-            "SP03_BASE_URL", "http://localhost:8083");
-    private static final String SP05_BASE_URL = System.getenv().getOrDefault(
-            "SP05_BASE_URL", "http://localhost:8085");
+    private static final String EP_CORE_BUSINESS_URL = System.getenv().getOrDefault(
+            "EP_CORE_BUSINESS_URL", "http://localhost:8083");
+    private static final String EP_GRADING_URL = System.getenv().getOrDefault(
+            "EP_GRADING_URL", "http://localhost:8085");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     /** 本轮测试唯一前缀, 避免与历史/并发测试数据冲突。 */
@@ -91,7 +91,7 @@ class CrossServiceFlowIT {
         user.put("password", "ep-it-pwd");
         user.put("email", "epit_" + TS + "@example.com");
 
-        HttpResponse<String> resp = send(SP03_BASE_URL, "POST", "/api/v1/users", user);
+        HttpResponse<String> resp = send(EP_CORE_BUSINESS_URL, "POST", "/api/v1/users", user);
         assertEquals(200, resp.statusCode(), "注册用户应返回 200, body=" + resp.body());
 
         JsonNode node = parse(resp);
@@ -113,7 +113,7 @@ class CrossServiceFlowIT {
         course.put("teacherId", registeredUserId);
         course.put("price", 100);
 
-        HttpResponse<String> create = send(SP03_BASE_URL, "POST", "/api/v1/courses", course);
+        HttpResponse<String> create = send(EP_CORE_BUSINESS_URL, "POST", "/api/v1/courses", course);
         assertEquals(200, create.statusCode(), "创建课程应返回 200, body=" + create.body());
 
         JsonNode node = parse(create);
@@ -122,7 +122,7 @@ class CrossServiceFlowIT {
         assertNotNull(id, "应返回课程 id, body=" + create.body());
         createdCourseId = id;
 
-        HttpResponse<String> pub = send(SP03_BASE_URL, "POST",
+        HttpResponse<String> pub = send(EP_CORE_BUSINESS_URL, "POST",
                 "/api/v1/courses/" + id + "/publish", null);
         assertEquals(200, pub.statusCode(), "发布课程应返回 200, body=" + pub.body());
     }
@@ -139,7 +139,7 @@ class CrossServiceFlowIT {
         order.put("courseId", createdCourseId);
         order.put("amount", 100);
 
-        HttpResponse<String> create = send(SP03_BASE_URL, "POST", "/api/v1/orders", order);
+        HttpResponse<String> create = send(EP_CORE_BUSINESS_URL, "POST", "/api/v1/orders", order);
         assertEquals(200, create.statusCode(), "创建订单应返回 200, body=" + create.body());
 
         JsonNode node = parse(create);
@@ -148,7 +148,7 @@ class CrossServiceFlowIT {
         assertNotNull(id, "应返回订单 id, body=" + create.body());
         createdOrderId = id;
 
-        HttpResponse<String> pay = send(SP03_BASE_URL, "POST",
+        HttpResponse<String> pay = send(EP_CORE_BUSINESS_URL, "POST",
                 "/api/v1/orders/" + id + "/pay", null);
         assertEquals(200, pay.statusCode(), "支付订单应返回 200, body=" + pay.body());
     }
@@ -156,7 +156,7 @@ class CrossServiceFlowIT {
     /**
      * 全链路串联 (Gap 3 覆盖): register → create course → publish →
      * create order → pay → (assignments if available)。
-     * 前序步骤已建立的上下文在此复用, 并尝试调用 sp05 作业接口。
+     * 前序步骤已建立的上下文在此复用, 并尝试调用 grading-service 作业接口。
      */
     @Test
     @Order(4)
@@ -166,26 +166,26 @@ class CrossServiceFlowIT {
         assertNotNull(createdCourseId, "前置课程发布未完成");
         assertNotNull(createdOrderId, "前置订单支付未完成");
 
-        // 验证 sp03 订单详情可查
-        HttpResponse<String> orderGet = send(SP03_BASE_URL, "GET",
+        // 验证 core-business 订单详情可查
+        HttpResponse<String> orderGet = send(EP_CORE_BUSINESS_URL, "GET",
                 "/api/v1/orders/" + createdOrderId, null);
         assertEquals(200, orderGet.statusCode(), "查询订单应返回 200, body=" + orderGet.body());
 
-        // 尝试调用 sp05 作业接口 (可选; 服务未就绪或无作业时不阻断主链路)
+        // 尝试调用 grading-service 作业接口 (可选; 服务未就绪或无作业时不阻断主链路)
         try {
             Map<String, Object> assignment = new LinkedHashMap<>();
             assignment.put("courseId", createdCourseId);
             assignment.put("title", "ep-it-assign-" + TS);
             assignment.put("content", "live integration test assignment");
 
-            HttpResponse<String> assignCreate = send(SP05_BASE_URL, "POST",
+            HttpResponse<String> assignCreate = send(EP_GRADING_URL, "POST",
                     "/api/v1/assignments", assignment);
             // 200/201/4xx 都可接受 (作业服务可能未就绪); 仅断言 HTTP 往返成功
             assertTrue(assignCreate.statusCode() > 0,
-                    "sp05 作业接口应返回 HTTP 状态码, 实际: " + assignCreate.statusCode());
+                    "grading-service 作业接口应返回 HTTP 状态码, 实际: " + assignCreate.statusCode());
         } catch (Exception e) {
-            // sp05 不可达属于环境问题, 不视为全链路失败
-            System.out.println("[ep-it] sp05 assignment 调用跳过: " + e.getMessage());
+            // grading-service 不可达属于环境问题, 不视为全链路失败
+            System.out.println("[ep-it] grading-service assignment 调用跳过: " + e.getMessage());
         }
     }
 }

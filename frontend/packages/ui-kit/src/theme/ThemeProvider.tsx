@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STORAGE_KEYS } from '@ep/shared';
+import { getCssVariables } from '@ep/design-tokens';
 import { lightTheme, darkTheme } from './tokens';
 import type { ThemeName } from './tokens';
 
@@ -14,8 +15,8 @@ const ThemeContext = createContext<ThemeContextValue>({
   toggle: () => {},
 });
 
-// Graceful storage fallback: prefer Taro storage, fall back to localStorage,
-// then to an in-memory no-op object when neither is available.
+// Graceful storage fallback: prefer localStorage, then an in-memory no-op
+// object when it is unavailable (e.g. mini-program environment).
 const memoryStore = new Map<string, string>();
 
 const storage = {
@@ -42,14 +43,23 @@ const storage = {
 };
 
 function applyCssVars(theme: ThemeName): void {
-  // H5: inject CSS variables into document root.
-  // MP: not applicable (CSS variables handled via platform styling).
-  if (process.env.TARO_ENV !== 'h5') return;
+  // Browser/H5: inject the design-token CSS variables into the document root
+  // and flag the theme for `[data-theme="dark"]` CSS overrides. In MP there is
+  // no document, so this is a safe no-op (platform styling is used instead).
   if (typeof document === 'undefined') return;
 
-  const cssVars = theme === 'dark' ? darkTheme : lightTheme;
+  const root = document.documentElement;
+  root.setAttribute('data-theme', theme);
+
+  const cssVars = getCssVariables(theme);
   Object.entries(cssVars).forEach(([key, val]) => {
-    document.documentElement.style.setProperty(key, val);
+    root.style.setProperty(key, val);
+  });
+
+  // Legacy variable names — kept during the migration to @ep/design-tokens.
+  const legacyVars = theme === 'dark' ? darkTheme : lightTheme;
+  Object.entries(legacyVars).forEach(([key, val]) => {
+    root.style.setProperty(key, val);
   });
 }
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# SP-02 Data Middle-Platform — Flink CDC 3.x YAML pipeline
+# data-platform Data Middle-Platform — Flink CDC 3.x YAML pipeline
 # Learning Event CDC: Pulsar (Avro) -> Iceberg ods.ods_learning_event
 # High-volume stream: parallelism 64, partition days+hours
 # D-028 / C-02 / C-03 / C-07

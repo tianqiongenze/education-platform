@@ -20,7 +20,7 @@ public class OpenApiConfig {
     public OpenAPI epOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("SP-03 Order API")
+                        .title("core-business Order API")
                         .description("Education Platform - Order Middle Platform")
                         .version("1.0.0")
                         .contact(new Contact().name("EP Team")))

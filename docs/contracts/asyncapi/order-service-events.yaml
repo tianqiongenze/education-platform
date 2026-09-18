@@ -1,0 +1,136 @@
+asyncapi: 3.0.0
+info:
+  title: Order Platform Domain Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for order-platform domain events published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: order-platform service.
+    Subscribers: core-business (inventory), data-platform (analytics).
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  order-service-events:
+    address: persistent://public/default/order-service-events
+    description: Topic for order-platform domain events (order payment lifecycle).
+    messages:
+      OrderPaidEvent:
+        $ref: '#/components/messages/OrderPaidEvent'
+      OrderRefundedEvent:
+        $ref: '#/components/messages/OrderRefundedEvent'
+operations:
+  publishOrderPaidEvent:
+    action: send
+    channel:
+      $ref: '#/channels/order-service-events'
+    messages:
+      - $ref: '#/components/messages/OrderPaidEvent'
+  publishOrderRefundedEvent:
+    action: send
+    channel:
+      $ref: '#/channels/order-service-events'
+    messages:
+      - $ref: '#/components/messages/OrderRefundedEvent'
+components:
+  messages:
+    OrderPaidEvent:
+      description: Emitted when an order transitions from PENDING to PAID.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [OrderPaidEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/OrderPaidEventPayload'
+    OrderRefundedEvent:
+      description: Emitted when an order transitions from PAID to REFUNDED.
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [OrderRefundedEvent]
+          tenantId:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          aggregateId:
+            type: integer
+            format: int64
+      payload:
+        $ref: '#/components/schemas/OrderRefundedEventPayload'
+  schemas:
+    OrderPaidEventPayload:
+      type: object
+      required: [aggregateId, orderId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (order id, == orderId).
+        orderId:
+          type: integer
+          format: int64
+          description: The paid order ID.
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The ordering user.
+        courseId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Product id (named courseId for back-compat; null for non-inventory products).
+        productType:
+          type: string
+          description: Product kind (e.g. COURSE, MEMBERSHIP).
+        payMethod:
+          type: string
+          description: Free-text pay method resolved to a PaymentChannel.
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.
+    OrderRefundedEventPayload:
+      type: object
+      required: [aggregateId, orderId, occurredAt]
+      properties:
+        aggregateId:
+          type: integer
+          format: int64
+          description: Aggregate root ID (order id, == orderId).
+        orderId:
+          type: integer
+          format: int64
+          description: The refunded order ID.
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The ordering user.
+        courseId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Product id (named courseId for back-compat; null for non-inventory products).
+        productType:
+          type: string
+          description: Product kind (e.g. COURSE, MEMBERSHIP).
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred.

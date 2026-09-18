@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 /**
  * Detects feature distribution drift using PSI (§12.2.2).
  *
- * <p>Thresholds (per sp02-sdd §12.2.2):
+ * <p>Thresholds (per data-platform-sdd §12.2.2):
  * <ul>
  *   <li>{@code psi > 0.2} — alert (significant drift)</li>
  *   <li>{@code psi > 0.4} — severe drift (action required)</li>

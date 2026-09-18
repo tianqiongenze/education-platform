@@ -28,9 +28,10 @@ import java.util.regex.Pattern;
 /**
  * Java Dubbo provider shim for {@link AiGradingRpcService} (D-091).
  *
- * <p>SP-04 is a Python/Litestar service that cannot serve a Java Dubbo Triple
+ * <p>The AI Gateway is a Python/Litestar service that cannot serve a Java Dubbo Triple
  * contract. This provider bridges the gap: it receives the Dubbo call from
- * sp05's {@code GradingRpcServiceImpl#gradeSubjective}, then calls SP-04's
+ * grading-service's {@code GradingRpcServiceImpl#gradeSubjective}, then calls the AI
+ * Gateway's
  * HTTP {@code POST /v1/chat/completions} endpoint with a grading-specific
  * system prompt, parses the {@code choices[0].message.content} payload, and
  * returns an {@link AiGradingResult}.
@@ -40,7 +41,7 @@ import java.util.regex.Pattern;
  * <em>inactive</em>; {@code "true"}/{@code "1"}/non-blank treated as active —
  * mirroring {@code DevGuardConfig}), this provider skips the HTTP call and
  * returns a deterministic stub grade based on answer length (short → lower
- * score, substantial → higher score). This lets dev/CI run without SP-04.
+ * score, substantial → higher score). This lets dev/CI run without the AI gateway.
  *
  * <h3>Iron-law compliance</h3>
  * <ul>
@@ -53,8 +54,8 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * <p>Failure semantics: on HTTP/parse failure this provider throws a
- * {@link RuntimeException} so the sp05 consumer catches it and applies the
- * configured fallback ({@code pending}/{@code fail}).
+     * {@link RuntimeException} so the grading-service consumer catches it and applies the
+     * configured fallback ({@code pending}/{@code fail}).
  */
 @DubboService
 public class AiGradingProviderImpl implements AiGradingRpcService {
@@ -82,7 +83,7 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
      */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${sp04.gateway-url:http://localhost:8000}")
+    @Value("${ai.gateway-url:http://localhost:8000}")
     private String gatewayUrl;
 
     /**
@@ -118,7 +119,7 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
             content = callGateway(SYSTEM_PROMPT, userMessage);
         } catch (RuntimeException e) {
             // Re-throw so GradingRpcServiceImpl#gradeSubjective applies the fallback.
-            log.warn("SP-04 gateway call failed for submission {}: {}",
+            log.warn("AI gateway call failed for submission {}: {}",
                     request.submissionId(), e.getMessage());
             throw e;
         }
@@ -138,7 +139,7 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
     }
 
     /**
-     * Call SP-04's {@code /v1/chat/completions} endpoint and return the
+     * Call the AI Gateway's {@code /v1/chat/completions} endpoint and return the
      * assistant {@code content} string.
      *
      * <p>Protected so unit tests can override it with a stub that returns a
@@ -165,12 +166,12 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("SP-04 gateway call failed: " + e.getMessage(), e);
+            throw new RuntimeException("AI gateway call failed: " + e.getMessage(), e);
         }
         int status = response.statusCode();
         if (status < 200 || status >= 300) {
             throw new RuntimeException(
-                    "SP-04 gateway returned HTTP " + status + ": " + safeBodyPreview(response.body()));
+                    "AI gateway returned HTTP " + status + ": " + safeBodyPreview(response.body()));
         }
         return extractContent(response.body());
     }
@@ -184,17 +185,17 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
             JsonNode root = objectMapper.readTree(responseBody);
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
-                throw new RuntimeException("SP-04 response missing choices[]");
+                throw new RuntimeException("AI gateway response missing choices[]");
             }
             JsonNode content = choices.get(0).path("message").path("content");
             if (content.isMissingNode() || content.isNull()) {
-                throw new RuntimeException("SP-04 response missing choices[0].message.content");
+                throw new RuntimeException("AI gateway response missing choices[0].message.content");
             }
             return content.asText();
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse SP-04 response: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to parse AI gateway response: " + e.getMessage(), e);
         }
     }
 
@@ -287,7 +288,7 @@ public class AiGradingProviderImpl implements AiGradingRpcService {
             root.put("stream", false);
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to serialize SP-04 request: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to serialize AI gateway request: " + e.getMessage(), e);
         }
     }
 

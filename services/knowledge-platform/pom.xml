@@ -24,7 +24,7 @@
     <module>tenant-service</module>
     <module>knowledge-bff</module>
     <module>mcp-server</module>
-    <!-- D-045: ep-memory Java SDK lives alongside SP-07 but is shared -->
+    <!-- D-045: ep-memory Java SDK lives alongside knowledge-platform but is shared -->
     <module>../ep-memory-java</module>
   </modules>
 
@@ -104,6 +104,14 @@
       <dependency>
         <groupId>com.ep</groupId>
         <artifactId>ep-cache</artifactId>
+        <version>1.0.0</version>
+      </dependency>
+      <!-- D-216: ep-data read/write-split datasource routing SDK. Declared in
+           dependencyManagement so child modules (knowledge-service,
+           tenant-service) omit the version. -->
+      <dependency>
+        <groupId>com.ep</groupId>
+        <artifactId>ep-data</artifactId>
         <version>1.0.0</version>
       </dependency>
     </dependencies>

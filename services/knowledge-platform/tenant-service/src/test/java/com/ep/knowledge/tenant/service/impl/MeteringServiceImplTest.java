@@ -22,7 +22,7 @@ import static org.mockito.Mockito.*;
  * D-179: Mockito-extension unit test for {@link MeteringServiceImpl}.
  *
  * <p>Mocks the {@link UsageRecordMapper} so the metering record/summarize logic
- * can be exercised without a database, following the sp07 service-test
+ * can be exercised without a database, following the knowledge-platform service-test
  * convention (no Spring context, no H2).
  */
 @ExtendWith(MockitoExtension.class)

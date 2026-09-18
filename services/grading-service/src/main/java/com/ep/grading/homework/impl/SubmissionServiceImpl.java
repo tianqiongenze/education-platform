@@ -24,7 +24,7 @@ import java.util.Objects;
  *   <li>P0-6: manual {@code expectedVersion} map replaced by JPA {@code @Version} optimistic lock;
  *             in-memory idempotency index replaced by Redis {@link IdempotencyService} (TTL 24h).</li>
  *   <li>P1-3: {@link GlobalLock} on {@link #grade} coordinates with the Seata global transaction
- *             so cross-service grading (sp05 grade + sp03 order completion) cannot diverge.</li>
+ *             so cross-service grading (grading-service grade + core-business order completion) cannot diverge.</li>
  * </ul>
  * Service interface is unchanged; only the implementation has been rewritten.
  * D-182: L1+L2 cache via ep-cache SDK. Submission status cached 60s (cacheEmpty=true);
@@ -74,10 +74,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setId(SnowflakeIdGenerator.getInstance().nextId());
         submission.setAssignmentId(cmd.assignmentId());
         submission.setStudentId(cmd.studentId());
-        submission.setContent(cmd.content());
-        submission.setStatus(SubmissionStatus.SUBMITTED);
-        submission.setSubmittedAt(LocalDateTime.now());
-        submission.setIdempotencyKey(key);
+        // D-224: the aggregate owns the SUBMITTED transition (state guard +
+        // audit timestamps) instead of the service layer calling setStatus.
+        submission.submit(cmd.studentId(), cmd.content(), key);
         Submission saved = submissionRepository.save(submission);
         if (key != null && !key.isBlank()) {
             idempotencyService.claimOrFetch(key, String.valueOf(saved.getId()));
@@ -111,10 +110,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new IllegalArgumentException("Submission not found: " + submissionId));
 
-        submission.setScore(cmd.score());
-        submission.setFeedback(cmd.feedback());
-        submission.setStatus(SubmissionStatus.GRADED);
-        submission.setGradedAt(LocalDateTime.now());
+        // D-224: delegate the GRADED transition to the aggregate.
+        submission.grade(cmd.score(), cmd.feedback());
 
         try {
             Submission saved = submissionRepository.save(submission);

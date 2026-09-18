@@ -1,0 +1,33 @@
+{
+  "name": "@ep/design-tokens",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Three-layer W3C DTCG design tokens (global/alias/component) with CSS variable and AntD 5 theme mapping outputs.",
+  "exports": {
+    ".": "./dist/tokens.ts",
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens": "./dist/tokens.ts",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/tokens.ts",
+  "types": "./dist/tokens.ts",
+  "files": [
+    "dist",
+    "tokens",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepare": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@ep/lint-config": "workspace:*",
+    "eslint": "9.18.0",
+    "typescript": "5.8.3",
+    "vitest": "2.1.9"
+  }
+}

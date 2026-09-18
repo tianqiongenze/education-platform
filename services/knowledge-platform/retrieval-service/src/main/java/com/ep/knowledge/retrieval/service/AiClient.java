@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Minimal client for the SP-04 AI Gateway chat-completion endpoint, used by
+ * Minimal client for the AI Gateway chat-completion endpoint, used by
  * {@link RagService} to generate the final answer over retrieved context.
  *
  * <p>Mirrors {@code data-platform}'s {@code AiGatewayClient}: JDK built-in
@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Maven dependencies (D-074/D-075). GraalVM AOT-friendly: no reflection, no
  * synchronized blocks (D-039/D-040).
  *
- * <p>SP-04 exposes the chat-completion contract at
+ * <p>The AI gateway exposes the chat-completion contract at
  * {@code POST /v1/chat/completions}. Request body:
  * <pre>{@code
  * {
@@ -49,8 +49,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>EP_DEV_ONLY guard: when {@code EP_DEV_ONLY} is unset, blank, or
  * {@code "true"} (the dev/CI default), the client skips the HTTP call entirely
  * and returns a contextual stub answer built from the user message. This keeps
- * the retrieval pipeline fully functional in dev/CI without a live SP-04
- * gateway, consistent with the EP_DEV_ONLY guard pattern used across EP.
+ * the retrieval pipeline fully functional in dev/CI without a live AI gateway,
+ * consistent with the EP_DEV_ONLY guard pattern used across EP.
  */
 @Component
 public class AiClient {
@@ -68,16 +68,16 @@ public class AiClient {
     private final HttpClient httpClient;
 
     /**
-     * Spring-managed constructor. Resolves the SP-04 gateway URL from
-     * {@code sp04.gateway-url} (default {@code http://localhost:8000}).
+     * Spring-managed constructor. Resolves the AI gateway URL from
+     * {@code ai.gateway-url} (default {@code http://localhost:8000}).
      *
-     * @param gatewayUrl SP-04 base URL (no path)
+     * @param gatewayUrl AI gateway base URL (no path)
      * @param model      LLM model id
      * @param timeoutSec request timeout in seconds
      */
-    public AiClient(@Value("${sp04.gateway-url:http://localhost:8000}") String gatewayUrl,
-                    @Value("${sp04.model:gpt-4o}") String model,
-                    @Value("${sp04.timeout-sec:10}") int timeoutSec) {
+    public AiClient(@Value("${ai.gateway-url:http://localhost:8000}") String gatewayUrl,
+                    @Value("${ai.model:gpt-4o}") String model,
+                    @Value("${ai.timeout-sec:10}") int timeoutSec) {
         this(gatewayUrl, model, timeoutSec, new ObjectMapper(), buildHttpClient(timeoutSec));
     }
 
@@ -94,7 +94,7 @@ public class AiClient {
     }
 
     /**
-     * Send a chat-completion request to the SP-04 AI Gateway and return the
+     * Send a chat-completion request to the AI gateway and return the
      * generated text.
      *
      * <p>In dev/CI (EP_DEV_ONLY guard active), the HTTP call is skipped and a
@@ -140,7 +140,7 @@ public class AiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
             if (status < 200 || status >= 300) {
-                log.warn("[AiClient] HTTP {} from SP-04 gateway — body={}", status,
+                log.warn("[AiClient] HTTP {} from AI gateway — body={}", status,
                         truncate(response.body()));
                 return "";
             }
@@ -148,21 +148,21 @@ public class AiClient {
             JsonNode root = mapper.readTree(response.body());
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
-                log.warn("[AiClient] SP-04 response has no choices — body={}", truncate(response.body()));
+                log.warn("[AiClient] AI gateway response has no choices — body={}", truncate(response.body()));
                 return "";
             }
             JsonNode content = choices.get(0).path("message").path("content");
             if (content.isMissingNode() || content.asText().isBlank()) {
-                log.warn("[AiClient] SP-04 response has no content — body={}", truncate(response.body()));
+                log.warn("[AiClient] AI gateway response has no content — body={}", truncate(response.body()));
                 return "";
             }
             return content.asText();
         } catch (HttpTimeoutException e) {
-            log.warn("[AiClient] HTTP timeout after {}s calling SP-04 gateway: {}",
+            log.warn("[AiClient] HTTP timeout after {}s calling AI gateway: {}",
                     timeoutSec, e.getMessage());
             return "";
         } catch (Exception e) {
-            log.warn("[AiClient] Error calling SP-04 gateway: {}", e.getMessage());
+            log.warn("[AiClient] Error calling AI gateway: {}", e.getMessage());
             return "";
         }
     }

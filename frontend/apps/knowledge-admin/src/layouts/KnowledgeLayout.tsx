@@ -11,6 +11,7 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { ThemeToggle } from '@ep/ui-kit';
 import type { ReactNode } from 'react';
 
 const { Header, Sider, Content } = Layout;
@@ -89,10 +90,13 @@ export default function KnowledgeLayout() {
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center',
+            gap: 16,
             padding: '0 24px',
-            background: '#fff',
+            // Token-driven so the chrome flips with the persisted theme.
+            background: 'var(--ep-color-bg-card, #fff)',
           }}
         >
+          <ThemeToggle />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar icon={<UserOutlined />} />
@@ -100,7 +104,14 @@ export default function KnowledgeLayout() {
             </div>
           </Dropdown>
         </Header>
-        <Content style={{ margin: '24px', padding: '24px', background: '#fff', borderRadius: 8 }}>
+        <Content
+          style={{
+            margin: '24px',
+            padding: '24px',
+            background: 'var(--ep-color-bg-card, #fff)',
+            borderRadius: 8,
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>

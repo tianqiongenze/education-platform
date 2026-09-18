@@ -3,9 +3,9 @@ package com.ep.grading.api.grading;
 /**
  * ai-platform AI grading Dubbo RPC contract.
  *
- * <p>Closes the TODO(sp04) gap in {@code GradingRpcServiceImpl#gradeSubjective}:
- * subjective questions are graded by sp04's RAG + LLM rubric scoring agent
- * (see {@code services/ai-platform/ai_agent/graphs/grading_agent.py}). sp05
+ * <p>Closes the TODO(ai-grading) gap in {@code GradingRpcServiceImpl#gradeSubjective}:
+ * subjective questions are graded by the AI gateway's RAG + LLM rubric scoring agent
+ * (see {@code services/ai-platform/ai_agent/graphs/grading_agent.py}). grading-service
  * {@code @DubboReference}s this interface and delegates subjective grading
  * here when {@code ep.ai-grading.enabled=true}.
  *
@@ -18,7 +18,7 @@ package com.ep.grading.api.grading;
  * invocation under Java 21 virtual threads.
  *
  * <p>Failure semantics: on grading failure the provider should throw a
- * {@link RuntimeException}; the sp05 consumer catches it and applies the
+ * {@link RuntimeException}; the grading-service consumer catches it and applies the
  * configured fallback ({@code pending} or {@code fail}) — see
  * {@code GradingRpcServiceImpl#gradeSubjective}.
  */

@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Because {@code EP_DEV_ONLY} is typically unset in CI, the
  * {@link AiGatewayClient} dev guard is active and returns template SQL — so
- * the tests verify the dev/CI path end-to-end without a running SP-04 gateway.
+ * the tests verify the dev/CI path end-to-end without a running AI gateway.
  */
 class TextToSqlServiceTest {
 

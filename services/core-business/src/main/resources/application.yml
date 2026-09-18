@@ -1,6 +1,21 @@
 server:
   port: 8083
 
+# D-216: shared Disruptor event pipeline (enqueue → publish). Default off;
+# enable in production for batched, back-pressured domain-event publishing.
+# D-066: Pulsar domain-event publishing (disabled by default; enabled in prod profile).
+# D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)
+ep:
+  disruptor:
+    enabled: false
+  pulsar:
+    enabled: false
+    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
+    topic:
+      domain-events: persistent://public/default/core-business-domain-events
+  cache:
+    enabled: true
+
 spring:
   application:
     name: core-business
@@ -33,7 +48,7 @@ dubbo:
     name: dubbo
     port: 20883
     threads: 500        # P0: 默认200不够1000并发, 扩到500
-    threadpool: cached  # P0: cached弹性线程池, 适配突发流量(配合D-039虚拟线程)
+    threadpool: fixed   # D-216 P2-5: cached+500 platform threads is an anti-pattern in the virtual-thread era  # P0: cached弹性线程池, 适配突发流量(配合D-039虚拟线程)
   consumer:
     timeout: 10000      # P4: 5000→10000, 1000并发下DB池竞争需更长等待
     retries: 0          # P2: 写操作不重试, 避免幂等被打破
@@ -112,12 +127,3 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
-# D-066: Pulsar domain-event publishing (disabled by default; enabled in prod profile).
-ep:
-  pulsar:
-    enabled: false
-    service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
-    topic:
-      domain-events: persistent://public/default/core-business-domain-events
-  cache:
-    enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)

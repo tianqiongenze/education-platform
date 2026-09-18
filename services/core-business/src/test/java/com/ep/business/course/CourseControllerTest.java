@@ -4,7 +4,9 @@ import com.ep.business.event.PulsarClientProperties;
 import com.ep.business.event.PulsarEventPublisher;
 import com.ep.cache.CacheService;
 import com.ep.web.common.GlobalExceptionHandler;
+import com.ep.web.common.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,6 +43,7 @@ class CourseControllerTest {
 
     @BeforeEach
     void setUp() {
+        TenantContext.clear(); // deterministic tenant ("default") for cache keys
         repository = mock(CourseRepository.class);
         when(repository.save(any(Course.class))).thenAnswer(inv -> {
             Course c = inv.getArgument(0);
@@ -51,9 +54,10 @@ class CourseControllerTest {
         });
         cacheService = mock(CacheService.class);
         // Simulate cache miss — loader is invoked, so the repository is exercised.
-        when(cacheService.getOrLoad(anyString(), anyString(), any(), anyLong(), anyBoolean()))
+        // (P0: CourseServiceImpl now uses the tenant-scoped 6-arg overload; loader at index 3.)
+        when(cacheService.getOrLoad(anyString(), anyString(), anyString(), any(), anyLong(), anyBoolean()))
                 .thenAnswer(inv -> {
-                    java.util.function.Supplier<?> loader = inv.getArgument(2);
+                    java.util.function.Supplier<?> loader = inv.getArgument(3);
                     return loader.get();
                 });
         CourseService courseService = new CourseServiceImpl(repository, noopPublisher(), cacheService);
@@ -64,6 +68,11 @@ class CourseControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     /** A disabled PulsarEventPublisher that never touches Pulsar. */

@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * D-119: Testcontainers integration test for the SP-03 Payment service.
+ * D-119: Testcontainers integration test for the core-business Payment service.
  *
  * <h3>What this test exercises</h3>
  * The payment service currently persists to a {@link java.util.concurrent.ConcurrentHashMap}

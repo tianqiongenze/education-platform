@@ -1,0 +1,813 @@
+# D-215a: Direct K3s deployment for all 13 backend services (frontend-portal already running).
+# Rancher Desktop K3s, lima-rancher-desktop node, 30GB RAM, 9 CPU.
+# All services: ClusterIP (no NodePort) — access via Traefik Ingress at 192.168.5.15.
+# Images: linux/arm64, pre-loaded in k3s containerd, imagePullPolicy: IfNotPresent.
+#
+# Memory plan (node has ~13GB available after infra):
+#   Java services (11): request 384Mi, limit 768Mi → MaxRAMPercentage=60 → ~460MB heap
+#   Go ws-gateway:      request 64Mi,  limit 128Mi
+#   Python ai-platform:  request 256Mi, limit 512Mi
+#
+# Probe timing (Spring Boot + Dubbo startup = 60-120s):
+#   readiness: initialDelay=30s, period=10s, failure=18 → 30+180=210s timeout
+#   liveness:  initialDelay=120s, period=15s, failure=10 → 120+150=270s timeout
+#
+# Env vars override Spring Boot profile YAML (OS env = level 6 > profile yaml = level 8).
+# Dubbo registry = N/A (no Nacos), Pulsar disabled, AOT disabled.
+# All infra (TiDB, Redis, Pulsar, Milvus, Neo4j) via K3s ClusterIP FQDNs.
+
+# ─── ConfigMap: logback-override (quiet logging for containers) ───
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logback-override
+  namespace: education-platform
+data:
+  logback.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder><pattern>%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n</pattern></encoder>
+      </appender>
+      <root level="INFO"><appender-ref ref="STDOUT" /></root>
+      <logger name="org.apache.dubbo" level="WARN"/>
+      <logger name="org.springframework" level="WARN"/>
+      <logger name="com.zaxxer.hikari" level="WARN"/>
+      <logger name="org.hibernate" level="WARN"/>
+    </configuration>
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 1: Core business services (TiDB-backed)
+# ═══════════════════════════════════════════════════════════
+
+# ─── core-business (8083) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-core-business
+  namespace: education-platform
+spec:
+  selector: { app: edu-core-business }
+  ports:
+    - { name: http, port: 8083, targetPort: 8083 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-core-business
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-core-business } }
+  template:
+    metadata: { labels: { app: edu-core-business } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-core-business:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8083 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:mysql://tidb-cluster-tidb.ekb-m2-aws-us-east-1.svc.cluster.local:4000/ep_business?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "root" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "" }
+            - { name: SPRING_DATASOURCE_DRIVER_CLASS_NAME, value: "com.mysql.cj.jdbc.Driver" }
+            - { name: SPRING_JPA_HIBERNATE_DDL_AUTO, value: "update" }
+            - { name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT, value: "org.hibernate.dialect.MySQLDialect" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8083 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── grading-service (8085) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-grading-service
+  namespace: education-platform
+spec:
+  selector: { app: edu-grading-service }
+  ports: [{ name: http, port: 8085, targetPort: 8085 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-grading-service
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-grading-service } }
+  template:
+    metadata: { labels: { app: edu-grading-service } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-grading-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8085 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: EP_DEV_REDIS_CLUSTER_ENABLED, value: "false" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:mysql://tidb-cluster-tidb.ekb-m2-aws-us-east-1.svc.cluster.local:4000/ep_itbackend?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "root" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "" }
+            - { name: SPRING_DATASOURCE_DRIVER_CLASS_NAME, value: "com.mysql.cj.jdbc.Driver" }
+            - { name: SPRING_JPA_HIBERNATE_DDL_AUTO, value: "update" }
+            - { name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT, value: "org.hibernate.dialect.MySQLDialect" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8085 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8085 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 2: Order + Payment (H2 in-mem, no external DB)
+# ═══════════════════════════════════════════════════════════
+
+# ─── order-platform (8084) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-order-platform
+  namespace: education-platform
+spec:
+  selector: { app: edu-order-platform }
+  ports: [{ name: http, port: 8084, targetPort: 8084 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-order-platform
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-order-platform } }
+  template:
+    metadata: { labels: { app: edu-order-platform } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-order-platform:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8084 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8084 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8084 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── payment-platform (8087) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-payment-platform
+  namespace: education-platform
+spec:
+  selector: { app: edu-payment-platform }
+  ports: [{ name: http, port: 8087, targetPort: 8087 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-payment-platform
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-payment-platform } }
+  template:
+    metadata: { labels: { app: edu-payment-platform } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-payment-platform:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8087 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8087 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8087 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 3: Knowledge platform services (TiDB + Milvus)
+# ═══════════════════════════════════════════════════════════
+
+# ─── knowledge-service (8071) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-knowledge-service
+  namespace: education-platform
+spec:
+  selector: { app: edu-knowledge-service }
+  ports: [{ name: http, port: 8071, targetPort: 8071 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-knowledge-service
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-knowledge-service } }
+  template:
+    metadata: { labels: { app: edu-knowledge-service } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-knowledge-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8071 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            # Override PostgreSQL → TiDB MySQL
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:mysql://tidb-cluster-tidb.ekb-m2-aws-us-east-1.svc.cluster.local:4000/knowledge?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "root" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "" }
+            - { name: SPRING_DATASOURCE_DRIVER_CLASS_NAME, value: "com.mysql.cj.jdbc.Driver" }
+            - { name: SPRING_JPA_HIBERNATE_DDL_AUTO, value: "update" }
+            - { name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT, value: "org.hibernate.dialect.MySQLDialect" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+            - { name: MILVUS_HOST, value: "milvus.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: MILVUS_PORT, value: "19530" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8071 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8071 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── retrieval-service (8072) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-retrieval-service
+  namespace: education-platform
+spec:
+  selector: { app: edu-retrieval-service }
+  ports: [{ name: http, port: 8072, targetPort: 8072 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-retrieval-service
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-retrieval-service } }
+  template:
+    metadata: { labels: { app: edu-retrieval-service } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-retrieval-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8072 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+            - { name: MILVUS_HOST, value: "milvus.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: MILVUS_PORT, value: "19530" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8072 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8072 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── tenant-service (8074) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-tenant-service
+  namespace: education-platform
+spec:
+  selector: { app: edu-tenant-service }
+  ports: [{ name: http, port: 8074, targetPort: 8074 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-tenant-service
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-tenant-service } }
+  template:
+    metadata: { labels: { app: edu-tenant-service } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-tenant-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8074 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            # Override PostgreSQL → TiDB MySQL
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:mysql://tidb-cluster-tidb.ekb-m2-aws-us-east-1.svc.cluster.local:4000/tenant?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "root" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "" }
+            - { name: SPRING_DATASOURCE_DRIVER_CLASS_NAME, value: "com.mysql.cj.jdbc.Driver" }
+            - { name: SPRING_JPA_HIBERNATE_DDL_AUTO, value: "update" }
+            - { name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT, value: "org.hibernate.dialect.MySQLDialect" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8074 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8074 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── agent-service (8073) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-agent-service
+  namespace: education-platform
+spec:
+  selector: { app: edu-agent-service }
+  ports: [{ name: http, port: 8073, targetPort: 8073 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-agent-service
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-agent-service } }
+  template:
+    metadata: { labels: { app: edu-agent-service } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-agent-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8073 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1500m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            # Override PostgreSQL → TiDB MySQL
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:mysql://tidb-cluster-tidb.ekb-m2-aws-us-east-1.svc.cluster.local:4000/knowledge?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "root" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "" }
+            - { name: SPRING_DATASOURCE_DRIVER_CLASS_NAME, value: "com.mysql.cj.jdbc.Driver" }
+            - { name: SPRING_JPA_HIBERNATE_DDL_AUTO, value: "update" }
+            - { name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT, value: "org.hibernate.dialect.MySQLDialect" }
+            - { name: SPRING_DATA_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+            - { name: AI_PLATFORM_GATEWAY_URL, value: "http://edu-ai-platform:8086" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8073 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8073 }
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 4: BFF + Data platform
+# ═══════════════════════════════════════════════════════════
+
+# ─── knowledge-bff (8070) — Spring Cloud Gateway ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-knowledge-bff
+  namespace: education-platform
+spec:
+  selector: { app: edu-knowledge-bff }
+  ports: [{ name: http, port: 8070, targetPort: 8070 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-knowledge-bff
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-knowledge-bff } }
+  template:
+    metadata: { labels: { app: edu-knowledge-bff } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-knowledge-bff:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8070 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            # Override lb:// routes → direct http:// (no Nacos)
+            - { name: SPRING_CLOUD_GATEWAY_ROUTES_0_URI, value: "http://edu-knowledge-service:8071" }
+            - { name: SPRING_CLOUD_GATEWAY_ROUTES_1_URI, value: "http://edu-retrieval-service:8072" }
+            - { name: SPRING_CLOUD_GATEWAY_ROUTES_2_URI, value: "http://edu-agent-service:8073" }
+            - { name: SPRING_CLOUD_GATEWAY_ROUTES_3_URI, value: "http://edu-tenant-service:8074" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8070 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8070 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ─── data-platform (8082) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-data-platform
+  namespace: education-platform
+spec:
+  selector: { app: edu-data-platform }
+  ports: [{ name: http, port: 8082, targetPort: 8082 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-data-platform
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-data-platform } }
+  template:
+    metadata: { labels: { app: edu-data-platform } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-data-platform:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8082 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: EP_DEV_ONLY, value: "true" }
+            - { name: EP_ROLE, value: "api" }
+            - { name: EP_CACHE_REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: EP_CACHE_REDIS_PORT, value: "6379" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8082 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8082 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 10
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 5: AI platform (Python/Granian)
+# ═══════════════════════════════════════════════════════════
+
+# ─── ai-platform (8086) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-ai-platform
+  namespace: education-platform
+spec:
+  selector: { app: edu-ai-platform }
+  ports: [{ name: http, port: 8086, targetPort: 8086 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-ai-platform
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-ai-platform } }
+  template:
+    metadata: { labels: { app: edu-ai-platform } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-ai-platform:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8086 }]
+          resources:
+            requests: { memory: "256Mi", cpu: "200m" }
+            limits:   { memory: "512Mi", cpu: "1000m" }
+          env:
+            - { name: LLM_MODE, value: "mock" }
+            - { name: MILVUS_HOST, value: "milvus.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: MILVUS_PORT, value: "19530" }
+            - { name: REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: REDIS_PORT, value: "6379" }
+            - { name: PULSAR_URL, value: "pulsar://pulsar-broker.ekb-m2-aws-us-east-1.svc.cluster.local:6650" }
+          readinessProbe:
+            httpGet: { path: /health, port: 8086 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: { path: /health, port: 8086 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 5
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 6: WebSocket gateway (Go)
+# ═══════════════════════════════════════════════════════════
+
+# ─── ws-gateway (8081) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-ws-gateway
+  namespace: education-platform
+spec:
+  selector: { app: edu-ws-gateway }
+  ports: [{ name: http, port: 8081, targetPort: 8081 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-ws-gateway
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-ws-gateway } }
+  template:
+    metadata: { labels: { app: edu-ws-gateway } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-ws-gateway:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8081 }]
+          resources:
+            requests: { memory: "64Mi", cpu: "100m" }
+            limits:   { memory: "128Mi", cpu: "500m" }
+          env:
+            - { name: PORT, value: "8081" }
+            - { name: REDIS_HOST, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local" }
+            - { name: REDIS_PORT, value: "6379" }
+            - { name: REDIS_ADDR, value: "redis-cluster-new.ekb-m2-aws-us-east-1.svc.cluster.local:6379" }
+          volumeMounts:
+            - { name: jwt-keys, mountPath: /etc/jwt, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: jwt-keys
+          secret: { secretName: jwt-keys, defaultMode: 0440 }
+
+---
+# ═══════════════════════════════════════════════════════════
+# Tier 7: Portal BFF (entry point for frontend)
+# ═══════════════════════════════════════════════════════════
+
+# ─── portal-bff (8090) ───
+apiVersion: v1
+kind: Service
+metadata:
+  name: edu-portal-bff
+  namespace: education-platform
+spec:
+  selector: { app: edu-portal-bff }
+  ports: [{ name: http, port: 8090, targetPort: 8090 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edu-portal-bff
+  namespace: education-platform
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: edu-portal-bff } }
+  template:
+    metadata: { labels: { app: edu-portal-bff } }
+    spec:
+      containers:
+        - name: app
+          image: esp/edu-portal-bff:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8090 }]
+          resources:
+            requests: { memory: "384Mi", cpu: "200m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }
+          envFrom:
+            - configMapRef: { name: edu-common-config }
+            - configMapRef: { name: edu-dubbo-config }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_AOT_ENABLED, value: "false" }
+            - { name: EP_PULSAR_ENABLED, value: "false" }
+            - { name: DUBBO_REGISTRY_ADDRESS, value: "N/A" }
+            - { name: EP_PROXY_ENABLED, value: "true" }
+            - { name: EP_PROXY_DATA_HOST, value: "http://edu-data-platform:8082" }
+            - { name: EP_PROXY_AI_HOST, value: "http://edu-ai-platform:8086" }
+            - { name: EP_PROXY_ITBACKEND_HOST, value: "http://edu-grading-service:8085" }
+            - { name: EP_PROXY_KNOWLEDGE_HOST, value: "http://edu-knowledge-bff:8070" }
+            - { name: EP_PROXY_ORDER_HOST, value: "http://edu-order-platform:8084" }
+            - { name: EP_PROXY_PAYMENT_HOST, value: "http://edu-payment-platform:8087" }
+          volumeMounts:
+            - { name: jwt-keys, mountPath: /etc/jwt, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8090 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8090 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 10
+      volumes:
+        - name: jwt-keys
+          secret: { secretName: jwt-keys, defaultMode: 0440 }
+
+---
+# ═══════════════════════════════════════════════════════════
+# Ingress: Fix existing routes to use correct ports
+# www.edu.com → frontend-portal:80 (already correct)
+# api.edu.com → portal-bff:8090 (was :80, fixing)
+# api.edu.com/ws → ws-gateway:8081 (already correct)
+# ═══════════════════════════════════════════════════════════
+
+# Fix portal-bff ingress (was pointing to port 80, should be 8090)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edu-unified-ingress
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/name: portal-bff
+    app.kubernetes.io/part-of: education-platform
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.edu.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: edu-portal-bff
+                port:
+                  number: 8090

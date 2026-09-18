@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>agent-service</artifactId>
-  <name>SP-07 Agent Service</name>
+  <name>Knowledge Agent Service</name>
 
   <dependencies>
     <dependency>

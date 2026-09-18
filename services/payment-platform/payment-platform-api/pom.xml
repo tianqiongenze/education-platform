@@ -11,7 +11,7 @@
 
   <artifactId>payment-platform-api</artifactId>
   <packaging>jar</packaging>
-  <name>SP03 Payment API (Dubbo Interfaces &amp; DTOs)</name>
+  <name>Payment API (Dubbo Interfaces &amp; DTOs)</name>
 
   <dependencies>
     <dependency>

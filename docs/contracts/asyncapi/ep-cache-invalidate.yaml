@@ -1,0 +1,73 @@
+asyncapi: 3.0.0
+info:
+  title: Cache Invalidation Events
+  version: 1.0.0
+  description: >
+    Event-driven contract for cross-service cache invalidation published to Apache Pulsar.
+    Part of D-207 SDD completion — contract-first AsyncAPI specs.
+    Publisher: All 8 Java services + Go ws-gateway + Python ai-platform (via ep-cache /
+    ep-common-go/cache / ep-common-python/cache).
+    Subscribers: Same set of services — all listen for cache invalidation to evict
+    local L1 (Caffeine) entries. Topic short name is "ep-cache-invalidate" (D-197,
+    com.ep.cache.event.EventTopics.CACHE_INVALIDATE).
+servers:
+  production:
+    host: pulsar://pulsar-broker:6650
+    protocol: pulsar
+    description: Production Pulsar cluster
+channels:
+  ep-cache-invalidate:
+    address: persistent://public/default/ep-cache-invalidate
+    description: >
+      Topic for cross-service cache invalidation messages. When a service evicts
+      an L2 (Redis) entry, it broadcasts an InvalidateMsg here so every other
+      service's L1 cache can evict the same key. Payload is the InvalidateMsg
+      POJO (com.ep.cache.InvalidateMsg) serialized as JSON.
+    messages:
+      CacheInvalidateEvent:
+        $ref: '#/components/messages/CacheInvalidateEvent'
+operations:
+  publishCacheInvalidateEvent:
+    action: send
+    channel:
+      $ref: '#/channels/ep-cache-invalidate'
+    messages:
+      - $ref: '#/components/messages/CacheInvalidateEvent'
+  subscribeCacheInvalidateEvent:
+    action: receive
+    channel:
+      $ref: '#/channels/ep-cache-invalidate'
+    messages:
+      - $ref: '#/components/messages/CacheInvalidateEvent'
+components:
+  messages:
+    CacheInvalidateEvent:
+      description: >
+        Cache invalidation broadcast message. Published by any service that
+        evicts an L2 cache entry; consumed by all services to evict their L1.
+        Maps to com.ep.cache.InvalidateMsg (cacheName + key).
+      headers:
+        type: object
+        properties:
+          eventType:
+            type: string
+            enum: [CacheInvalidateEvent]
+          originService:
+            type: string
+            description: Name of the service that emitted the invalidation.
+          timestamp:
+            type: string
+            format: date-time
+      payload:
+        $ref: '#/components/schemas/CacheInvalidateEventPayload'
+  schemas:
+    CacheInvalidateEventPayload:
+      type: object
+      required: [cacheName, key]
+      properties:
+        cacheName:
+          type: string
+          description: The named cache region to invalidate (e.g. "course", "user").
+        key:
+          type: string
+          description: The cache key to evict.

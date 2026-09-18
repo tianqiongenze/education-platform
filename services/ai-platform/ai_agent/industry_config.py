@@ -1,4 +1,4 @@
-"""Industry configuration — industry-agnostic AI middleware (SP-04).
+"""Industry configuration — industry-agnostic AI middleware (AI).
 
 The AI middleware infrastructure (memory, harness, MCP, A2A, plugin, hermes,
 gateway) is industry-agnostic. All industry-specific behavior is expressed as

@@ -40,7 +40,7 @@ dubbo:
     name: dubbo
     port: 20885
     threads: 500        # P0: 默认200不够1000并发, 扩到500
-    threadpool: cached  # P0: cached弹性线程池, 适配突发流量(配合D-039虚拟线程)
+    threadpool: fixed   # D-216 P2-5: cached+500 platform threads is an anti-pattern in the virtual-thread era  # P0: cached弹性线程池, 适配突发流量(配合D-039虚拟线程)
   scan:
     base-packages: com.ep.grading
   consumer:
@@ -122,7 +122,7 @@ springdoc:
     path: /swagger-ui.html
 
 # ai-platform integration: subjective-question AI grading via Dubbo.
-# Disabled by default so dev/test never depends on sp04 being up.
+# Disabled by default so dev/test never depends on the AI gateway being up.
 ep:
   cache:
     enabled: true  # D-182: adopt ep-cache SDK (L1 Caffeine + L2 Redis + Pub/Sub broadcast)
@@ -130,3 +130,17 @@ ep:
     enabled: ${AI_GRADING_ENABLED:false}
     timeout-ms: 30000
     fallback: pending  # pending | fail
+  # D-216: Disruptor event pipelines for grading-service.
+  #   - grading-events pipeline (homework/live domain events → Pulsar outbox)
+  #   - Yjs update batch buffer (collaborative-edit updates → snapshot store)
+  # Default OFF so existing tests/dev-local boot unaffected; production enables it.
+  disruptor:
+    enabled: false
+    yjs:
+      buffer-size: 16384
+      wait-strategy: SLEEPING
+  pulsar:
+    enabled: false
+    service-url: pulsar://localhost:6650
+    topic:
+      domain-events: persistent://public/default/ep-grading-domain-events

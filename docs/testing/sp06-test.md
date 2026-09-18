@@ -1,5 +1,7 @@
 # SP-06 多端前端骨架 —— 测试方案文档
 
+> **D-200 Naming Note:** This document's filename retains the legacy code `sp06` for reference continuity. Per D-137, sp06 → portal-bff. The subproject has been renamed in all source code, configs, and directory structure.
+
 | 编号 | 版本 | 日期 | 状态 | 编制 | 依据 |
 |------|------|------|------|------|------|
 | SP06-TEST-001 | v1.0 | 2026-08-04 | Approved | ZCode(测试架构师) | SP06-SRS-001 / SP06-SAD-001 / SP06-SDD-001 / D-031 |

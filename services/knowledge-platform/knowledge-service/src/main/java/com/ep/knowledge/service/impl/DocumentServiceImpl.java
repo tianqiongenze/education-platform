@@ -25,6 +25,9 @@ public class DocumentServiceImpl implements DocumentService {
     // D-182: cache names and TTL for knowledge document metadata (600s).
     private static final String CACHE_DOCUMENT = "knowledge:document";
     private static final long DOCUMENT_TTL_SEC = 600;
+    /** 补齐高频未缓存读：document list 按 tenant+category 缓存（60s）。 */
+    private static final String CACHE_DOCUMENT_LIST = "knowledge:document:list";
+    private static final long DOCUMENT_LIST_TTL_SEC = 60;
 
     /**
      * Allowlist of file extensions permitted for upload. Any extension not in
@@ -65,7 +68,9 @@ public class DocumentServiceImpl implements DocumentService {
         doc.setCreatedAt(LocalDateTime.now());
         documentMapper.insert(doc);
         // D-182: evict potentially cached null for this document id.
-        cacheService.evict(CACHE_DOCUMENT, String.valueOf(doc.getId()));
+        // P0 (audit: 租户未进 key): tenant-scoped evict mirrors the tenant-scoped get.
+        cacheService.evict(CACHE_DOCUMENT, tenantId, String.valueOf(doc.getId()));
+        cacheService.evictAll(CACHE_DOCUMENT_LIST); // a new document changes the tenant's list
         log.info("Uploaded document {} for tenant {}", doc.getId(), tenantId);
         return doc;
     }
@@ -73,7 +78,9 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     public Document get(String tenantId, String id) {
         // D-182: cache read-only document metadata (600s, cacheEmpty=true).
-        return cacheService.getOrLoad(CACHE_DOCUMENT, id,
+        // P0 (audit: 租户未进 key): the tenant is part of the key — without it,
+        // tenant A's cached Document (same id namespace) could be served to tenant B.
+        return cacheService.getOrLoad(CACHE_DOCUMENT, tenantId, id,
                 () -> getDirect(tenantId, id), DOCUMENT_TTL_SEC, true);
     }
 
@@ -90,15 +97,21 @@ public class DocumentServiceImpl implements DocumentService {
         Document doc = documentMapper.selectById(id);
         if (doc != null && tenantId.equals(doc.getTenantId())) {
             documentMapper.deleteById(id);
-            // D-182: evict cache entry after delete.
-            cacheService.evict(CACHE_DOCUMENT, id);
+            // D-182: evict cache entry after delete (P0: tenant-scoped key).
+            cacheService.evict(CACHE_DOCUMENT, tenantId, id);
+            cacheService.evictAll(CACHE_DOCUMENT_LIST);
         }
     }
 
     @Override
     public List<Document> list(String tenantId, String categoryId) {
-        return documentMapper.selectList(
-                new LambdaQueryWrapper<Document>().eq(Document::getTenantId, tenantId));
+        // 补齐高频未缓存读：list 结果按 tenant+category 缓存 60s（tenant 已在
+        // 缓存 key 维度中，category 维度取参数本身，null 归一为 "all"）。
+        String categoryKey = categoryId == null || categoryId.isBlank() ? "all" : categoryId;
+        return cacheService.getOrLoad(CACHE_DOCUMENT_LIST, tenantId, categoryKey,
+                () -> documentMapper.selectList(
+                        new LambdaQueryWrapper<Document>().eq(Document::getTenantId, tenantId)),
+                DOCUMENT_LIST_TTL_SEC, false);
     }
 
     @Override
@@ -116,12 +129,11 @@ public class DocumentServiceImpl implements DocumentService {
 
         if (devMode) {
             log.info("Parse-and-chunk (EP_DEV_ONLY): simulated 1 chunk for document {}", documentId);
-            doc.setChunkCount(1);
-            doc.setStatus("PARSED");
-            doc.setUpdatedAt(LocalDateTime.now());
+            // D-201: delegate to the aggregate's state machine (UPLOADED -> PARSED).
+            doc.markParsed(1);
             documentMapper.updateById(doc);
-            // D-182: evict cache entry after metadata change.
-            cacheService.evict(CACHE_DOCUMENT, documentId);
+            // D-182: evict cache entry after metadata change (P0: tenant-scoped key).
+            cacheService.evict(CACHE_DOCUMENT, doc.getTenantId(), documentId);
             return 1;
         }
 
@@ -131,14 +143,13 @@ public class DocumentServiceImpl implements DocumentService {
         log.info("Parse-and-chunk invoked for document {} (format={})", documentId, doc.getFormat());
         // TODO: fetch content from MinIO via doc.getContentPath(), then:
         //   List<String> chunks = DocumentParser.parseAndChunk(content, doc.getFormat());
-        //   doc.setChunkCount(chunks.size());
+        //   doc.markParsed(chunks.size());
         //   persist chunks to vector store
-        doc.setChunkCount(0);
-        doc.setStatus("PARSED");
-        doc.setUpdatedAt(LocalDateTime.now());
+        // D-201: delegate to the aggregate's state machine (UPLOADED -> PARSED).
+        doc.markParsed(0);
         documentMapper.updateById(doc);
-        // D-182: evict cache entry after metadata change.
-        cacheService.evict(CACHE_DOCUMENT, documentId);
+        // D-182: evict cache entry after metadata change (P0: tenant-scoped key).
+        cacheService.evict(CACHE_DOCUMENT, doc.getTenantId(), documentId);
         return 0;
     }
 

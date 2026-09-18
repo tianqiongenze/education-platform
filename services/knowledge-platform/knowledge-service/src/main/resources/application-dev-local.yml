@@ -45,6 +45,25 @@ minio:
 seata:
   enabled: false
 
+# D-216: ep.data opt-in template (H2 mode, disabled by default).
+# When enabled=true, EpDataAutoConfiguration creates a dual HikariCP pool
+# (write + read) wrapped by EpRoutingDataSource + LazyConnectionDataSourceProxy.
+# In H2 mode the read pool collapses onto the write pool (no read replicas),
+# so the dual-pool topology is exercised without needing a second database.
+# Leave disabled in dev-local to preserve the spring.datasource.* H2 setup above.
+ep:
+  data:
+    enabled: false
+    provider: h2
+    read-replicas: false
+    follower-reads: false
+    write:
+      database: ep_knowledge
+      maximum-pool-size: 10
+    read:
+      database: ep_knowledge
+      maximum-pool-size: 10
+
 logging:
   level:
     root: INFO

@@ -3,6 +3,9 @@ package com.ep.bff.proxy;
 import com.ep.bff.config.ProxyConfig.ProxyProps;
 import com.ep.bff.proxy.ProxyController.Match;
 import com.ep.cache.CacheService;
+import com.ep.web.common.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -12,6 +15,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -32,6 +36,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  * D-182: Tests also verify GET responses are cached via ep-cache SDK (120s)
  * and non-GET methods bypass the cache.
  * <p>
+ * Cache audit fix (BFF 聚合缓存串号): caching now applies ONLY to whitelisted
+ * public read-only GET paths ({@code ep.bff.cache-paths}) and the cache key
+ * carries the tenant dimension.
+ * <p>
  * Uses {@link MockRestServiceServer} bound to the real RestClient.Builder
  * so the full forward path (header copy, body copy, URI build) is exercised
  * without real network calls. matchRoute is unit-tested directly too.
@@ -47,18 +55,30 @@ class ProxyControllerTest {
         "/proxy/payment", "http://localhost:8087"
     );
 
+    @BeforeEach
+    void setUp() {
+        TenantContext.clear();
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
+
     /**
      * Creates a CacheService mock that simulates a cache miss: it invokes the
      * loader Supplier so the actual forward happens (needed for MockRestServiceServer
      * to intercept the call). This lets existing forward-path tests work unchanged.
+     * <p>
+     * Cache audit fix: stubs the tenant-scoped 6-arg overload (loader at index 3).
      */
     @SuppressWarnings("unchecked")
     private static CacheService cacheMiss() {
         CacheService cs = mock(CacheService.class);
         // Cache miss: always invoke the loader so the real forward executes.
-        when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+        when(cs.getOrLoad(anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
             .thenAnswer(inv -> {
-                Supplier<ResponseEntity<byte[]>> loader = inv.getArgument(2);
+                Supplier<ResponseEntity<byte[]>> loader = inv.getArgument(3);
                 return loader.get();
             });
         return cs;
@@ -86,12 +106,18 @@ class ProxyControllerTest {
         return new MockHttpServletRequest(method, uri);
     }
 
+    private static MockHttpServletRequest reqWithTenant(String method, String uri, String tenantId) {
+        MockHttpServletRequest r = new MockHttpServletRequest(method, uri);
+        r.addHeader("X-Tenant-Id", tenantId);
+        return r;
+    }
+
     private static RestClient dummyClient() {
         return RestClient.builder().build();
     }
 
     @Test
-    @DisplayName("matchRoute: /proxy/data/v3/api-docs → sp02 base + /v3/api-docs")
+    @DisplayName("matchRoute: /proxy/data/v3/api-docs → data-platform base + /v3/api-docs")
     void matchRoute_data() {
         ProxyController c = new ProxyController(dummyClient(),
             new ProxyProps(true, 10000, ROUTES), cacheMiss());
@@ -217,7 +243,7 @@ class ProxyControllerTest {
     }
 
     @Test
-    @DisplayName("D-182: GET request invokes cache getOrLoad")
+    @DisplayName("D-182: whitelisted GET request invokes cache getOrLoad")
     void get_request_uses_cache() {
         CacheService cs = cacheMiss();
         Wired w = new Wired(RestClient.builder(), cs);
@@ -225,13 +251,118 @@ class ProxyControllerTest {
             .andRespond(withSuccess("{\"openapi\":\"3.0.1\"}".getBytes(), MediaType.APPLICATION_JSON));
         var resp = w.controller.proxy(req("GET", "/proxy/data/v3/api-docs"));
         assertEquals(200, resp.getStatusCode().value());
+        // Cache audit fix: tenant dimension ("default" without X-Tenant-Id) in the key.
         verify(cs, times(1)).getOrLoad(
             eq("bff:aggregation"),
+            eq("default"),
             eq("GET:http://localhost:8082/v3/api-docs"),
             any(Supplier.class),
             eq(120L),
             eq(false));
         w.server.verify();
+    }
+
+    @Test
+    @DisplayName("Cache audit: default whitelist covers public course list/detail GETs")
+    void course_list_path_is_cached_by_default() {
+        CacheService cs = cacheMiss();
+        Wired w = new Wired(RestClient.builder(), cs);
+        w.server.expect(requestTo("http://localhost:8082/api/courses"))
+            .andRespond(withSuccess("[]".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = w.controller.proxy(req("GET", "/proxy/data/api/courses"));
+        assertEquals(200, resp.getStatusCode().value());
+        verify(cs, times(1)).getOrLoad(
+            eq("bff:aggregation"), eq("default"), eq("GET:http://localhost:8082/api/courses"),
+            any(Supplier.class), eq(120L), eq(false));
+        w.server.verify();
+    }
+
+    @Test
+    @DisplayName("Cache audit: non-whitelisted GET bypasses the cache entirely")
+    void non_whitelisted_get_bypasses_cache() {
+        CacheService cs = cacheMiss();
+        Wired w = new Wired(RestClient.builder(), cs);
+        w.server.expect(requestTo("http://localhost:8082/users/me"))
+            .andRespond(withSuccess("{}".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = w.controller.proxy(req("GET", "/proxy/data/users/me"));
+        assertEquals(200, resp.getStatusCode().value());
+        // Personalized responses must never be cached.
+        verify(cs, never()).getOrLoad(
+            anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean());
+        w.server.verify();
+    }
+
+    @Test
+    @DisplayName("Cache audit: X-Tenant-Id header enters the cache key")
+    void tenant_header_enters_cache_key() {
+        CacheService cs = cacheMiss();
+        Wired w = new Wired(RestClient.builder(), cs);
+        w.server.expect(requestTo("http://localhost:8082/v3/api-docs"))
+            .andRespond(withSuccess("{}".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = w.controller.proxy(reqWithTenant("GET", "/proxy/data/v3/api-docs", "tenant-9"));
+        assertEquals(200, resp.getStatusCode().value());
+        verify(cs, times(1)).getOrLoad(
+            eq("bff:aggregation"), eq("tenant-9"),
+            eq("GET:http://localhost:8082/v3/api-docs"),
+            any(Supplier.class), eq(120L), eq(false));
+        w.server.verify();
+    }
+
+    @Test
+    @DisplayName("Cache audit: configurable whitelist (ep.bff.cache-paths) replaces the default")
+    void custom_whitelist_replaces_default() {
+        // Part 1: default path (/proxy/data/v3/api-docs) is NOT cached when a
+        // custom whitelist is provided. Use a fresh RestClient + MockServer.
+        {
+            CacheService cs1 = cacheMiss();
+            RestClient.Builder b1 = RestClient.builder();
+            MockRestServiceServer server1 = MockRestServiceServer.bindTo(b1).build();
+            ProxyController c1 = new ProxyController(b1.build(),
+                new ProxyProps(true, 10000, ROUTES), cs1, List.of("/proxy/data/health"));
+
+            server1.expect(requestTo("http://localhost:8082/v3/api-docs"))
+                .andRespond(withSuccess("{}".getBytes(), MediaType.APPLICATION_JSON));
+            c1.proxy(req("GET", "/proxy/data/v3/api-docs"));
+            verify(cs1, never()).getOrLoad(
+                anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean());
+            server1.verify();
+        }
+
+        // Part 2: custom path IS cached. Separate RestClient + MockServer so
+        // MockRestServiceServer doesn't reject expectations after actual requests.
+        {
+            CacheService cs2 = cacheMiss();
+            RestClient.Builder b2 = RestClient.builder();
+            MockRestServiceServer server2 = MockRestServiceServer.bindTo(b2).build();
+            ProxyController c2 = new ProxyController(b2.build(),
+                new ProxyProps(true, 10000, ROUTES), cs2, List.of("/proxy/data/health"));
+
+            server2.expect(requestTo("http://localhost:8082/health"))
+                .andRespond(withSuccess("ok".getBytes(), MediaType.APPLICATION_JSON));
+            c2.proxy(req("GET", "/proxy/data/health"));
+            verify(cs2, times(1)).getOrLoad(
+                eq("bff:aggregation"), eq("default"), eq("GET:http://localhost:8082/health"),
+                any(Supplier.class), eq(120L), eq(false));
+            server2.verify();
+        }
+    }
+
+    @Test
+    @DisplayName("Cache audit: ep.bff.cache-paths=none disables response caching")
+    void none_whitelist_disables_caching() {
+        CacheService cs = cacheMiss();
+        RestClient.Builder b = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(b).build();
+        ProxyController c = new ProxyController(b.build(),
+            new ProxyProps(true, 10000, ROUTES), cs, List.of("none"));
+
+        server.expect(requestTo("http://localhost:8082/v3/api-docs"))
+            .andRespond(withSuccess("{}".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = c.proxy(req("GET", "/proxy/data/v3/api-docs"));
+        assertEquals(200, resp.getStatusCode().value());
+        verify(cs, never()).getOrLoad(
+            anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean());
+        server.verify();
     }
 
     @Test
@@ -246,7 +377,7 @@ class ProxyControllerTest {
         assertEquals(200, resp.getStatusCode().value());
         // Cache must NOT be consulted for non-GET methods.
         verify(cs, never()).getOrLoad(
-            anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean());
+            anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean());
         w.server.verify();
     }
 
@@ -257,7 +388,7 @@ class ProxyControllerTest {
         ResponseEntity<byte[]> cached = ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
             .body("{\"cached\":true}".getBytes());
-        when(cs.getOrLoad(anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
+        when(cs.getOrLoad(anyString(), anyString(), anyString(), any(Supplier.class), anyLong(), anyBoolean()))
             .thenReturn(cached);
 
         Wired w = new Wired(RestClient.builder(), cs);
@@ -268,5 +399,29 @@ class ProxyControllerTest {
         assertArrayEquals("{\"cached\":true}".getBytes(), resp.getBody());
         // No upstream call should have been made.
         w.server.verify();
+    }
+
+    // ---- shouldCache unit tests ------------------------------------------
+
+    @Test
+    @DisplayName("shouldCache: never caches non-GET methods")
+    void shouldCache_rejectsNonGet() {
+        ProxyController c = new ProxyController(dummyClient(),
+            new ProxyProps(true, 10000, ROUTES), cacheMiss());
+        assertFalse(c.shouldCache(HttpMethod.POST, "/proxy/data/v3/api-docs"));
+        assertFalse(c.shouldCache(HttpMethod.DELETE, "/proxy/data/api/courses/1"));
+        assertFalse(c.shouldCache(HttpMethod.GET, null));
+    }
+
+    @Test
+    @DisplayName("shouldCache: honours the default whitelist patterns")
+    void shouldCache_defaultWhitelist() {
+        ProxyController c = new ProxyController(dummyClient(),
+            new ProxyProps(true, 10000, ROUTES), cacheMiss());
+        assertTrue(c.shouldCache(HttpMethod.GET, "/proxy/data/v3/api-docs"));
+        assertTrue(c.shouldCache(HttpMethod.GET, "/proxy/knowledge/api/courses"));
+        assertTrue(c.shouldCache(HttpMethod.GET, "/proxy/knowledge/api/courses"));
+        assertTrue(c.shouldCache(HttpMethod.GET, "/proxy/data/api/course/42"));
+        assertFalse(c.shouldCache(HttpMethod.GET, "/proxy/data/users/me"));
     }
 }

@@ -199,14 +199,31 @@ func (cs *CacheService) Put(ctx context.Context, cacheName, key string, value an
 // message on InvalidateChannel so other nodes clear their L1. This is the
 // correctness fix: the previous ws-gateway Evict only cleared the local L1+L2
 // and never broadcast, leaving stale L1 entries on peer pods.
+//
+// D-216 cross-language wire contract: the payload is JSON
+// {"cacheName":"...","key":"..."} — identical to the Java ep-cache
+// RedisCacheBroadcast (InvalidateMsg). The previous raw "cache:key" string was
+// invisible to Java/Python subscribers and vice versa, so invalidation never
+// propagated across languages.
 func (cs *CacheService) Evict(ctx context.Context, cacheName, key string) {
 	fk := fullKey(cacheName, key)
 	cs.l1Remove(fk)
 	if cs.rdb != nil {
 		cs.rdb.Del(ctx, fk)
-		// Broadcast the full key so peers evict exactly this entry.
-		_ = cs.rdb.Publish(ctx, InvalidateChannel, fk).Err()
+		// Broadcast the cross-language JSON contract (see D-216 note above).
+		payload, err := json.Marshal(invalidateMsg{CacheName: cacheName, Key: key})
+		if err != nil {
+			// marshal of two strings cannot fail in practice; fall back to raw
+			payload = []byte(fk)
+		}
+		_ = cs.rdb.Publish(ctx, InvalidateChannel, payload).Err()
 	}
+}
+
+// invalidateMsg mirrors the Java ep-cache InvalidateMsg wire format.
+type invalidateMsg struct {
+	CacheName string `json:"cacheName"`
+	Key       string `json:"key"`
 }
 
 // --- L1 (LRU + per-entry TTL) ---
@@ -282,6 +299,10 @@ func (cs *CacheService) l2Set(ctx context.Context, fk string, value any, ttl tim
 
 // listenInvalidations subscribes to InvalidateChannel and evicts received keys
 // from the local L1. It runs until ctx is cancelled or the subscription closes.
+//
+// D-216: accepts the unified JSON wire format {"cacheName","key"} (Java/Go/
+// Python contract) and, during the rolling-upgrade window, the legacy raw
+// "cache:key" string and the legacy Python {"cache","key"} field name.
 func (cs *CacheService) listenInvalidations(ctx context.Context) {
 	defer cs.wg.Done()
 	pubsub := cs.rdb.Subscribe(ctx, InvalidateChannel)
@@ -297,8 +318,35 @@ func (cs *CacheService) listenInvalidations(ctx context.Context) {
 				return
 			}
 			if msg != nil {
-				cs.l1Remove(msg.Payload)
+				if fk := parseInvalidatePayload(msg.Payload); fk != "" {
+					cs.l1Remove(fk)
+				}
 			}
 		}
 	}
+}
+
+// parseInvalidatePayload extracts the full cache key from a broadcast payload,
+// accepting the D-216 JSON contract plus both legacy formats.
+func parseInvalidatePayload(payload string) string {
+	var m struct {
+		CacheName string `json:"cacheName"`
+		Cache     string `json:"cache"` // legacy Python field
+		Key       string `json:"key"`
+	}
+	if err := json.Unmarshal([]byte(payload), &m); err == nil {
+		name := m.CacheName
+		if name == "" {
+			name = m.Cache
+		}
+		if name != "" && m.Key != "" {
+			return fullKey(name, m.Key)
+		}
+		return ""
+	}
+	// legacy Go raw "cache:key" — treat as an already-composed full key
+	if payload != "" {
+		return payload
+	}
+	return ""
 }

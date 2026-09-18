@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 
 /**
- * D-045 Core memory manager for SP-07/SP-02/SP-03.
+ * D-045 Core memory manager for knowledge-platform/data-platform/core-business.
  *
  * <p>Chooses between Dubbo RPC ({@link MemoryRpcService}) and HTTP fallback
  * ({@link MemoryClient}) based on {@code ep.memory.use-rpc}. All operations

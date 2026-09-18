@@ -1,0 +1,89 @@
+// Input styles — values come from @ep/design-tokens (--ep-* CSS variables).
+// Each var() has a fallback so the field still renders if tokens are absent.
+.ep-input {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  background-color: var(--ep-color-bg-container, #ffffff);
+  border: 1px solid var(--ep-color-border-base, #d9d9d9);
+  border-radius: var(--ep-input-border-radius, 6px);
+  transition: border-color var(--ep-motion-duration-base, 200ms)
+      var(--ep-motion-easing-standard, ease),
+    box-shadow var(--ep-motion-duration-base, 200ms)
+      var(--ep-motion-easing-standard, ease);
+
+  &__field {
+    flex: 1 1 auto;
+    width: 100%;
+    height: var(--ep-input-height-md, 32px);
+    padding: 0 var(--ep-space-3, 12px);
+    border: none;
+    background: transparent;
+    color: var(--ep-color-text-primary, #262626);
+    font-size: var(--ep-font-size-md, 14px);
+    line-height: 1.5;
+    outline: none;
+    appearance: none;
+
+    &::placeholder {
+      color: var(--ep-color-text-tertiary, #bfbfbf);
+    }
+  }
+
+  &__prefix,
+  &__suffix {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--ep-space-2, 8px);
+    color: var(--ep-color-text-secondary, #8c8c8c);
+    font-size: var(--ep-font-size-md, 14px);
+  }
+
+  &__prefix {
+    padding-left: var(--ep-space-3, 12px);
+  }
+
+  &__suffix {
+    padding-right: var(--ep-space-3, 12px);
+  }
+
+  &--with-prefix .ep-input__field {
+    padding-left: 0;
+  }
+
+  &--with-suffix .ep-input__field {
+    padding-right: 0;
+  }
+
+  &--focused {
+    border-color: var(--ep-color-border-brand, #1890ff);
+    box-shadow: 0 0 0 2px var(--ep-color-blue-1, #e6f7ff);
+  }
+
+  &--error {
+    border-color: var(--ep-color-status-error, #ff4d4f);
+
+    &.ep-input--focused {
+      box-shadow: 0 0 0 2px var(--ep-color-status-error-bg, #fff1f0);
+    }
+  }
+
+  &--warning {
+    border-color: var(--ep-color-status-warning, #fa8c16);
+
+    &.ep-input--focused {
+      box-shadow: 0 0 0 2px var(--ep-color-status-warning-bg, #fff7e6);
+    }
+  }
+
+  &--disabled {
+    background-color: var(--ep-color-bg-secondary, #fafafa);
+    color: var(--ep-color-text-tertiary, #bfbfbf);
+    cursor: not-allowed;
+
+    .ep-input__field {
+      cursor: not-allowed;
+      color: var(--ep-color-text-tertiary, #bfbfbf);
+    }
+  }
+}

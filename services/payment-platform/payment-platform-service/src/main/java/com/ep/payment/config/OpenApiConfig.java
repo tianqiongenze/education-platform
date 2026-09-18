@@ -20,7 +20,7 @@ public class OpenApiConfig {
     public OpenAPI epOpenAPI() {
         return new OpenAPI()
             .info(new Info()
-                .title("SP03 Payment API")
+                .title("core-business Payment API")
                 .description("Education Platform — Payment Middle Platform")
                 .version("1.0.0")
                 .contact(new Contact().name("EP Team")))

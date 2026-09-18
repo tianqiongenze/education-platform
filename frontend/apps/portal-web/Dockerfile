@@ -10,7 +10,7 @@
 # Docker build context is frontend/ so the whole workspace is available.
 #
 # Build:
-#   docker build -t harbor.edu.internal/education-platform/frontend-portal:1.0.0 \
+#   docker build -t esp/edu-frontend-portal:1.0.0 \
 #       -f frontend/apps/portal-web/Dockerfile frontend/
 
 ARG NODE_VERSION=22
@@ -24,7 +24,8 @@ RUN corepack enable && corepack prepare pnpm@11.0.0 --activate
 WORKDIR /repo
 
 # Copy the whole workspace (manifests + lockfile first for better layer cache).
-COPY frontend/ ./
+# Build context is frontend/ itself, so COPY . ./
+COPY . ./
 
 WORKDIR /repo/apps/portal-web
 

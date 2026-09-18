@@ -1,0 +1,375 @@
+openapi: 3.0.3
+info:
+  title: Tenant Service API
+  description: |
+    Education Platform — Tenant Service (port 8074). Multi-tenant control
+    plane: tenant CRUD, API key management, usage metering, and billing
+    invoices. Contract-first spec (D-206).
+  version: 1.0.0
+  contact:
+    name: EP Team
+servers:
+  - url: http://localhost:8074
+    description: Local dev
+security:
+  - tenantAuth: []
+tags:
+  - name: tenants
+    description: Tenant management
+  - name: api-keys
+    description: API key management
+  - name: metering
+    description: Usage metering
+  - name: billing
+    description: Billing invoices
+
+paths:
+  /api/v1/tenants:
+    post:
+      tags: [tenants]
+      summary: Create a tenant
+      operationId: createTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Tenant'
+      responses:
+        '200':
+          description: Created tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}:
+    get:
+      tags: [tenants]
+      summary: Get a tenant by id
+      operationId: getTenant
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: Tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/quota:
+    put:
+      tags: [tenants]
+      summary: Update tenant quota (platform_admin only)
+      operationId: updateTenantQuota
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quota]
+              properties:
+                quota:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: Updated tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/api-keys:
+    post:
+      tags: [api-keys]
+      summary: Create a new API key for a tenant
+      operationId: createApiKey
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: Created API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [api-keys]
+      summary: List API keys for a tenant
+      operationId: listApiKeys
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKey'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/api-keys/{keyId}:
+    delete:
+      tags: [api-keys]
+      summary: Revoke a tenant API key (platform_admin only)
+      operationId: revokeApiKey
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/KeyIdPath'
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '204':
+          description: Revoked
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/usage:
+    post:
+      tags: [metering]
+      summary: Record a usage event
+      operationId: recordUsage
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsageEvent'
+      responses:
+        '202':
+          description: Recorded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/usage/{period}:
+    get:
+      tags: [metering]
+      summary: Summarize usage for a billing period
+      operationId: summarizeUsage
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/PeriodPath'
+      responses:
+        '200':
+          description: Usage summary (resourceType → quantity)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                  format: int64
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/invoices/{period}:
+    post:
+      tags: [billing]
+      summary: Generate an invoice for a billing period
+      operationId: generateInvoice
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/PeriodPath'
+      responses:
+        '200':
+          description: Generated invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInvoice'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/tenants/{id}/invoices:
+    get:
+      tags: [billing]
+      summary: List invoices for a tenant
+      operationId: listInvoices
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingInvoice'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    tenantAuth:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+  parameters:
+    TenantIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    KeyIdPath:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+    PeriodPath:
+      name: period
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Billing period identifier (e.g. 2026-08)
+    RoleHeader:
+      name: X-Role
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Role for RBAC (platform_admin required for privileged ops)
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        quota:
+          type: integer
+          format: int64
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        keyPrefix:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+    UsageEvent:
+      type: object
+      required: [resourceType, quantity]
+      properties:
+        resourceType:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+    BillingInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        period:
+          type: string
+        totalAmount:
+          type: number
+          format: double
+        currency:
+          type: string
+        status:
+          type: string
+        lineItems:
+          type: array
+          items:
+            type: object
+            properties:
+              resourceType:
+                type: string
+              quantity:
+                type: integer
+                format: int64
+              unitPrice:
+                type: number
+                format: double
+              amount:
+                type: number
+                format: double
+        createdAt:
+          type: string
+          format: date-time

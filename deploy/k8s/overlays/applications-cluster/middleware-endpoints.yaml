@@ -1,0 +1,61 @@
+# D-225: middleware endpoint overrides for the applications-cluster.
+#
+# VERIFIED LIVE 2026-09-06 (kubectl on k8s-master 10.167.2.175):
+#   - Database: NO TiDB. CockroachDB 3-node in `infra`
+#     (svc cockroachdb.infra 26257, PG wire, insecure mode, db `education`).
+#   - Redis Cluster: `redis8` StatefulSet in `dify-plus`
+#     (per-node svcs redis8-node-0/1/2, port 6379).
+#   - Pulsar: broker up, bookies crashlooping (repair tracked separately);
+#     services boot with D-195 no-op event/cache publishing.
+#   - Milvus: milvus.infra:19530 (NodePort svc 30909).
+#   - Nacos: NOT PRESENT → Dubbo registry N/A (wave-1 degraded discovery).
+#
+# Keys below are the env names the services ACTUALLY consume
+# (application-prod.yml: ${TIDB_URL}, ${DB_USERNAME}, ${DB_PASSWORD};
+#  Spring relaxed binding: SPRING_DATASOURCE_* overrides yml,
+#  SPRING_DATA_REDIS_CLUSTER_NODES activates ep-cache RedisClusterConfiguration).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: education-platform
+data:
+  # --- Spring profile for all Java services (base deployments don't set it) ---
+  SPRING_PROFILES_ACTIVE: "prod"
+
+  # --- Database: CockroachDB via PostgreSQL wire protocol (D-202 dual-DB path) ---
+  TIDB_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: "org.postgresql.Driver"
+  DB_USERNAME: "root"
+  DB_PASSWORD: ""
+  DB_POOL_SIZE: "10"
+
+  # --- Redis Cluster (dify-plus, shared) ---
+  SPRING_DATA_REDIS_CLUSTER_NODES: "redis8-node-0.dify-plus.svc.cluster.local:6379,redis8-node-1.dify-plus.svc.cluster.local:6379,redis8-node-2.dify-plus.svc.cluster.local:6379"
+  REDIS_HOST: "redis8-node-0.dify-plus.svc.cluster.local"
+  REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: "difyai123456"
+  SPRING_DATA_REDIS_CLUSTER_PASSWORD: "difyai123456"
+
+  # --- Dubbo registry: no Nacos on this cluster (wave-1 degraded) ---
+  NACOS_ADDR: "N/A"
+  NACOS_SERVER_ADDR: "N/A"
+  DUBBO_REGISTRY_ADDRESS: "N/A"
+  DUBBO_METADATA_REPORT_ADDRESS: "N/A"
+  DUBBO_CONFIG_CENTER_ADDRESS: "N/A"
+
+  # --- Pulsar (degraded: bookies repair tracked in runbook) ---
+  PULSAR_URL: "pulsar://pulsar.infra.svc.cluster.local:6650"
+  PULSAR_WEB_URL: "http://pulsar.infra.svc.cluster.local:8080"
+
+  # --- JPA dialect: base yml hardcodes H2Dialect; CRDB needs PostgreSQL ---
+  SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: "org.hibernate.dialect.PostgreSQLDialect"
+
+  # --- Seata: no Seata TC / Nacos on this cluster (D-113 Saga engine is
+  #     in-JVM; the global-tx client would fail startup against N/A registry) ---
+  SEATA_ENABLED: "false"
+
+  # --- Milvus vector DB ---
+  MILVUS_HOST: "milvus.infra.svc.cluster.local"
+  MILVUS_PORT: "19530"

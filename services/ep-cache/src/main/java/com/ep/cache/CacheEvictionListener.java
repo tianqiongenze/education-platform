@@ -38,6 +38,15 @@ public class CacheEvictionListener {
             if (cm == null || msg.getCacheName() == null) {
                 return;
             }
+            // D-216: reserved key "*" clears the WHOLE cache (evictAll broadcast)
+            if ("*".equals(msg.getKey())) {
+                Cache whole = cm.getCache(msg.getCacheName());
+                if (whole != null) {
+                    whole.clear();
+                    log.info("evict-all broadcast received — cleared L1 cache {}", msg.getCacheName());
+                }
+                return;
+            }
             Cache cache = cm.getCache(msg.getCacheName());
             if (cache != null && msg.getKey() != null) {
                 cache.evict(msg.getKey());
