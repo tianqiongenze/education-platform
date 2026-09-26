@@ -32,12 +32,12 @@ jobs:
           - services/senior-care
           - services/boardgame-service
           - services/integration-tests
-          - services/ep-memory-java
-          - services/ep-web-common
+          - services/libs-java/ep-memory-java
+          - services/libs-java/ep-web-common
           - services/grading-api
           - services/order-platform/order-platform-api
           - services/payment-platform/payment-platform-api
-          - services/ep-cache
+          - services/libs-java/ep-cache
     steps:
       - uses: actions/checkout@v4
       - name: Setup Java 21
@@ -128,12 +128,12 @@ jobs:
           - services/knowledge-platform/mcp-server
           - services/senior-care
           - services/boardgame-service
-          - services/ep-memory-java
-          - services/ep-web-common
+          - services/libs-java/ep-memory-java
+          - services/libs-java/ep-web-common
           - services/grading-api
           - services/order-platform/order-platform-api
           - services/payment-platform/payment-platform-api
-          - services/ep-cache
+          - services/libs-java/ep-cache
     steps:
       - uses: actions/checkout@v4
       - name: Download coverage artifact

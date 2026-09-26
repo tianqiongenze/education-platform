@@ -6,8 +6,8 @@ on:
     paths:
       - 'services/ai-platform/**/*.py'
       - 'services/ai-platform/pyproject.toml'
-      - 'services/ep-common-python/**/*.py'
-      - 'services/ep-common-python/pyproject.toml'
+      - 'services/libs-python/ep-common-python/**/*.py'
+      - 'services/libs-python/ep-common-python/pyproject.toml'
   push:
     branches: [main]
   workflow_dispatch:
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/ep-common-python
+        working-directory: services/libs-python/ep-common-python
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python 3.12
@@ -101,7 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-coverage-ep-common-python
-          path: services/ep-common-python/coverage.xml
+          path: services/libs-python/ep-common-python/coverage.xml
           if-no-files-found: ignore
 
   coverage-gate:

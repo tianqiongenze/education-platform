@@ -787,3 +787,28 @@ Iron Law 8 三方案对比:
 - 缓存专项: singleflight防击穿+TTL±20%抖动+租户进key+SCAN+命中率指标 (6.5→8.0)
 - 部署决策: 暂停远程部署 (P-11 fastjson SPI 修法已录 runbook); 复用 infra CRDB+dify-plus RedisCluster
 - 决策总数: 226
+
+
+## D-227~D-229: 登录闭环+消费者矩阵+目录方案A+部署恢复 (2026-09-19)
+
+| 决策 | 描述 | 日期 | 状态 |
+|---|---|---|---|
+| D-227 | 验证码+JWT注销+登录闭环 (CaptchaService/AuthService/JwtRevocationFilter; 51t) | 2026-09-19 | ✅ |
+| D-228 | 事件消费者矩阵 1→4 (CourseArchived/UserFrozen/OrderPaid; 28t) | 2026-09-19 | ✅ |
+| D-229 | 目录方案A执行 (services 22→16项, libs三目录) + P-11 fastjson修复 + r5部署 | 2026-09-19 | ✅ |
+
+- 测试: 重构后全量 mvn -o test BUILD SUCCESS; Go ws-gateway+live-go PASS; Python ep_common import OK (pth 修复)
+- 决策总数: 229
+
+
+## D-230~D-231: 数据层双开关默认CRDB+真实集群部署修复链 (2026-09-26)
+
+| 决策 | 描述 | 日期 | 状态 |
+|---|---|---|---|
+| D-230 | 数据层双开关: EpDataEnabledCondition 安全阀 + 默认 COCKROACHDB (参考 English-Study-Platform 模式); ep-data 29t PASS | 2026-09-26 | ✅ |
+| D-231 | r5~r7 部署修复链: fastjson v1 兼容/registry N/A/JWT 公钥格式/Jackson2 共享 bean/副本定容 (core/portal=2 其余=1) | 2026-09-26 | 🟡 |
+
+- 部署进展: 6 服务镜像 r7 双节点; payment 全代 Running; edu-dubbo-config 已 patch N/A; jwt-keys 正确格式重建
+- 剩余阻塞: 部分 Java 服务运行期初始化阻塞 (HTTP /actuator 未就绪, 详见 runbook §7 排查清单)
+- 功能测试脚本就绪: scripts/post-deploy-functional-test.sh (T0~T7, 服务就绪即跑)
+- 决策总数: 231

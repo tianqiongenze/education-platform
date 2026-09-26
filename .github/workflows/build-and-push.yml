@@ -56,7 +56,7 @@ jobs:
           java-version: '21'
           cache: 'maven'
       - name: Install local path dependencies (ep-* / order-platform-api / payment-platform-api)
-        run: mvn -B -DskipTests install -pl services/ep-web-common,services/grading-api,services/ep-cache,services/ep-memory-java,services/order-platform/order-platform-api,services/payment-platform/payment-platform-api,services/knowledge-platform/knowledge-api -am || true
+        run: mvn -B -DskipTests install -pl services/libs-java/ep-web-common,services/grading-api,services/libs-java/ep-cache,services/libs-java/ep-memory-java,services/order-platform/order-platform-api,services/payment-platform/payment-platform-api,services/knowledge-platform/knowledge-api -am || true
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:

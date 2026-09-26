@@ -1,0 +1,12 @@
+# D-231: replica counts sized to node capacity (worker1 ~14 spare CPU cores
+# after shared workloads; master kept out of new scheduling pressure).
+# Core paths get 2 replicas for availability; everything else 1.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: replicas-sizing
+  namespace: education-platform
+data:
+  core-business: "2"
+  portal-bff: "2"
+  default: "1"

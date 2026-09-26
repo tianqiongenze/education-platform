@@ -23,7 +23,7 @@ spring:
 
 dubbo:
   registry:
-    address: nacos://${NACOS_ADDR}
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://${NACOS_ADDR}}
 
 csp:
   sentinel:

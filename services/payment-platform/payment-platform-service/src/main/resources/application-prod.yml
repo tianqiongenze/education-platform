@@ -43,7 +43,7 @@ dubbo:
     name: dubbo
     port: 20887
   registry:
-    address: nacos://${NACOS_ADDR}
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://${NACOS_ADDR}}
 
 csp:
   sentinel:

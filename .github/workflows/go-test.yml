@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'services/ws-gateway/**'
-      - 'services/ep-common-go/**'
+      - 'services/libs-go/ep-common-go/**'
       - 'services/**/go.mod'
       - 'services/**/go.sum'
   push:
@@ -20,7 +20,7 @@ jobs:
       matrix:
         service:
           - services/ws-gateway
-          - services/ep-common-go
+          - services/libs-go/ep-common-go
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go

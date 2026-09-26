@@ -80,7 +80,7 @@ build_jib() {
 build_ws_gateway() {
   log "docker build: ws-gateway:$VERSION"
   # Context is services/ so the go.mod replace directive for ep-common-go
-  # (-> ../ep-common-go) resolves inside the build context.
+  # (-> ../libs-go/ep-common-go) resolves inside the build context.
   docker build -t "${REGISTRY}/ws-gateway:${VERSION}" \
       -f services/ws-gateway/Dockerfile services/
   [ "${SKIP_PUSH:-0}" = "1" ] || docker push "${REGISTRY}/ws-gateway:${VERSION}"
@@ -90,7 +90,7 @@ build_ws_gateway() {
 build_ai_platform() {
   log "docker build: ai-platform:$VERSION"
   # Context is services/ so pyproject.toml's local path dep
-  # ep-common -> ../ep-common-python resolves.
+  # ep-common -> ../libs-python/ep-common-python resolves.
   docker build -t "${REGISTRY}/ai-platform:${VERSION}" \
       -f services/ai-platform/Dockerfile services/
   [ "${SKIP_PUSH:-0}" = "1" ] || docker push "${REGISTRY}/ai-platform:${VERSION}"

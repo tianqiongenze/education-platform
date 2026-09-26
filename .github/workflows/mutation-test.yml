@@ -35,7 +35,7 @@ jobs:
           java-version: '21'
           cache: 'maven'
       - name: Install ep-web-common (dependency)
-        working-directory: services/ep-web-common
+        working-directory: services/libs-java/ep-web-common
         run: mvn install -DskipTests -B -q
       - name: Run PITest mutation testing
         working-directory: ${{ matrix.service }}

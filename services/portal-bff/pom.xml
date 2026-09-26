@@ -192,6 +192,13 @@
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- D-229/P-11: Dubbo JsonUtils SPI probes fastjson v1 API at runtime;
+         without it Dubbo module start fails (NoClassDefFoundError). -->
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>fastjson</artifactId>
+      <version>2.0.58</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

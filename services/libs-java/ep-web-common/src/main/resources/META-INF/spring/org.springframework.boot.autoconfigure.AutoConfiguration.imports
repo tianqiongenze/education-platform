@@ -1,0 +1,8 @@
+com.ep.web.common.config.VirtualThreadDbAutoConfiguration
+com.ep.web.common.ActuatorSecurityAutoConfiguration
+com.ep.web.common.RateLimitAutoConfiguration
+com.ep.web.common.RiskControlAutoConfiguration
+com.ep.web.common.audit.AuditLogAutoConfiguration
+com.ep.web.common.tenant.TenantWebAutoConfiguration
+com.ep.web.common.security.JwtRevocationAutoConfiguration
+com.ep.web.common.jackson.Jackson2CompatAutoConfiguration

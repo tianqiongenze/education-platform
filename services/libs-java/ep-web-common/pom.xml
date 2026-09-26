@@ -1,0 +1,176 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    ep-web-common — shared HTTP infrastructure (NOT domain logic) for the
+    education-platform backend services.
+
+    Contains cross-cutting web-layer concerns that were previously copy-pasted
+    into 6 services (core-business, grading-service, and 4 knowledge-platform services):
+      - RoleChecker        : reads the BFF-injected X-Role header
+      - ForbiddenException : HTTP 403 domain-agnostic authz signal
+      - ErrorResponse      : structured error body for BFF clients
+      - GlobalExceptionHandler : @RestControllerAdvice mapping the above
+
+    Per Philipp Hauer / CircleCI guidance, infrastructure code (security,
+    HTTP error handling) SHOULD be shared; domain logic should NOT. This JAR
+    is intentionally infrastructure-only — it knows nothing about courses,
+    orders, tenants, grading, etc.
+  -->
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.7</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.ep</groupId>
+  <artifactId>ep-web-common</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>ep-web-common</name>
+  <description>Shared HTTP/security infrastructure for education-platform services</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- All runtime dependencies are `provided`: they are supplied by the
+         consuming Spring Boot application at runtime. This keeps ep-web-common
+         a thin library that cannot lock consumers into specific versions. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- GlobalExceptionHandler maps these to HTTP 404/409. They are provided
+         by any Spring Data JPA consumer; declared here (provided scope) so the
+         library compiles standalone without forcing JPA onto non-JPA consumers. -->
+    <dependency>
+      <groupId>jakarta.persistence</groupId>
+      <artifactId>jakarta.persistence-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-tx</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- P1-6: VirtualThreadDbAutoConfiguration 依赖 Spring Boot 自动装配注解
+         (@AutoConfiguration / @ConditionalOnProperty)。provided 由消费方
+         Spring Boot 应用在运行时提供。 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-autoconfigure</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- P1-4: ActuatorSecurityAutoConfiguration secures /actuator/** endpoints
+         with HTTP Basic + ACTUATOR role. provided by consuming Spring Boot apps. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Bean Validation API (jakarta.validation) used by shared web infra
+         (e.g. request DTOs / Rate Limiting annotations). provided by consumers. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Resilience4j auto-configuration support for shared rate-limiting
+         infrastructure. provided by consumers that enable rate limiting. -->
+    <dependency>
+      <groupId>io.github.resilience4j</groupId>
+      <artifactId>resilience4j-spring-boot3</artifactId>
+      <version>2.2.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Spring Data Redis: used by RedisWindowCounter (risk-control cluster-wide
+         rate limit counter). provided by consumers that have spring-data-redis. -->
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-redis</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- AspectJ: used by AuditLogAspect (@Around audit logging). provided by
+         consumers that have spring-boot-starter-aop. -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Spring AOP infrastructure: used by AuditLogAutoConfiguration to register
+         the AuditLogAspect bean. provided by consumers. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-aop</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- test -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.14.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>5.18.0</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- P0-3/P1-8 tests: MockHttpServletRequest/MockHttpServletResponse. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- D-231: Jackson 2 databind — the shared ObjectMapper compat bean is
+         compiled against it; services already ship it transitively. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>21</release>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

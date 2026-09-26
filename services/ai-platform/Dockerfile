@@ -31,7 +31,7 @@ WORKDIR /src
 
 # Copy the ai-platform project and its local path dependency.
 COPY ai-platform/ ./ai-platform/
-COPY ep-common-python/ ./ep-common-python/
+COPY libs-python/ep-common-python/ ./libs-python/ep-common-python/
 
 WORKDIR /src/ai-platform
 

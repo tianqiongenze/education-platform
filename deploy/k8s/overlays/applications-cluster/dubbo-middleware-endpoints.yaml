@@ -3,7 +3,9 @@
 #   * Checked-in value is a cross-namespace FQDN PLACEHOLDER.
 #   * scripts/deploy-applications-cluster.sh discovers the real Nacos
 #     Service (`kubectl -n infra get svc`) and rewrites both files.
-#   * If Nacos cannot be discovered at deploy time the script ABORTS.
+#   * D-231: applications-cluster has NO Nacos — registry/metadata/config
+#     center are set to N/A (Dubbo no-registry mode; direct discovery
+#     restored in Wave-2 with a project-local Nacos).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,6 +13,6 @@ metadata:
   namespace: education-platform
 data:
   # Dubbo 3.3.6 registry/metadata/config — Nacos in infra namespace.
-  DUBBO_REGISTRY_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"
-  DUBBO_METADATA_REPORT_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"
-  DUBBO_CONFIG_CENTER_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848?namespace=education-platform"
+  DUBBO_REGISTRY_ADDRESS: "N/A"
+  DUBBO_METADATA_REPORT_ADDRESS: "N/A"
+  DUBBO_CONFIG_CENTER_ADDRESS: "N/A"

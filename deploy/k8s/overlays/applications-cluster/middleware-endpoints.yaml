@@ -23,6 +23,18 @@ data:
   # --- Spring profile for all Java services (base deployments don't set it) ---
   SPRING_PROFILES_ACTIVE: "prod"
 
+  # --- D-230: data-layer dual switch (TiDB | CRDB), DEFAULT = CRDB.
+  # The ep-data library activates on ep.data.enabled=true (or by default when
+  # an endpoint exists) and routes write→CRDB leader, read→follower reads.
+  # Flip to TiDB by setting EP_DATA_PROVIDER=tidb + the TiDB URLs below.
+  EP_DATA_ENABLED: "true"
+  EP_DATA_PROVIDER: "cockroachdb"
+  EP_DATA_WRITE_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"
+  EP_DATA_READ_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"
+  EP_DATA_READ_REPLICAS: "false"   # single CRDB endpoint → read pool collapses onto write
+  EP_DATA_WRITE_MAXIMUM_POOL_SIZE: "8"
+  # DB_USERNAME / DB_PASSWORD already bound below (root / empty, insecure mode)
+
   # --- Database: CockroachDB via PostgreSQL wire protocol (D-202 dual-DB path) ---
   TIDB_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://cockroachdb.infra.svc.cluster.local:26257/education?sslmode=disable"

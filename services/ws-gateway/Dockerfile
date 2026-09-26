@@ -11,12 +11,12 @@
 #       services/ws-gateway
 #
 # Note: ws-gateway depends on the local replace directive for
-# github.com/education-platform/ep-common-go (-> ../ep-common-go). The Docker
+# github.com/education-platform/ep-common-go (-> ../libs-go/ep-common-go). The Docker
 # build context is services/ws-gateway, so we vendor ep-common-go into the
 # build by copying it from a sibling context. To keep the build self-contained,
-# the builder stage clones ep-common-go is NOT needed here because go build
+# vendored at libs-go/ep-common-go — go build
 # resolves the replace via the local filesystem; the build context must include
-# ../ep-common-go. See deploy/build/build-all-images.sh which sets the context
+# resolves. See deploy/build/build-all-images.sh which sets the context
 # to services/ and uses -f services/ws-gateway/Dockerfile so the replace path
 # resolves.
 
@@ -35,7 +35,7 @@ WORKDIR /src
 COPY ws-gateway/ ./ws-gateway/
 
 # Copy the locally-replaced ep-common-go sibling module (go.mod replace target).
-COPY ep-common-go/ ./ep-common-go/
+COPY libs-go/ep-common-go/ ./libs-go/ep-common-go/
 
 WORKDIR /src/ws-gateway
 

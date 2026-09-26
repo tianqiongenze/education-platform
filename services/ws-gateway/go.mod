@@ -11,7 +11,7 @@ require (
 // D-109: shared utilities extracted from ws-gateway.
 require github.com/education-platform/ep-common-go v0.0.0
 
-replace github.com/education-platform/ep-common-go => ../ep-common-go
+replace github.com/education-platform/ep-common-go => ../libs-go/ep-common-go
 
 require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect

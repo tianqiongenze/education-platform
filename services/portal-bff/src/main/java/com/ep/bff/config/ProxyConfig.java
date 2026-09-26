@@ -51,6 +51,19 @@ public class ProxyConfig {
      * with Spring Boot 4). Configured with the connect/read timeout from
      * {@code ep.proxy.timeout-ms}.
      */
+    /**
+     * D-231: Boot 4 auto-configures a Jackson 3 (tools.jackson) ObjectMapper;
+     * the BFF's servlet filters and event consumers are written against the
+     * Jackson 2 API (com.fasterxml). Expose the Jackson 2 mapper explicitly.
+     */
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(com.fasterxml.jackson.databind.ObjectMapper.class)
+    @Bean
+    public com.fasterxml.jackson.databind.ObjectMapper bffJackson2ObjectMapper() {
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+                .findAndRegisterModules()
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    }
+
     @Bean
     public RestClient proxyRestClient(ProxyProps props) {
         int timeoutMs = props.timeoutMs() > 0 ? props.timeoutMs() : 10000;

@@ -25,7 +25,7 @@
     <module>knowledge-bff</module>
     <module>mcp-server</module>
     <!-- D-045: ep-memory Java SDK lives alongside knowledge-platform but is shared -->
-    <module>../ep-memory-java</module>
+    <module>../libs-java/ep-memory-java</module>
   </modules>
 
   <properties>

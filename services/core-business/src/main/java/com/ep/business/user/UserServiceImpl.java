@@ -36,7 +36,7 @@ public class UserServiceImpl implements UserService {
                            PulsarEventPublisher eventPublisher,
                            CacheService cacheService) {
         this.userRepository = userRepository;
-        PasswordEncoder encoder = passwordEncoderProvider.getIfAvailable();
+        PasswordEncoder encoder = passwordEncoderProvider.getIfUnique();
         this.passwordEncoder = encoder != null ? encoder : new BCryptPasswordEncoder();
         this.eventPublisher = eventPublisher;
         this.cacheService = cacheService;

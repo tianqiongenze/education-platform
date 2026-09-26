@@ -118,7 +118,20 @@ domain(grading/order/payment) → edge(portal-bff/ws-gateway/ingress) → autosc
 
 ---
 
-| P-11 | Dubbo 启动即崩：`NoClassDefFoundError com/alibaba/fastjson/JSONException`（r4 新副本） | Dubbo 3.3.6 `JsonUtils` 按 SPI 顺序尝试 `FastJsonImpl`（fastjson **v1**）；树里只有 fastjson2（2.0.56），v1 类缺失 | **待修（部署暂停）**：给 dubbo 服务显式加 `com.alibaba:fastjson:2.0.58-compatible`（v1 API shim，fastjson2 官方兼容包），或 `-Ddubbo.application.json-util=gson` 强制走 Gson 实现（gson 已在树中）；根因与 redisson 同类——SPI 实现探测在运行期才发现缺类，构建期应加 enforcer 规则 |
+| P-11 | Dubbo 启动即崩：`NoClassDefFoundError com/alibaba/fastjson/JSONException`（r4 副本） | Dubbo 3.3.6 `JsonUtils` 按 SPI 顺序尝试 `FastJsonImpl`（fastjson **v1**）；树里只有 fastjson2（2.0.56），v1 类缺失 | **已修（D-229，r5）**：5 个 Dubbo 服务显式加 `com.alibaba:fastjson:2.0.58`（v1-API-over-fastjson2 官方兼容包）；备选 `-Ddubbo.application.json-util=gson` 未采用（需逐服务配置）；预防：SPI 探测类缺失构建期不可见 → 服务 pom 统一挂兼容包 |
+
+## 5.1 目录结构方案 A（已执行，D-229）
+
+```
+services/libs-java/{ep-web-common, ep-disruptor, ep-cache, ep-data, ep-memory-java}
+services/libs-go/ep-common-go
+services/libs-python/ep-common-python
+archive/ep-rw-java        (原 services/archive，移出顶层)
+services/ 22 项 → 16 项（Java/Go/Python 服务 + libs 三目录）
+```
+同步更新：根 pom modules、knowledge-platform `../libs-java/ep-memory-java`、
+go.mod replace ×2、ai-platform pyproject path、CI ×5、scripts ×2、
+build-all-images.sh、两服务 Dockerfile COPY（context=services/ 下 libs-go/、libs-python/）。
 
 ## 6. 已知降级项（Wave-1）
 
@@ -126,3 +139,31 @@ domain(grading/order/payment) → edge(portal-bff/ws-gateway/ingress) → autosc
 2. **事件发布 no-op**（D-195 路径）：Pulsar bookies 修复后自动恢复
 3. **NetworkPolicy/HPA 未启用**：功能验证通过后按 phase 3/8 补上
 4. **CRDB insecure 模式**：共享 infra 现状；生产化需 TLS + 用户鉴权（runbook 后续项）
+
+
+## 7. 运行期初始化阻塞排查清单（D-231 实测，2026-09-26）
+
+r7 六服务镜像双节点就绪；服务进入启动序列但部分服务 HTTP 未就绪（周期重启）。已修复层与当前待查层如下（按启动顺序排列，每层修完即暴露下一层）：
+
+| 层 | 已修复（镜像 r5~r7 已含） | 待查（当前阻塞） |
+|---|---|---|
+| Dubbo SPI | fastjson v1 兼容包（P-11） | — |
+| Dubbo 注册中心 | registry/config-center/metadata = N/A（无 nacos:// 前缀） | — |
+| Redis | 密码认证（SPRING_DATA_REDIS_PASSWORD） | Cluster 客户端连接验证 |
+| Jackson | Jackson2CompatAutoConfiguration（ep-web-common，全服务） | — |
+| JWT | jwt-keys Secret 重建（SPKI 公钥 + PKCS8 私钥，4 个键名） | — |
+| **数据层（CRDB 双池）** | EP_DATA_* 显式配置 + D-230 语义 | **疑似阻塞层：hibernate ddl-auto=update 在 CRDB 上执行 DDL 失败/挂起 → 排查命令见下** |
+| **Pulsar** | — | PULSAR_URL 消费确认（日志见 localhost:6650 重连刷屏=env 未被 yml 键引用） |
+
+排查命令（下次会话直接执行）：
+```bash
+# 1. 看当前死亡原因（最新一代 pod）
+ssh root@10.167.2.175 "kubectl -n education-platform logs <pod> --previous 2>&1 | grep -m1 -oE 'Error creating bean[^\"]{0,160}'"
+# 2. 验证 ep-data 是否接管（日志应有 '[ep-data] read/write split active: provider=cockroachdb'）
+ssh root@10.167.2.175 "kubectl -n education-platform logs <pod> 2>&1 | grep 'ep-data' | head -3"
+# 3. CRDB 建表验证（ddl-auto 首次连接即 DDL）
+ssh root@10.167.2.175 "kubectl exec cockroachdb-a-0 -n infra -- /cockroach-binary/cockroach sql --insecure --host=localhost:26257 -e 'SHOW TABLES FROM education;'"
+# 4. 临时缓解（若 DDL 是阻塞点）：ddl-auto 改 validate/none + 手动建表 DDL
+```
+
+关键判断：payment-platform 曾全代稳定 Running（N/A 修复后）→ 链路（CRDB+Redis+Jackson）不是全局阻断；按服务逐个收口即可。

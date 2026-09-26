@@ -1463,11 +1463,11 @@ flowchart LR
 
 ### 15.2 目录结构评分（v6 专项回答：services/ 混放符合软件工程要求吗）
 
-**5/10（及格线边缘）**。`services/` 平铺 22 项（6 共享库 + 12 业务服务 + 3 API 模块 + integration-tests + archive），Java/Go/Python 混放不可辨。
+**已从 5/10 提升至 ~7/10（方案 A 已执行，D-229）**。`services/` 内共享库收敛为 `libs-java/`（5 个）、`libs-go/`、`libs-python/` 三目录，archive/ 移出顶层，22 项 → 16 项；Java/Go/Python 边界可辨。
 
 | 方案 | 描述 | 成本 | 结论 |
 |---|---|---|---|
-| **A（推荐）** | services 内分 `libs-java/ libs-go/ libs-python/`，archive 移出 | S（半天） | 已批准，暂缓执行 |
+| **A ✅ 已执行** | services 内分 `libs-java/ libs-go/ libs-python/`，archive 移出 | S（半天） | D-229 完成（全量回归 PASS） |
 | B | 顶级 `java/ go/ python/ frontend/` | M（2-3天） | 渐进二步 |
 | C | 领域分组 `domains/{learning,commerce,...}` | L（1-2周） | 收益存疑 |
 
