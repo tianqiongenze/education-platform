@@ -70,6 +70,7 @@ public class ConversationContext {
     private final ObjectMapper mapper;
 
     /** Default constructor — dev/CI mode (no Redis). */
+    @org.springframework.beans.factory.annotation.Autowired
     public ConversationContext() {
         this(null);
     }

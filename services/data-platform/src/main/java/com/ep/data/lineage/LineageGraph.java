@@ -49,6 +49,7 @@ public class LineageGraph {
     private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
 
     /** Default constructor for dev/CI (no persistence). */
+    @org.springframework.beans.factory.annotation.Autowired
     public LineageGraph() {
         this.jdbcTemplateProvider = null;
     }

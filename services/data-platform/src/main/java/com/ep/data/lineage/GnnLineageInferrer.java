@@ -109,6 +109,7 @@ public class GnnLineageInferrer {
     private final Map<Long, LineageEdge> candidates = new ConcurrentHashMap<>();
 
     /** Default constructor — loads model.json from classpath if available. */
+    @org.springframework.beans.factory.annotation.Autowired
     public GnnLineageInferrer() {
         this(loadWeightsFromClasspath());
     }

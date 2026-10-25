@@ -58,6 +58,7 @@ public final class ScheduleOptimizer {
     private final ObjectProvider<ModelManager> modelManagerProvider;
 
     /** Default constructor — pure-Java rules (dev/CI mode). */
+    @org.springframework.beans.factory.annotation.Autowired
     public ScheduleOptimizer() {
         this(null);
     }

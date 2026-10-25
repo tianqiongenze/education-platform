@@ -47,6 +47,7 @@ public class TrinoExecutor {
      * @param configProvider Spring {@link ObjectProvider} for
      *        {@link TrinoConfig}; may be null in tests
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public TrinoExecutor(ObjectProvider<TrinoConfig> configProvider) {
         this.configProvider = configProvider;
     }

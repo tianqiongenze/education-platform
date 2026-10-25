@@ -65,6 +65,7 @@ public class IcebergAuditWriter {
      * @param jdbcTemplateProvider Spring {@link ObjectProvider} for
      *        {@link JdbcTemplate}; may be null in tests
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public IcebergAuditWriter(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
         this.jdbcTemplateProvider = jdbcTemplateProvider;
     }

@@ -49,6 +49,7 @@ public class GradingServiceImpl implements GradingService {
     @DubboReference
     private PlagiarismCheckFacade plagiarismService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public GradingServiceImpl(GradePipelineRepository pipelineRepository,
                               GradeStageRepository stageRepository,
                               IdempotencyService idempotencyService) {

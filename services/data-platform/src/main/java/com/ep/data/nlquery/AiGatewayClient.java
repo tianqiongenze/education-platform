@@ -68,6 +68,7 @@ public class AiGatewayClient {
     /**
      * Construct with configuration resolved from the environment.
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public AiGatewayClient() {
         this(NlQueryConfig.fromEnv());
     }

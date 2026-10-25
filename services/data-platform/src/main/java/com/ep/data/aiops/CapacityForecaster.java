@@ -65,6 +65,7 @@ public final class CapacityForecaster {
     private final ObjectProvider<ModelManager> modelManagerProvider;
 
     /** Create a forecaster with the default EWMA alpha (0.3) — dev/CI mode. */
+    @org.springframework.beans.factory.annotation.Autowired
     public CapacityForecaster() {
         this(DEFAULT_ALPHA, null);
     }

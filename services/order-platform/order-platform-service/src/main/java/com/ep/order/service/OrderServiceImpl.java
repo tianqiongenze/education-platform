@@ -136,6 +136,10 @@ public class OrderServiceImpl implements OrderService {
     /** D-218: pagination size cap (anti-scraping). */
     static final int MAX_PAGE_SIZE = 100;
 
+    // D-232: two constructors exist (this primary + the legacy 5-arg test
+    // compat below) — Spring needs @Autowired to pick this one instead of
+    // falling back to a (nonexistent) default constructor.
+    @org.springframework.beans.factory.annotation.Autowired
     public OrderServiceImpl(OrderRepository orderRepository,
                             PulsarEventPublisher eventPublisher,
                             StateMachineEngine sagaEngine,

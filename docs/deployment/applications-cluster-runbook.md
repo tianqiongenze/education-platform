@@ -167,3 +167,21 @@ ssh root@10.167.2.175 "kubectl exec cockroachdb-a-0 -n infra -- /cockroach-binar
 ```
 
 关键判断：payment-platform 曾全代稳定 Running（N/A 修复后）→ 链路（CRDB+Redis+Jackson）不是全局阻断；按服务逐个收口即可。
+
+
+## 8. D-232 逐层修复实录（r8→r10，2026-10-25 收口快照）
+
+| 代 | 修复 | 结果 |
+|---|---|---|
+| r8 | 一键幂等恢复（ns被外部回收者删除+节点镜像被清后 5 分钟重建全套） | 部署链恢复 |
+| r9 | 三重 bean 接线：OrderServiceImpl/ProcessSandboxExecutor 双构造器加 @Autowired；ProxyConfig 绑定移到 ProxyProps record + @EnableConfigurationProperties | 对应故障消失 |
+| r10 | 系统性修复 15 个多构造器 Spring/Dubbo bean（含 GradingServiceImpl、CacheService）；ep-cache/ep-web-common 重新 install | 下一层暴露 |
+
+**当前未收口层（下次会话从这里继续，均已实证）**：
+1. `edu-ws-gateway`：`crosspod: XReadGroup error: ERR Protocol error: unauthenticated multibulk length` → ws-gateway 的 Redis Streams 需要带 difyai123456 认证（查 src/cache 或 crosspod 的 Redis 客户端初始化，补 REDIS_PASSWORD env/配置）
+2. `edu-grading-service` / `edu-portal-bff` r10 代仍有下一层 bean 故障（本快照时未及抓取——用 §7 的批量抓取命令获取最新 fatal）
+3. `edu-core-business` Running 但 HTTP 未就绪（readiness /actuator/health/readiness 未过——查 readinessProbe 日志或端口）
+4. payment 曾全代稳定 Running + CRDB 5 表建成 → 数据层链路(CRDB+Redis+Jackson2)已验证可行，逐服务收口即可
+5. 部署命令注意：set image 的容器名 order-platform/payment-platform 对应镜像名 *-service（勿混）
+
+**外部回收者**：会周期性删除 education-platform ns + 清节点 docker images。对抗手段=deploy-r8.sh 一键幂等恢复（本地 jib tar 持久存在于各服务 target/）。

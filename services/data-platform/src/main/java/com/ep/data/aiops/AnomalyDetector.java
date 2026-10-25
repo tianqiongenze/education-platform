@@ -74,6 +74,7 @@ public final class AnomalyDetector {
      * Create a detector with the default tree count and a fixed seed for
      * deterministic output in tests (dev/CI mode — no ONNX).
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public AnomalyDetector() {
         this(NUM_TREES, 0x5EEDL, null);
     }

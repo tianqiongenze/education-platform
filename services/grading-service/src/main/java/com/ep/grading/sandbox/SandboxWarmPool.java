@@ -34,6 +34,7 @@ public class SandboxWarmPool {
     private final Map<LanguageSpec, Integer> minReady;
     private final int defaultMinReady;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SandboxWarmPool() {
         this(DEFAULT_MIN_READY);
     }

@@ -75,6 +75,7 @@ public class CacheService {
     private final AtomicLong loaderInvocations = new AtomicLong();
     private final AtomicLong loaderErrors = new AtomicLong();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public CacheService(ObjectProvider<CacheManager> cm,
                         ObjectProvider<RedisTemplate<String, Object>> redis,
                         ObjectProvider<CacheBroadcast> b) {

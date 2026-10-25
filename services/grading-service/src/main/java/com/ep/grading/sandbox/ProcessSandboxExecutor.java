@@ -55,6 +55,8 @@ public class ProcessSandboxExecutor implements SandboxExecutor {
 
     private final boolean sandboxEnabled;
 
+    // D-232: test ctor coexists — mark the production one for autowiring.
+    @org.springframework.beans.factory.annotation.Autowired
     public ProcessSandboxExecutor(@Value("${EP_DEV_ONLY:false}") String epDevOnly) {
         this.sandboxEnabled = isDevOnlySet(epDevOnly);
         if (sandboxEnabled) {

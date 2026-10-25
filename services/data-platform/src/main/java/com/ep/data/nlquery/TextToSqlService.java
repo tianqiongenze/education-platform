@@ -70,6 +70,7 @@ public class TextToSqlService {
      * @param sqlValidator         SQL white-list + AST validator
      * @param conversationContext  multi-turn conversation context
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public TextToSqlService(AiGatewayClient aiGatewayClient,
                             SqlValidator sqlValidator,
                             ConversationContext conversationContext) {

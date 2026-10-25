@@ -1,6 +1,7 @@
 package com.ep.bff.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,7 +31,10 @@ import java.util.Map;
  * accessible as {@code com.ep.bff.config.ProxyConfig.ProxyProps}.
  */
 @Configuration
-@ConfigurationProperties(prefix = "ep.proxy")
+// D-232: binding target is the ProxyProps record (registered below); the
+// outer class stays a plain @Configuration so it is no longer itself a
+// ConfigurationProperties bean (which left ProxyProps uninjectable).
+@EnableConfigurationProperties(ProxyConfig.ProxyProps.class)
 public class ProxyConfig {
 
     /**
@@ -39,6 +43,7 @@ public class ProxyConfig {
      * Using a record keeps the binding GraalVM-friendly (no reflective
      * setters) and immutable (D-039: no shared mutable state, no sync needed).
      */
+    @ConfigurationProperties(prefix = "ep.proxy")
     public record ProxyProps(
         @DefaultValue("false") boolean enabled,
         @DefaultValue("10000") int timeoutMs,

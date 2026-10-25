@@ -50,6 +50,7 @@ public class RateLimiter {
      * @param redisProvider Spring {@link ObjectProvider} for
      *        {@link StringRedisTemplate}; may be null in tests
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public RateLimiter(ObjectProvider<StringRedisTemplate> redisProvider) {
         this(DEFAULT_MAX_REQUESTS, DEFAULT_WINDOW_SECONDS, redisProvider);
     }

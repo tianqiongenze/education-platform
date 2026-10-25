@@ -75,6 +75,7 @@ public class ModelManager {
     private volatile boolean initialized = false;
 
     /** Default constructor — reads env vars and system properties. */
+    @org.springframework.beans.factory.annotation.Autowired
     public ModelManager() {
         this.env = createEnvironment();
         this.devOnly = computeDevOnly();
