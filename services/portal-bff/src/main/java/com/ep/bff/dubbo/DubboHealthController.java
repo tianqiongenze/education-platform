@@ -21,7 +21,7 @@ import java.util.Map;
 @RequestMapping("/api/v1/dubbo")
 public class DubboHealthController {
 
-    @DubboReference(check = false, timeout = 3000)
+    @DubboReference(check = false, timeout = 3000, url = "${dubbo.ref.health.url:}")
     private HealthRpcService healthRpcService;
 
     @GetMapping("/health")

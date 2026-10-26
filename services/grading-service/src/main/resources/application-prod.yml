@@ -25,6 +25,10 @@ spring:
 dubbo:
   registry:
     address: ${DUBBO_REGISTRY_ADDRESS:nacos://${NACOS_ADDR}}
+  consumer:
+    # D-232: registry=N/A mode — reference startup checks must be off,
+    # otherwise "No such any registry to reference" fails the boot.
+    check: false
 
 csp:
   sentinel:

@@ -63,7 +63,9 @@ func getService() *commoncache.CacheService {
 }
 
 // newClientFromEnv builds a Redis client from REDIS_HOST/REDIS_PORT, defaulting
-// to redis-cluster:6379.
+// to redis-cluster:6379. REDIS_PASSWORD enables AUTH (the shared dify-plus
+// redis8 cluster requires it — without AUTH the first command fails with
+// "ERR Protocol error: unauthenticated multibulk length", D-232).
 func newClientFromEnv() *redis.Client {
 	host := os.Getenv("REDIS_HOST")
 	if host == "" {
@@ -73,7 +75,16 @@ func newClientFromEnv() *redis.Client {
 	if port == "" {
 		port = "6379"
 	}
-	return redis.NewClient(&redis.Options{Addr: host + ":" + port})
+	opts := &redis.Options{Addr: host + ":" + port}
+	if pw := os.Getenv("REDIS_PASSWORD"); pw != "" {
+		opts.Password = pw
+	}
+	if db := os.Getenv("REDIS_DB"); db != "" {
+		if n, err := strconv.Atoi(db); err == nil {
+			opts.DB = n
+		}
+	}
+	return redis.NewClient(opts)
 }
 
 // SetClientForTest injects a mock Redis client and resets the singleton

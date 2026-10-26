@@ -25,7 +25,7 @@ import java.util.Objects;
 @RequestMapping("/api/v1/users")
 public class UserDubboController {
 
-    @DubboReference(check = false, timeout = 10000)  // P2: 3000→5000, 匹配core-business provider超时
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.user.url:}")  // P2 timeout + D-232 direct-url
     private UserService userService;
 
     @PostMapping

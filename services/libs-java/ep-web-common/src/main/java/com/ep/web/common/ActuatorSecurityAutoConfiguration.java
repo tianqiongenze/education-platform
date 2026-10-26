@@ -30,7 +30,7 @@ import org.springframework.security.web.SecurityFilterChain;
  *
  * <p>Behavior:
  * <ul>
- *   <li>{@code /actuator/health} and {@code /actuator/info} — permitAll</li>
+ *   <li>{@code /actuator/health} (+ subpaths, for K8s probes) and {@code /actuator/info} — permitAll</li>
  *   <li>all other {@code /actuator/**} — require role {@code ACTUATOR}</li>
  *   <li>authentication via HTTP Basic</li>
  *   <li>stateless (no HTTP session created)</li>
@@ -93,7 +93,12 @@ public class ActuatorSecurityAutoConfiguration {
         http
                 .securityMatcher("/actuator/**")
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // D-232: health probes must stay anonymous — K8s
+                        // startup/liveness/readiness probes cannot send Basic
+                        // credentials; a 401 on the startup probe kills
+                        // healthy pods in a boot loop.
+                        .requestMatchers("/actuator/health", "/actuator/health/**",
+                                "/actuator/info", "/actuator/info/**").permitAll()
                         .requestMatchers("/actuator/**").hasRole(ACTUATOR_ROLE)
                         .anyRequest().denyAll())
                 .httpBasic(basic -> {

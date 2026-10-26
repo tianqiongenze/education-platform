@@ -31,7 +31,9 @@ import java.util.Optional;
 @Validated
 public class IdeSessionController {
 
-    @DubboReference
+    // D-232: self-referencing Dubbo within one app is an anti-pattern and
+    // breaks in registry=N/A mode — use the local bean directly.
+    @org.springframework.beans.factory.annotation.Autowired
     private IdeSessionService ideSessionService;
 
     @PostMapping

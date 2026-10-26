@@ -190,7 +190,7 @@
       <groupId>io.seata</groupId>
       <artifactId>seata-spring-boot-starter</artifactId>
       <version>2.0.0</version>
-    </dependency>
+  </dependency>
     <!-- D-113: Saga state-machine engine. Seata 2.x does not publish a
          seata-saga-starter uber-jar; the StateMachineEngine is assembled
          from seata-saga-engine (engine core), seata-saga-statelang (JSON
@@ -331,12 +331,6 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
-    </dependency>
-    <!-- D-229/P-11: Dubbo JsonUtils SPI probes fastjson v1 API at runtime;
-         without it Dubbo module start fails (NoClassDefFoundError). -->
-    <dependency>
-      <groupId>com.alibaba</groupId>
-      <artifactId>fastjson</artifactId>
     </dependency>
   </dependencies>
 

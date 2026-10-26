@@ -38,6 +38,16 @@ import java.io.IOException;
 @Configuration
 public class SagaStateMachineConfig {
 
+    /**
+     * D-232: saga can be disabled per environment ({@code ep.saga.enabled=false}).
+     * Rationale: on the applications-cluster, Seata's statelang JSON parser
+     * fails at boot with BOTH fastjson variants (v1-compat 2.0.58 and the
+     * genuine 1.2.83 — JSONArray→Map ClassCast inside registryByResources).
+     * With the bean absent, OrderServiceImpl degrades to the local-transaction
+     * create path (cross-service steps are invoked via direct Dubbo URLs with
+     * their own compensation actions), so the service stays functional.
+     */
+
     private static final Logger log = LoggerFactory.getLogger(SagaStateMachineConfig.class);
 
     @Value("classpath:saga/create-order-saga.json")
@@ -58,9 +68,19 @@ public class SagaStateMachineConfig {
      * @return the singleton {@link StateMachineEngine} used by OrderServiceImpl
      */
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            name = "ep.saga.enabled", havingValue = "true", matchIfMissing = true)
     public StateMachineEngine stateMachineEngine() throws IOException {
         log.info("D-113: initialising Seata Saga state-machine engine");
         DefaultStateMachineConfig config = new DefaultStateMachineConfig();
+        // D-232: Seata 2.0 no longer auto-creates the repository inside
+        // DefaultStateMachineConfig — provide the in-memory implementation
+        // explicitly (unit tests mock the engine, so only a real context hit
+        // this NPE: "registryByResources(...) because repository is null").
+        if (config.getStateMachineRepository() == null) {
+            config.setStateMachineRepository(
+                    new io.seata.saga.engine.repo.impl.StateMachineRepositoryImpl());
+        }
         StateMachineRepository repository = config.getStateMachineRepository();
         // Register both JSON definitions. registryByResources parses the JSON
         // via the statelang parser and stores the resulting StateMachine domain

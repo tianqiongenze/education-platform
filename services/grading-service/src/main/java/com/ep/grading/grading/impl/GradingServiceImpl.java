@@ -46,7 +46,8 @@ public class GradingServiceImpl implements GradingService {
     private final IdempotencyService idempotencyService;
     private final SandboxExecutor sandboxExecutor;
 
-    @DubboReference
+    // D-232: local facade bean — direct injection (was self-Dubbo reference).
+    @org.springframework.beans.factory.annotation.Autowired
     private PlagiarismCheckFacade plagiarismService;
 
     @org.springframework.beans.factory.annotation.Autowired

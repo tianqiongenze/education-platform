@@ -59,6 +59,15 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- D-232: SCA BOM manages fastjson to the 2.0.58 v1-compat artifact
+           which breaks Seata saga statelang (JSONArray→Map). Pin the REAL
+           v1 Seata needs; nearest-wins beats the imported BOM. Dubbo is
+           isolated via per-service SPI override files. -->
+      <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>fastjson</artifactId>
+        <version>1.2.83</version>
+      </dependency>
       <dependency>
         <groupId>org.apache.dubbo</groupId>
         <artifactId>dubbo-bom</artifactId>
@@ -95,12 +104,6 @@
         <groupId>com.ep</groupId>
         <artifactId>core-business</artifactId>
         <version>1.0.0</version>
-      </dependency>
-      <!-- D-229/P-11: fastjson v1-API compat for Dubbo JsonUtils SPI probe. -->
-      <dependency>
-        <groupId>com.alibaba</groupId>
-        <artifactId>fastjson</artifactId>
-        <version>2.0.58</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

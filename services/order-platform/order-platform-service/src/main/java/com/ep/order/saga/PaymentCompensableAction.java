@@ -57,7 +57,7 @@ public class PaymentCompensableAction {
      * provider is not yet registered (dev/CI); {@code timeout=10000ms} covers
      * the synchronous gateway round-trip on the pay path.
      */
-    @DubboReference(check = false, timeout = 10000)
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.payment.url:}")
     private PaymentService paymentService;
 
     private final PaymentCompensationReconcileService compensationReconcileService;

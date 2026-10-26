@@ -83,7 +83,9 @@ public class GradingRpcServiceImpl implements GradingRpcService {
      * ai-platform AI grading Dubbo reference. {@code check=false} so dev/test
      * starts cleanly even when the AI grading service is not registered with Nacos.
      */
-    @DubboReference(check = false)
+    // D-232: property-driven direct connect — empty default keeps registry
+    // mode locally; the applications-cluster sets DUBBO_REF_AI_URL (N/A registry).
+    @DubboReference(check = false, url = "${dubbo.ref.ai.url:}")
     private AiGradingRpcService aiGrading;
 
     /**

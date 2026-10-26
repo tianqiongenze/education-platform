@@ -123,7 +123,7 @@ public class OrderServiceImpl implements OrderService {
      * provider is not yet registered (dev/CI); {@code timeout=10000ms} covers
      * the synchronous gateway round-trip on the pay path.
      */
-    @DubboReference(check = false, timeout = 10000)
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.payment.url:}")
     private PaymentService paymentService;
 
     /**
@@ -148,7 +148,7 @@ public class OrderServiceImpl implements OrderService {
                             CoursePricingPort coursePricingPort) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
-        this.sagaEngine = sagaEngine;
+        this.sagaEngine = sagaEngine; // may be null when ep.saga.enabled=false (D-232 degraded mode)
         this.cacheService = cacheService;
         this.outboxRepository = outboxRepository;
         this.coursePricingPort = Objects.requireNonNull(coursePricingPort,
@@ -262,6 +262,14 @@ public class OrderServiceImpl implements OrderService {
         sagaContext.put("businessKey", cmd.idempotencyKey());
         sagaContext.put("reason", "D-113 saga createOrder failure");
 
+        if (sagaEngine == null) {
+            // D-232 degraded mode (ep.saga.enabled=false): local-transaction
+            // order only; cross-service steps run via their direct Dubbo URLs
+            // with compensation actions, orchestrated by the callers.
+            log.warn("D-232: saga engine disabled (ep.saga.enabled=false) — createOrderWithGlobalTx degraded to local-transaction create for orderId={}",
+                    order.orderId());
+            return order;
+        }
         log.info("D-113: starting createOrderSaga orderId={} courseId={} stockUnits={}",
                 order.orderId(), cmd.courseId(), stockUnits);
         try {
@@ -301,6 +309,15 @@ public class OrderServiceImpl implements OrderService {
         sagaContext.put("amount", order.getAmount() == null ? BigDecimal.ZERO : order.getAmount());
         sagaContext.put("reason", reason);
 
+        if (sagaEngine == null) {
+            log.warn("D-232: saga engine disabled — cancelOrderWithGlobalTx degraded for orderId={}: invoking refund + cancel locally",
+                    orderId);
+            refundOrder(orderId, reason);
+            order.setStatus(com.ep.order.api.OrderStatus.CANCELED.getCode());
+            order.setUpdatedAt(System.currentTimeMillis());
+            orderRepository.save(order);
+            return;
+        }
         log.info("D-113: starting cancelOrderSaga orderId={} reason={}", orderId, reason);
         sagaEngine.startWithBusinessKey(
                 CANCEL_ORDER_SAGA, null, "cancel-" + orderId, sagaContext);

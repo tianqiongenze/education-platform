@@ -48,6 +48,15 @@ data:
   REDIS_HOST: "redis8-node-0.dify-plus.svc.cluster.local"
   REDIS_PORT: "6379"
   SPRING_DATA_REDIS_PASSWORD: "difyai123456"
+  REDIS_PASSWORD: "difyai123456"
+
+  # --- D-232: per-reference direct URLs (registry=N/A mode) ---
+  DUBBO_REF_COURSE_URL: "dubbo://edu-core-business.education-platform.svc.cluster.local:20883"
+  DUBBO_REF_USER_URL: "dubbo://edu-core-business.education-platform.svc.cluster.local:20883"
+  DUBBO_REF_ORDER_URL: "dubbo://edu-order-platform.education-platform.svc.cluster.local:20884"
+  DUBBO_REF_PAYMENT_URL: "dubbo://edu-payment-platform.education-platform.svc.cluster.local:20887"
+  DUBBO_REF_HEALTH_URL: "dubbo://edu-core-business.education-platform.svc.cluster.local:20883"
+  DUBBO_REF_AI_URL: "dubbo://ai-platform.education-platform.svc.cluster.local:20885"
   SPRING_DATA_REDIS_CLUSTER_PASSWORD: "difyai123456"
 
   # --- Dubbo registry: no Nacos on this cluster (wave-1 degraded) ---

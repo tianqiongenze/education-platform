@@ -23,7 +23,7 @@ import java.util.List;
 @RequestMapping("/api/v1/courses")
 public class CourseDubboController {
 
-    @DubboReference(check = false, timeout = 10000)
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.course.url:}")
     private CourseService courseService;
 
     @PostMapping

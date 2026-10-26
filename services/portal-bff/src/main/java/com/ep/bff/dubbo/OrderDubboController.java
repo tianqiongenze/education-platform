@@ -39,7 +39,7 @@ public class OrderDubboController {
     /** Role value that bypasses ownership checks (admin). */
     static final String ROLE_ADMIN = "ADMIN";
 
-    @DubboReference(check = false, timeout = 10000)
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.order.url:}")
     private OrderService orderService;
 
     @PostMapping

@@ -1,0 +1,5 @@
+# D-232: shadow Dubbo 3.3.6 SPI — keep ONLY the fastjson2 impl so
+# ServiceLoader never touches the fastjson-v1 line (P-11) while the
+# v1 compat artifact stays OFF the classpath (it hijacks Seata saga
+# JSON parsing with JSONArray→Map ClassCast).
+fastjson2=org.apache.dubbo.common.json.impl.FastJson2Impl
