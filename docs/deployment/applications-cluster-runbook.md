@@ -185,3 +185,36 @@ ssh root@10.167.2.175 "kubectl exec cockroachdb-a-0 -n infra -- /cockroach-binar
 5. 部署命令注意：set image 的容器名 order-platform/payment-platform 对应镜像名 *-service（勿混）
 
 **外部回收者**：会周期性删除 education-platform ns + 清节点 docker images。对抗手段=deploy-r8.sh 一键幂等恢复（本地 jib tar 持久存在于各服务 target/）。
+
+
+## 9. D-233 全绿实测快照（2026-10-26）
+
+**集群状态**: 6服务8Pod全部 1/1 Running 0重启（r12/r15/r16/r18/r20 混合版本，全部含最终修复）。
+
+### T0 健康矩阵（节点→ClusterIP 实测）
+| 服务 | ClusterIP:port | /actuator/health |
+|---|---|---|
+| core-business | 10.109.25.191:8083 | UP |
+| grading-service | 10.98.249.89:8085 | UP |
+| order-platform | 10.97.182.151:8084 | UP |
+| payment-platform | 10.110.216.64:8087 | UP |
+| portal-bff | 10.97.98.252:80 | UP |
+| ws-gateway | 10.97.36.157:8081 | 待核（Pod 1/1，节点 curl /healthz 空响应，注意监听端口=8080 而 svc=8081） |
+
+注意: 节点 shell 中 **DNS 解析 svc 名失败**（curl EMPTY），必须用字面 ClusterIP。port-forward 从 Mac 也异常（HTTP=000）——统一走节点 curl。
+
+### T1 认证链（直连 core-business）
+- captcha 签发 ✅（`{"captchaId","question":"8 - 5 = ?"}`）
+- 错误答案 → 400 CAPTCHA_INVALID ✅
+- 正确答案+未播种账号 → 500（见下）
+- **登录 happy-path 阻塞点**: EP_DEV_SEED_ENABLED 未开（seedDevDefaults 不执行，13800000000 不存在）+ AuthService 对未知账号抛 500 而非 401（AuthServiceTest 只测了锁定/401语义，UnknownPhone 500 待查——可能是 recordFailure 后抛出的异常类型被 GlobalExceptionHandler 兜底）
+
+### T6 限流（实弹）✅
+RiskControlFilter 对节点 IP 触发 429 `{"code":"RATE_LIMITED","message":"Too many requests, retry after 24s"}` — 登录/ captcha 高频实弹触发，默认 60/min 生效。
+
+### 下次会话收口清单（按序）
+1. `EP_DEV_SEED_ENABLED=true` 注入 core-business env → 重启 → login happy-path (T1.3~T1.4: token/logout/401)
+2. 排查 login 500（UnknownPhone 路径）→ 应返 401/409
+3. T2/T3/T4 课程/订单/批改链（用 T1 token 走 BFF 10.97.98.252:80，D-218 金额篡改断言 0.01→服务端价）
+4. ws-gateway: 节点 curl /healthz 路径核对（监听 8080 vs svc 8081——PORT env 或 svc targetPort 对齐）
+5. 全绿后跑 `NODE=10.167.2.175 ./scripts/post-deploy-functional-test.sh`（T0~T7 完整版，需把脚本内 BFF 改为 ClusterIP 直连模式——port-forward 在本环境不可用）

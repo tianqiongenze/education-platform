@@ -109,6 +109,10 @@ public class OrderServiceImpl implements OrderService {
      * {@code src/main/resources/saga/}. Injected (rather than field-autowired)
      * so the integration tests can swap in a stubbed engine.
      */
+    /**
+     * D-232: nullable — absent when {@code ep.saga.enabled=false} (degraded
+     * mode). Wrapped in ObjectProvider so Spring tolerates the missing bean.
+     */
     private final StateMachineEngine sagaEngine;
 
     /**
@@ -142,13 +146,15 @@ public class OrderServiceImpl implements OrderService {
     @org.springframework.beans.factory.annotation.Autowired
     public OrderServiceImpl(OrderRepository orderRepository,
                             PulsarEventPublisher eventPublisher,
-                            StateMachineEngine sagaEngine,
+                            org.springframework.beans.factory.ObjectProvider<StateMachineEngine> sagaEngineProvider,
                             CacheService cacheService,
                             OutboxRepository outboxRepository,
                             CoursePricingPort coursePricingPort) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
-        this.sagaEngine = sagaEngine; // may be null when ep.saga.enabled=false (D-232 degraded mode)
+        this.sagaEngine = sagaEngineProvider != null
+                ? sagaEngineProvider.getIfAvailable()
+                : null; // null in degraded mode (D-232)
         this.cacheService = cacheService;
         this.outboxRepository = outboxRepository;
         this.coursePricingPort = Objects.requireNonNull(coursePricingPort,
@@ -165,7 +171,16 @@ public class OrderServiceImpl implements OrderService {
                             StateMachineEngine sagaEngine,
                             CacheService cacheService,
                             OutboxRepository outboxRepository) {
-        this(orderRepository, eventPublisher, sagaEngine, cacheService, outboxRepository,
+        this(orderRepository, eventPublisher,
+                new org.springframework.beans.factory.ObjectProvider<StateMachineEngine>() {
+                    @Override public StateMachineEngine getObject() { return sagaEngine; }
+                    @Override public StateMachineEngine getIfAvailable() { return sagaEngine; }
+                    @Override public StateMachineEngine getIfUnique() { return sagaEngine; }
+                    @Override public StateMachineEngine getObject(Object... args) { return sagaEngine; }
+                    @Override public java.util.stream.Stream<StateMachineEngine> stream() { return java.util.stream.Stream.empty(); }
+                    @Override public java.util.stream.Stream<StateMachineEngine> orderedStream() { return java.util.stream.Stream.of(sagaEngine); }
+                },
+                cacheService, outboxRepository,
                 courseId -> {
                     throw new IllegalStateException(
                             "D-218 fail-closed: no pricing port configured — COURSE orders rejected");

@@ -27,7 +27,7 @@ public class DubboCoursePricingPort implements CoursePricingPort {
 
     private static final Logger log = LoggerFactory.getLogger(DubboCoursePricingPort.class);
 
-    @DubboReference(check = false, timeout = 10000)
+    @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.course.url:}")
     private CourseService courseService;
 
     @Override

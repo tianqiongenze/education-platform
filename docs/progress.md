@@ -812,3 +812,16 @@ Iron Law 8 三方案对比:
 - 剩余阻塞: 部分 Java 服务运行期初始化阻塞 (HTTP /actuator 未就绪, 详见 runbook §7 排查清单)
 - 功能测试脚本就绪: scripts/post-deploy-functional-test.sh (T0~T7, 服务就绪即跑)
 - 决策总数: 231
+
+
+## D-232~D-233: 集群全绿部署+T0/T1/T6功能实测 (2026-10-26)
+
+| 决策 | 描述 | 日期 | 状态 |
+|---|---|---|---|
+| D-232 | r8一键幂等恢复+r9/r10 15个多构造器bean系统性修复+r11探针401修复+r12直接URL | 2026-10-25 | ✅ |
+| D-233 | r13~r20: saga解析器四轮搏斗后条件装配降级; 6服务8Pod全绿; T0=5/6 UP; T1 captcha/400通过; T6 429实弹 | 2026-10-26 | ✅ |
+
+- **集群实证**: core×2/grading/order/payment/portal/ws 全部 1/1 Running 0重启; CRDB 5表(order/payment域)ddl-auto建成; Redis Cluster密码认证; Jackson2全服务
+- **功能实测**: T0健康矩阵 5/6 UP(ws-gateway节点curl路径待核); T1.1 captcha签发✓ T1.2错答400✓; T6 429+retry-after实弹✓
+- **待收口**: EP_DEV_SEED_ENABLED=true播种→login happy-path→T2/T3/T4链; ws-gateway节点curl路径核对
+- 决策总数: 233; commit ed24c9f3 已push
