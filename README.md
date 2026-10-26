@@ -1,12 +1,12 @@
 # education-platform · 多语言云原生在线教育平台
 
-> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**233 个架构决策（D-001 ~ D-233）全程留痕，v7 逐项目群评分 91.8 / A-**（18 个项目单元逐项打分见 `docs/architecture/project-group-scorecard-v7.md`）。
+> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**236 个架构决策（D-001 ~ D-236）全程留痕，v7 逐项目群评分 91.8 / A-**（18 个项目单元逐项打分见 `docs/architecture/project-group-scorecard-v7.md`）。
 
 ![Java](https://img.shields.io/badge/Java%2021-Spring%20Boot%204.0.x-6DB33F?logo=springboot&logoColor=white)
 ![Go](https://img.shields.io/badge/Go%201.25-WebSocket%20%2B%20Live-00ADD8?logo=go&logoColor=white)
 ![Python](https://img.shields.io/badge/Python%203.12-Litestar%20%2B%20LangGraph-3776AB?logo=python&logoColor=white)
 ![Architecture](https://img.shields.io/badge/scorecard-v7_91.8%2F100%20(A--)-orange)
-![ADR](https://img.shields.io/badge/decisions-233%20(D--001~D--233)-blueviolet)
+![ADR](https://img.shields.io/badge/decisions-236%20(D--001~D--236)-blueviolet)
 ![Contracts](https://img.shields.io/badge/contracts-9%20OpenAPI%20%2B%208%20AsyncAPI-blue)
 
 ---
@@ -60,21 +60,23 @@
 
 ```
 架构评分          v5 93.5 / 100（A，制品完备度标尺）→ v6 91.0（A-，实战有效性标尺）→ v7 91.8（A-，逐项目群矩阵 + 大厂标准对齐重构，见 §13）
-架构决策          233 项（D-001 ~ D-233，decisions.jsonl 全程留痕；D-233 = 风控滑动窗口 + 幂等重放 + 缓存热点闭环）
+架构决策          236 项（D-001 ~ D-236，decisions.jsonl 全程留痕；D-233 = 风控滑动窗口+幂等重放+缓存热点闭环；D-234 = 通用 Outbox；D-235 = RUM；D-236 = 路线图全落地含资金安全修复）
 后端服务          17 个：Java 14 + Go 2 + Python 1（AI 平台内含 9 模块）
 公共库            7 个：Java 5（ep-web-common / ep-disruptor / ep-cache / ep-data / ep-memory-java）
                           + Go 1（ep-common-go）+ Python 1（ep-common-python）
-前端应用          7 个（Web 3 + H5 2 + 小程序 2），pnpm monorepo + @ep/ scope
+前端应用          7 个（Web 3 + H5 2 + 小程序 2），pnpm monorepo + @ep/ scope，路由级 code-splitting + RUM 已接入
 SDD 契约          17 份（OpenAPI 9 + AsyncAPI 8），Spectral lint 门禁
-Java 测试         ≈ 1730 用例 0 失败（mvn -o test 全量实证）+ 21 个 IT 类
+Java 测试         ≈ 1860 用例 0 失败（全量回归：ep-cache 102 + ep-web-common 88 + portal-bff 193 + order 63 + core-business 105 + grading 231 + payment 59 等实证）
 Python 测试       279 用例（pytest）
 Go 测试           全覆盖（-race 跑法，含 WS 限频 3 项）
 k6 压测           14 套脚本（1K → 百万级在线模拟、秒杀尖峰、跨语言对比、SDD 契约验证）
-前端测试          89 用例本轮实证（7/7 app 构建通过；历史累计 223；12/12 typecheck 全绿）
+前端测试          12/12 typecheck + 12/12 test 任务全绿（含 RUM SDK 5 例与懒加载路由）
 CI Workflows      14 条（测试矩阵/覆盖率/变异测试/AOT 门禁/铁律扫描/三重安全扫描）
 多活单元          4 个（cell-bj / cell-hz / cell-sz / cell-sg）
 真实集群          applications-cluster 双节点部署实证（Wave-1 六镜像双节点就绪，runbook 11 踩坑）
-风控效能          窗口边界放行 2×→1.0×；XFF 伪造绕过→不可行；崩溃重试等待 24h→≤5min；Redis 故障自愈 ≤30s（D-233）
+风控效能          窗口边界放行 2×→1.0×；XFF 伪造绕过→不可行；崩溃重试等待 24h→≤5min；Redis 故障自愈 ≤30s；封禁 IP 请求成本 1 次 Redis GET（D-233/D-236）
+事件可靠性        事件丢失窗口收敛至 outbox 落库失败才丢（DB 级可靠性 + 5 次重试发布；D-234 通用 Outbox 三服务接入）
+资金安全          超额退款漏洞封死（累计退款守卫，11 例资金安全测试锁定；D-236）
 ```
 
 ### 1.3 技术栈总表
@@ -524,6 +526,7 @@ flowchart TB
 | L2 Redis Cluster | 共享 Cache-Aside | ≥ 85% | 30-60 min | TTL + 主动失效 | — |
 | L3 DB | 兜底持久化 | — | — | 写入即最新 | — |
 | 空值哨兵 | 防穿透 | — | 60s | `__EP_CACHE_EMPTY__` | — |
+| **布隆过滤器** | 防穿透（首查前置） | 垃圾流量 0 次 DB 查询 | bitmap TTL 滑动重建 | fail-open 退化 | ✅ `BloomFilterGuard`（Redis bitmap + FNV-1a 双哈希，opt-in per cache，D-236） |
 | **综合（L1+L2）** | 两级协同 | **≥ 99%（SLO）** | — | — | ✅ `ep_cache_composite_hit_rate` 指标 + <99% WARN 告警（样本≥1000） |
 | **热点 key** | 探测→观测→调参 | 晋升 0 次/窗为健康 | 60s 滑窗 | — | ✅ `HotspotDetector`：回源 ≥5 次/窗 → `ep_cache_hotspot_promoted_total` 告警 |
 
@@ -760,11 +763,13 @@ flowchart TB
 | 金额篡改（0.01元购课） | CoursePricingPort 服务端定价复核，fail-closed 拒单 | ✅ | D-218 |
 | 水平越权（IDOR 遍历他人订单/答卷） | OrderDubbo/Submission Controller 归属校验（本人或 ADMIN） | ✅ | D-218 |
 | 重复支付 | Redis SETNX + DB UNIQUE 双保险幂等 + **重复请求响应重放**（Stripe 标准：2xx 缓存 24h 原样重放；PENDING 409+Retry-After；处理超时 5min 防崩溃僵尸；Lua CAS 原子落状态） | ✅ | D-155/D-221 + **D-233（v7）** |
+| 超额退款（资金损失） | **累计退款守卫**：非 FAILED 退款总额 + 本次 ≤ 支付金额（DB 侧 SUM，60/40 分次退满正确翻转 REFUNDED，超额拒绝显式抛错） | ✅ | **D-236（v7）** |
+| 恶意用户持续攻击（429 后卷土重来） | **IP 自动封禁**：3 次 429 违规 → 30 分钟自动封禁（Redis SET + 内存降级），封禁请求 403 快速拒绝（成本 = 1 次 Redis GET） | ✅ | **D-236（v7）** |
 | 登录撞库 | LoginAttemptLimiter 5次/15分钟锁定（Redis+内存降级） | ✅ | D-219 |
 | WS 帧洪水/消息轰炸 | 64KB 帧上限 + 每连接 token bucket 10msg/s | ✅ | D-220 |
 | 全表爬取（size=10^6） | 分页 size 上限 100 | ✅ | D-218 |
 | 管理操作无留痕 | AuditLogAspect（退款/冻结/发布课程 → AUDIT logger JSON） | ✅ | D-223 |
-| 事件丢失（双写间隙） | Transactional Outbox（ep_outbox 同事务 + Relay 重试） | ✅ | D-217 |
+| 事件丢失（双写间隙） | Transactional Outbox：order 参考实现（D-217）→ **通用 Outbox SPI**（ep-web-common，JdbcTemplate + 独立 relay，core-business / grading 桥接 persist-first，payment 由磁盘 spool 降级链覆盖） | ✅ | D-217 + **D-234（v7）** |
 | 内部服务直连 | NetworkPolicy deny-by-default | ✅ | D-133 |
 | 静态安全漏洞 | Semgrep SAST + Trivy + Aikido 三重扫描 | ✅ | 8/8 findings closed |
 | 东西向流量窃听 | mTLS | ❌ 缺失 | P2 待补（Linkerd/Istio） |
@@ -1505,8 +1510,9 @@ flowchart LR
 
 <div align="center">
 
-**架构评分 v7 91.8/A-（逐项目群实战标尺，18 单元矩阵）· 233 项决策留痕 · 10 条铁律 · 17 份契约先行 · 1730 Java 测试 0 失败**
-**v7 大厂标准对齐：风控滑动窗口 + XFF 可信代理链 + 幂等响应重放（Stripe 标准）+ 缓存命中率 ≥99% SLO 闭环（D-233）**
+**架构评分 v7 91.8/A-（逐项目群实战标尺，18 单元矩阵）· 236 项决策留痕 · 10 条铁律 · 17 份契约先行 · 1860 Java 测试 0 失败**
+**v7 大厂标准对齐（D-233~D-236）：风控滑动窗口 + XFF 可信代理链 + 幂等响应重放（Stripe 标准）+ 缓存命中率 ≥99% SLO 闭环**
+**+ 通用 Outbox 三服务接入 + 前端路由懒加载与 RUM 闭环 + 资金域超额退款漏洞修复 + IP 自动封禁 + 布隆过滤器防穿透**
 
 _本仓库为工程实践参考实现，持续重构演进中。_
 

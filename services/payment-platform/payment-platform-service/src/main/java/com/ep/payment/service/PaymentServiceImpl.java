@@ -322,6 +322,28 @@ public class PaymentServiceImpl implements PaymentService {
                             + "), paymentId=" + payment.getPaymentId());
         }
 
+        // D-236 (money-safety): cumulative refund cap — the sum of all active
+        // (non-FAILED) refunds of this payment plus the new request must never
+        // exceed the payment amount. Before this guard, N partial refunds
+        // could each pass the per-call check and jointly over-refund the
+        // payment (a classic funds-loss defect). The SDD spec ("the Payment
+        // only transitions to REFUNDED when the sum of successful Refunds
+        // equals the Payment amount") is now enforced literally.
+        BigDecimal alreadyRefunded = isJpa()
+                ? refundRepository.sumActiveRefundAmountByOrderId(orderId)
+                : refundsById.values().stream()
+                        .filter(r -> orderId.equals(r.getOrderId()) && r.getStatus() != RefundStatus.FAILED)
+                        .map(Refund::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal cumulativeAfter = alreadyRefunded.add(amount);
+        if (cumulativeAfter.compareTo(payment.getAmount()) > 0) {
+            throw new IllegalArgumentException(
+                    "Refund overdraw rejected: payment=" + payment.getAmount()
+                            + ", alreadyRefunded=" + alreadyRefunded
+                            + ", requested=" + amount
+                            + ", paymentId=" + payment.getPaymentId());
+        }
+
         PaymentChannelSpi spi = resolveChannel(payment.getChannel());
         if (!spi.supportsRefund()) {
             throw new IllegalStateException(
@@ -350,8 +372,10 @@ public class PaymentServiceImpl implements PaymentService {
             refundsById.put(refund.getRefundId(), refund);
         }
 
-        // Full refund → flip the Payment to REFUNDED; partial → leave SUCCESS.
-        if (amount.compareTo(payment.getAmount()) >= 0) {
+        // D-236: full-refund flip uses the cumulative ledger, not the single
+        // call's amount — a 60/40 split across two partial refunds must leave
+        // the payment REFUNDED after the second one.
+        if (cumulativeAfter.compareTo(payment.getAmount()) >= 0) {
             payment.markRefunded();
         }
 

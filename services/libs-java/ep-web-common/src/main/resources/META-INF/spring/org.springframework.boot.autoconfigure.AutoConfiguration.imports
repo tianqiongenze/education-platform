@@ -6,3 +6,4 @@ com.ep.web.common.audit.AuditLogAutoConfiguration
 com.ep.web.common.tenant.TenantWebAutoConfiguration
 com.ep.web.common.security.JwtRevocationAutoConfiguration
 com.ep.web.common.jackson.Jackson2CompatAutoConfiguration
+com.ep.web.common.outbox.OutboxAutoConfiguration

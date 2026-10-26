@@ -144,3 +144,9 @@ ep:
     service-url: pulsar://localhost:6650
     topic:
       domain-events: persistent://public/default/ep-grading-domain-events
+  outbox:
+    enabled: true          # D-234: persist-first, relay drains to Pulsar with bounded retries
+    relay-interval-millis: 5000
+    batch-size: 50
+    max-retries: 5
+    create-table: true

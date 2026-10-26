@@ -60,7 +60,18 @@ public class GradingEventPublisher {
                                  GradingPulsarProperties properties,
                                  @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled) {
         this(clientProvider, properties, pulsarEnabled,
-                EventSendRetrySupport.DEFAULT_MAX_RETRIES, EventSendRetrySupport.DEFAULT_BACKOFF_MILLIS);
+                EventSendRetrySupport.DEFAULT_MAX_RETRIES, EventSendRetrySupport.DEFAULT_BACKOFF_MILLIS, null);
+    }
+
+    /**
+     * Legacy 5-arg constructor kept for existing tests: no outbox bridge.
+     */
+    public GradingEventPublisher(ObjectProvider<PulsarClient> clientProvider,
+                                 GradingPulsarProperties properties,
+                                 @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled,
+                                 @Value("${ep.pulsar.send-retries:2}") int sendRetries,
+                                 @Value("${ep.pulsar.send-backoff-millis:200}") long sendBackoffMillis) {
+        this(clientProvider, properties, pulsarEnabled, sendRetries, sendBackoffMillis, null);
     }
 
     @Autowired
@@ -68,16 +79,21 @@ public class GradingEventPublisher {
                                  GradingPulsarProperties properties,
                                  @Value("${ep.pulsar.enabled:false}") boolean pulsarEnabled,
                                  @Value("${ep.pulsar.send-retries:2}") int sendRetries,
-                                 @Value("${ep.pulsar.send-backoff-millis:200}") long sendBackoffMillis) {
+                                 @Value("${ep.pulsar.send-backoff-millis:200}") long sendBackoffMillis,
+                                 org.springframework.beans.factory.ObjectProvider<com.ep.web.common.outbox.OutboxWriter> outboxWriterProvider) {
         this.clientProvider = clientProvider;
         this.topic = properties.getTopic().getDomainEvents();
         this.pulsarEnabled = pulsarEnabled;
         this.sendRetries = sendRetries;
         this.sendBackoffMillis = sendBackoffMillis;
+        this.outboxWriterProvider = outboxWriterProvider;
         this.mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
+
+    /** D-234: optional outbox bridge — null when ep.outbox is disabled. */
+    private final org.springframework.beans.factory.ObjectProvider<com.ep.web.common.outbox.OutboxWriter> outboxWriterProvider;
 
     @PostConstruct
     public void init() {
@@ -104,10 +120,29 @@ public class GradingEventPublisher {
 
     /**
      * Publish a single domain event. Fail-safe: never throws.
+     *
+     * <p>D-234: when the outbox bridge is active the event is persisted to
+     * {@code ep_outbox} (durable; the background relay forwards it with bounded
+     * retries). Otherwise the historical direct-send path runs.</p>
      */
     public void publish(DomainEvent event) {
         if (event == null) {
             return;
+        }
+        // D-234 outbox bridge: persist-first, relay publishes later.
+        com.ep.web.common.outbox.OutboxWriter outbox = outboxWriterProvider != null
+                ? outboxWriterProvider.getIfAvailable() : null;
+        if (outbox != null) {
+            try {
+                String aggregateId = event.envelope() != null && event.envelope().aggregateId() != null
+                        ? event.envelope().aggregateId() : "unknown";
+                outbox.write(event.getClass().getSimpleName(), aggregateId, event.getClass().getSimpleName(),
+                        mapper.writeValueAsString(event));
+                return;
+            } catch (Exception e) {
+                log.warn("D-234: outbox write failed, falling back to direct send for {}: {}",
+                        event.getClass().getSimpleName(), e.getMessage());
+            }
         }
         if (!pulsarEnabled || producer == null) {
             log.debug("Pulsar disabled/unavailable, skipping event: {}", event.getClass().getSimpleName());
@@ -124,5 +159,18 @@ public class GradingEventPublisher {
             log.warn("Pulsar publish failed for {}: {}",
                     event.getClass().getSimpleName(), e.getMessage());
         }
+    }
+
+    /**
+     * D-234: raw publish used by the outbox relay. Same EP_DEV_ONLY guard as
+     * {@link #publish} — a no-op when Pulsar is disabled so the relay marks
+     * rows published and tests need no broker.
+     */
+    public void publishRaw(String eventType, String payloadJson) throws Exception {
+        if (!pulsarEnabled || producer == null) {
+            log.debug("Pulsar disabled/unavailable, relay skips raw publish: {}", eventType);
+            return;
+        }
+        producer.send(payloadJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

@@ -15,6 +15,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "web-vitals": "4.2.4",
     "zod": "3.23.8"
   },
   "devDependencies": {

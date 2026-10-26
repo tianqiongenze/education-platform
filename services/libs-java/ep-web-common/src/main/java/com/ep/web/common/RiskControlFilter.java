@@ -83,6 +83,8 @@ public class RiskControlFilter extends OncePerRequestFilter {
     private final int windowSeconds;
     private final int trustedProxies;
     private final Clock clock;
+    /** D-236 (v7 P2): automatic IP ban — null when disabled in the auto-config. */
+    private final com.ep.web.common.risk.IpBanService ipBanService;
 
     /**
      * @param counter       the window counter (Redis-backed or in-memory)
@@ -92,12 +94,19 @@ public class RiskControlFilter extends OncePerRequestFilter {
      */
     public RiskControlFilter(WindowCounter counter, int authLimit, int defaultLimit,
                              int windowSeconds) {
-        this(counter, authLimit, defaultLimit, windowSeconds, DEFAULT_TRUSTED_PROXIES, Clock.systemUTC());
+        this(counter, authLimit, defaultLimit, windowSeconds, DEFAULT_TRUSTED_PROXIES, Clock.systemUTC(), null);
     }
 
     /** Full constructor: trusted-proxy count and injectable clock (tests). */
     public RiskControlFilter(WindowCounter counter, int authLimit, int defaultLimit,
                              int windowSeconds, int trustedProxies, Clock clock) {
+        this(counter, authLimit, defaultLimit, windowSeconds, trustedProxies, clock, null);
+    }
+
+    /** Constructor with the IP ban service (D-236 auto-configuration path). */
+    public RiskControlFilter(WindowCounter counter, int authLimit, int defaultLimit,
+                             int windowSeconds, int trustedProxies, Clock clock,
+                             com.ep.web.common.risk.IpBanService ipBanService) {
         if (authLimit < 1 || defaultLimit < 1 || windowSeconds < 1) {
             throw new IllegalArgumentException("limits and window must be positive");
         }
@@ -110,11 +119,12 @@ public class RiskControlFilter extends OncePerRequestFilter {
         this.windowSeconds = windowSeconds;
         this.trustedProxies = trustedProxies;
         this.clock = clock;
+        this.ipBanService = ipBanService;
     }
 
     RiskControlFilter(WindowCounter counter, int authLimit, int defaultLimit,
                       int windowSeconds, Clock clock) {
-        this(counter, authLimit, defaultLimit, windowSeconds, DEFAULT_TRUSTED_PROXIES, clock);
+        this(counter, authLimit, defaultLimit, windowSeconds, DEFAULT_TRUSTED_PROXIES, clock, null);
     }
 
     @Override
@@ -124,6 +134,17 @@ public class RiskControlFilter extends OncePerRequestFilter {
         int limit = isAuthPath(path) ? authLimit : defaultLimit;
 
         String ip = clientIp(request, trustedProxies);
+
+        // D-236: banned IPs are rejected before any limiter work — one Redis
+        // GET replaces the full filter chain for a known attacker.
+        if (ipBanService != null && ipBanService.isBanned(ip)) {
+            log.warn("Risk control: 403 banned ip={} path={}", ip, path);
+            response.setStatus(403);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"code\":\"IP_BANNED\",\"message\":\"Access denied\"}");
+            return;
+        }
+
         String user = request.getHeader("X-User-Id");
         String userKey = user == null || user.isBlank() ? "anon" : user.trim();
 
@@ -135,6 +156,10 @@ public class RiskControlFilter extends OncePerRequestFilter {
                     + (ipCount > limit ? "ip:" + ip : "user:" + userKey), windowSeconds));
             log.warn("Risk control: 429 path={} ip={} user={} ipCount={} userCount={} limit={}",
                     path, ip, userKey, ipCount, userCount, limit);
+            // D-236: persistent abusers escalate from 429 to an automatic ban.
+            if (ipBanService != null && ipCount > limit) {
+                ipBanService.recordViolation(ip);
+            }
             response.setStatus(429);
             response.setHeader("Retry-After", String.valueOf(retryAfter));
             response.setContentType("application/json");

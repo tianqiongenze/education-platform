@@ -205,6 +205,34 @@ public class CacheService {
         }
     }
 
+    /**
+     * D-236: bloom-guarded variant — when the caller supplies a
+     * {@link BloomFilterGuard} and it answers "definitely absent", the loader
+     * (DB query) is skipped entirely and the empty sentinel is served. This is
+     * the anti-penetration optimization: junk traffic never touches the DB.
+     * Guards must be fed by the data write path (see {@link BloomFilterGuard}).
+     */
+    public <T> T getOrLoad(String cacheName, String key, Supplier<T> loader, long ttlSec,
+                           boolean cacheEmpty, BloomFilterGuard bloom) {
+        String effKey = key;
+        if (bloom != null && bloom.definitelyAbsent(effKey)) {
+            loaderInvocations.incrementAndGet(); // counted as "would-be loader" for the composite denominator
+            return unwrap((T) EMPTY_SENTINEL);
+        }
+        return getOrLoadInternal(cacheName, effKey, loader, ttlSec, cacheEmpty);
+    }
+
+    /** Tenant-scoped bloom-guarded variant of {@link #getOrLoad(String, String, Supplier, long, boolean, BloomFilterGuard)}. */
+    public <T> T getOrLoad(String cacheName, String tenantId, String key, Supplier<T> loader, long ttlSec,
+                           boolean cacheEmpty, BloomFilterGuard bloom) {
+        String effKey = tenantKey(tenantId, key);
+        if (bloom != null && bloom.definitelyAbsent(effKey)) {
+            loaderInvocations.incrementAndGet();
+            return unwrap((T) EMPTY_SENTINEL);
+        }
+        return getOrLoadInternal(cacheName, effKey, loader, ttlSec, cacheEmpty);
+    }
+
     private <T> T doLoad(String cacheName, String effKey, String fullKey,
                          Supplier<T> loader, long ttlSec, boolean cacheEmpty) {
         loaderInvocations.incrementAndGet();

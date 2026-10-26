@@ -15,6 +15,12 @@ ep:
       domain-events: persistent://public/default/core-business-domain-events
   cache:
     enabled: true
+  outbox:
+    enabled: true          # D-234: persist-first, relay drains to Pulsar with bounded retries
+    relay-interval-millis: 5000
+    batch-size: 50
+    max-retries: 5
+    create-table: true
 
 spring:
   application:
@@ -126,4 +132,3 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
-

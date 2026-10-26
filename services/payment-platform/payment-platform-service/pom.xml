@@ -351,6 +351,40 @@
         </executions>
       </plugin>
 
+      <!-- D-236: PITest mutation testing for the funds domain. Nightly via
+           mutation-test.yml; the money-safety suite is expected to kill
+           mutants in the refund ledger paths. Java 21 needs
+           -XX:+EnableDynamicAgentLoading. -->
+      <plugin>
+        <groupId>org.pitest</groupId>
+        <artifactId>pitest-maven</artifactId>
+        <version>1.16.1</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-junit5-plugin</artifactId>
+            <version>1.2.1</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <targetClasses>
+            <param>com.ep.payment.service.*</param>
+            <param>com.ep.payment.entity.*</param>
+          </targetClasses>
+          <targetTests>
+            <param>com.ep.payment.*</param>
+          </targetTests>
+          <jvmArgs>
+            <value>-XX:+EnableDynamicAgentLoading</value>
+          </jvmArgs>
+          <outputFormats>
+            <format>XML</format>
+            <format>HTML</format>
+          </outputFormats>
+          <timeoutConstant>5000</timeoutConstant>
+        </configuration>
+      </plugin>
+
       <!-- D-119: Spring Cloud Contract producer plugin. Generates WireMock
            stubs from the Groovy contracts in src/test/resources/contracts/
            and packages them as a stubs jar so the consumer

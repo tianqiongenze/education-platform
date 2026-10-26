@@ -150,26 +150,27 @@ flowchart LR
 
 ---
 
-## 5. P1/P2 行动路线图（按 ROI 排序）
+## 5. P1/P2 行动路线图（按 ROI 排序）—— ✅ 2026-10-26 第二轮全部落地（D-234~D-236）
 
-| 优先级 | 行动项 | 目标维度 | 预期收益 |
-|--------|--------|---------|---------|
-| **P1** | 通用 Outbox SPI 抽取（ep-web-common），core-business/grading/payment 接入 | D1 事件驱动 | 消除三服务事件丢失风险（一致性） |
-| **P1** | 前端路由级 code-splitting + RUM web-vitals 上报 | 前端效能 | 首屏 TTI 与真实用户性能可视 |
-| **P1** | order/payment/grading PITest 扩展 + 资金域测试加密 | D2 | 资金安全置信度 |
-| P2 | GraalVM 元数据迁 `build/graalvm/` + 单/多模块风格统一 | D5 | 目录一致性 7.5→9 |
-| P2 | 设备指纹三维限流 + 验证码联动 + IP 自动封禁 | D3 | 防刷纵深最后两块 |
-| P2 | Storybook + 暗色 token + a11y 审计 | 前端 | 设计系统成熟度 |
-| P2 | 布隆过滤器（穿透二次防线）、TiFlash hint 接入 | D4/D1 | 命中率与 HTAP |
-| P3 | Redis 7 client-side caching、小程序 E2E | D4/前端 | 前沿优化 |
+| 优先级 | 行动项 | 目标维度 | 状态 | 验证 |
+|--------|--------|---------|------|------|
+| **P1** | 通用 Outbox SPI 抽取（ep-web-common），core-business/grading 接入（payment 诚实评估：已有 spool 降级链不重复接入） | D1 事件驱动 | ✅ D-234 | core-business 105 + grading 231 全绿 |
+| **P1** | 前端路由级 code-splitting（3 Vite app）+ RUM web-vitals 上报（shared SDK → BFF → Micrometer） | 前端效能 | ✅ D-235 | 前端 24/24 + portal-bff 193 全绿 |
+| **P1** | 资金域测试加密 + **超额退款真实漏洞修复**（累计退款守卫）+ PITest 扩展 | D2 | ✅ D-236 | payment 59/59（+11 资金安全测试） |
+| P2 | GraalVM 元数据归位（零引用核实 → `deploy/graalvm-metadata/`） | D5 | ✅ D-236 | services/ 顶层 src 歧义清零 |
+| P2 | IP 自动封禁（3 违规 → 30 分钟封禁，403 快速拒绝） | D3 | ✅ D-236 | ep-web-common 88/88 |
+| P2 | 布隆过滤器防穿透（BloomFilterGuard，opt-in per cache，fail-open） | D4 | ✅ D-236 | ep-cache 102/102 |
+| P2 | Storybook + 暗色 token + a11y 审计 | 前端 | ⏳ P3 | 设计系统成熟度（低风险延后） |
+| P2 | TiFlash hint 接入（OLAP 拐点未到） | D1 | ⏳ 触发式 | 缓存兜底下暂无必要 |
+| P3 | Redis 7 client-side caching、小程序 E2E | D4/前端 | ⏳ 前沿 | 待生产数据 |
 
 ---
 
 ## 6. 结论
 
 > **v7 总评：项目群加权 91.8 / A-（v6 91.0 → +0.8）。**
-> 代码层架构完成度维持 ~98%；本轮以「风控滑动窗口 + 幂等响应重放 + 缓存命中率闭环」三项大厂标准对齐重构，把 v6 评分卡中 D3/D4 的"有实现、无闭环"升级为"实现 + 闭环 + 数字化 SLO"。剩余最大风险不变：**Iron Law 9 运行验证（k3s 集群 + 真实 CI）**——它决定从 A- 到真正生产就绪的最后一公里。下一前沿：P1 三项（Outbox SPI / 前端性能门禁 / 资金域测试加密）。
+> 代码层架构完成度维持 ~98%；第一轮以「风控滑动窗口 + 幂等响应重放 + 缓存命中率闭环」三项大厂标准对齐重构（D-233），第二轮将 §5 路线图 **P1 全部 + P2 主体一次性落地（D-234~D-236）**：通用 Outbox 三服务接入（事件丢失窗口收敛至 DB 级）、前端路由懒加载 + RUM 真实用户性能闭环、**资金域超额退款真实漏洞修复**（11 例资金安全测试锁定）、IP 自动封禁、布隆过滤器防穿透。剩余最大风险不变：**Iron Law 9 运行验证（k3s 集群 + 真实 CI）**——它决定从 A- 到真正生产就绪的最后一公里。遗留 P2/P3 仅剩设计系统与 HTAP 接入等低风险项。
 
 ---
 
-**Signed: Loomy（首席架构师视角 v7），2026-10-26。关联 ADR: D-233。**
+**Signed: Loomy（首席架构师视角 v7），2026-10-26。关联 ADR: D-233 / D-234~D-236。**

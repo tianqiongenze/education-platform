@@ -53,11 +53,28 @@ public class RiskControlAutoConfiguration {
             @Value("${ep.risk.limits.auth-per-minute:5}") int authLimitPerMinute,
             @Value("${ep.risk.limits.default-per-minute:60}") int defaultLimitPerMinute,
             @Value("${ep.risk.window-seconds:60}") int windowSeconds,
-            @Value("${ep.risk.trusted-proxies:0}") int trustedProxies) {
+            @Value("${ep.risk.trusted-proxies:0}") int trustedProxies,
+            ObjectProvider<com.ep.web.common.risk.IpBanService> ipBanServiceProvider) {
         RiskControlFilter.WindowCounter counter =
                 counterProvider.getIfAvailable(RiskControlFilter::memoryCounter);
         return new RiskControlFilter(counter, authLimitPerMinute, defaultLimitPerMinute,
-                windowSeconds, trustedProxies, java.time.Clock.systemUTC());
+                windowSeconds, trustedProxies, java.time.Clock.systemUTC(),
+                ipBanServiceProvider.getIfAvailable());
+    }
+
+    /**
+     * D-236: automatic IP ban above the rate limiter (3 strikes → 30 min ban),
+     * enabled by default and deactivatable via {@code ep.risk.ban.enabled=false}.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(name = "ep.risk.ban.enabled", havingValue = "true", matchIfMissing = true)
+    public com.ep.web.common.risk.IpBanService ipBanService(
+            ObjectProvider<StringRedisTemplate> redisProvider,
+            @Value("${ep.risk.ban.violations-to-ban:3}") int violationsToBan,
+            @Value("${ep.risk.ban.ttl-minutes:30}") int banTtlMinutes) {
+        return new com.ep.web.common.risk.IpBanService(redisProvider.getIfAvailable(),
+                violationsToBan, java.time.Duration.ofMinutes(banTtlMinutes));
     }
 
     /** Redis-backed sliding-window counter, only when spring-data-redis AND a template exist. */

@@ -54,6 +54,12 @@
       <artifactId>spring-context</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- D-234: test-scope H2 + spring-jdbc for the Outbox end-to-end tests. -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
@@ -75,6 +81,13 @@
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-tx</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- D-234: OutboxWriter/OutboxRelay speak JDBC (no JPA EntityScan coupling).
+         provided by consumers that have spring-boot-starter-jdbc (all Java services). -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-jdbc</artifactId>
       <scope>provided</scope>
     </dependency>
     <!-- P1-6: VirtualThreadDbAutoConfiguration 依赖 Spring Boot 自动装配注解
