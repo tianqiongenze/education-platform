@@ -58,6 +58,9 @@ public class CacheService {
     /** In-flight loader futures for singleflight (stampede protection). */
     private final ConcurrentHashMap<String, CompletableFuture<Object>> inFlightLoads = new ConcurrentHashMap<>();
 
+    /** v7 (D-233): hotspot key detector — closes the detect leg of the hit-rate loop. */
+    private final HotspotDetector hotspotDetector = new HotspotDetector();
+
     /** Default TTL jitter: random factor in [0.8, 1.2]. */
     private static final DoubleSupplier DEFAULT_JITTER = () -> 0.8 + ThreadLocalRandom.current().nextDouble() * 0.4;
 
@@ -157,6 +160,10 @@ public class CacheService {
                     return (T) raw;
                 }
                 l2Misses.incrementAndGet();
+                // v7 (D-233): a miss that must fall through to the loader feeds
+                // the hotspot detector — repeated fall-throughs on one key are
+                // the actionable signal for L1 sizing / TTL tuning.
+                hotspotDetector.recordFallThrough(cacheName, effKey);
             } catch (Exception e) {
                 l2Misses.incrementAndGet();
                 log.warn("L2 redis miss/degrade: {}", e.getMessage());
@@ -359,6 +366,14 @@ public class CacheService {
      * (see {@link CacheConfig}); also logged periodically by
      * {@link CacheStatsLogger}.
      */
+    /**
+     * v7 (D-233): exposes the hotspot detector for Micrometer gauge binding
+     * and diagnostics endpoints.
+     */
+    public HotspotDetector getHotspotDetector() {
+        return hotspotDetector;
+    }
+
     public CacheStats getStats() {
         return new CacheStats(
                 l1Hits.get(), l1Misses.get(),
@@ -385,6 +400,21 @@ public class CacheService {
         public double l2HitRate() {
             long total = l2Hits + l2Misses;
             return total == 0 ? 0.0 : (double) l2Hits / total;
+        }
+
+        /**
+         * v7 (D-233): composite hit rate across BOTH tiers — every request
+         * that did not fall through to the loader. SLO target ≥ 0.99
+         * (industry practice for a two-tier cache fronting a database);
+         * exported as {@code ep_cache_composite_hit_rate}.
+         */
+        public double compositeHitRate() {
+            long total = l1Hits + l1Misses;
+            if (total == 0) {
+                return 0.0;
+            }
+            long servedFromCache = l1Hits + l2Hits;
+            return (double) servedFromCache / total;
         }
 
         @Override

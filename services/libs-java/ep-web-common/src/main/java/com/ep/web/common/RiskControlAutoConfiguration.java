@@ -14,20 +14,24 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Risk-control P0-3: registers the {@link RiskControlFilter} for every web
- * service that carries ep-web-common. Enabled by default
+ * Risk-control P0-3 (v7, D-233): registers the {@link RiskControlFilter} for
+ * every web service that carries ep-web-common. Enabled by default
  * ({@code ep.risk.enabled=true} unless overridden) — rate limiting that ships
  * disabled is rate limiting that never ships.
  *
- * <p>Limits (requests per {@code ep.risk.window-seconds} window, default 60s):
- * {@code ep.risk.limits.auth-per-minute} (default 5 for {@code /api/auth/**})
- * and {@code ep.risk.limits.default-per-minute} (default 60 elsewhere).</p>
+ * <p>Limits (requests per {@code ep.risk.window-seconds} sliding window,
+ * default 60s): {@code ep.risk.limits.auth-per-minute} (default 5 for
+ * {@code /api/auth/**}) and {@code ep.risk.limits.default-per-minute}
+ * (default 60 elsewhere). {@code ep.risk.trusted-proxies} (default 0)
+ * controls how many reverse proxies in front of this service are trusted
+ * when resolving the client IP from {@code X-Forwarded-For}.</p>
  *
- * <p>Counting prefers Redis ({@link RedisWindowCounter}, cluster-wide) when
- * both spring-data-redis and a {@link StringRedisTemplate} bean are present,
- * and degrades to the per-instance {@link RiskControlFilter.MemoryWindowCounter}
- * otherwise. The Redis branch is isolated in a nested configuration class so
- * consumers without spring-data-redis on the classpath can still load this
+ * <p>Counting prefers Redis ({@link RedisSlidingWindowCounter}, cluster-wide
+ * sliding window with half-open self-healing) when both spring-data-redis and
+ * a {@link StringRedisTemplate} bean are present, and degrades to the
+ * per-instance {@link RiskControlFilter.MemorySlidingWindowCounter} otherwise.
+ * The Redis branch is isolated in a nested configuration class so consumers
+ * without spring-data-redis on the classpath can still load this
  * auto-configuration.</p>
  */
 @AutoConfiguration
@@ -39,8 +43,8 @@ public class RiskControlAutoConfiguration {
     /**
      * The filter bean. The {@link RiskControlFilter.WindowCounter} is injected
      * as an optional dependency: the Redis branch below contributes a
-     * cluster-wide counter when possible, otherwise the in-memory fallback is
-     * created here.
+     * cluster-wide sliding-window counter when possible, otherwise the
+     * in-memory fallback is created here.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -48,13 +52,15 @@ public class RiskControlAutoConfiguration {
             ObjectProvider<RiskControlFilter.WindowCounter> counterProvider,
             @Value("${ep.risk.limits.auth-per-minute:5}") int authLimitPerMinute,
             @Value("${ep.risk.limits.default-per-minute:60}") int defaultLimitPerMinute,
-            @Value("${ep.risk.window-seconds:60}") int windowSeconds) {
+            @Value("${ep.risk.window-seconds:60}") int windowSeconds,
+            @Value("${ep.risk.trusted-proxies:0}") int trustedProxies) {
         RiskControlFilter.WindowCounter counter =
                 counterProvider.getIfAvailable(RiskControlFilter::memoryCounter);
-        return new RiskControlFilter(counter, authLimitPerMinute, defaultLimitPerMinute, windowSeconds);
+        return new RiskControlFilter(counter, authLimitPerMinute, defaultLimitPerMinute,
+                windowSeconds, trustedProxies, java.time.Clock.systemUTC());
     }
 
-    /** Redis-backed counter, only when spring-data-redis AND a template exist. */
+    /** Redis-backed sliding-window counter, only when spring-data-redis AND a template exist. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(StringRedisTemplate.class)
     static class RedisCounterConfiguration {
@@ -63,7 +69,7 @@ public class RiskControlAutoConfiguration {
         @ConditionalOnBean(StringRedisTemplate.class)
         @ConditionalOnMissingBean(RiskControlFilter.WindowCounter.class)
         public RiskControlFilter.WindowCounter riskControlWindowCounter(StringRedisTemplate redisTemplate) {
-            return new RedisWindowCounter(redisTemplate);
+            return new RedisSlidingWindowCounter(redisTemplate);
         }
     }
 }

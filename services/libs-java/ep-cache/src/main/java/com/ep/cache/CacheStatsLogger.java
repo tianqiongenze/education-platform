@@ -34,7 +34,24 @@ public class CacheStatsLogger implements AutoCloseable {
         });
         this.scheduler.scheduleAtFixedRate(() -> {
             try {
-                log.info("ep-cache stats: {}", cacheService.getStats());
+                CacheService.CacheStats stats = cacheService.getStats();
+                log.info("ep-cache stats: {}", stats);
+                // v7 (D-233): composite hit-rate SLO check — industry target for
+                // a two-tier cache is >= 99%. A sustained gap is the actionable
+                // signal to raise L1 capacity, lengthen TTLs, or investigate
+                // hotspots reported by HotspotDetector.
+                if (stats.l1Hits() + stats.l1Misses() >= 1000) {
+                    double composite = stats.compositeHitRate();
+                    if (composite < 0.99) {
+                        log.warn("ep-cache SLO: composite hit rate {} below 99% target "
+                                + "(L1={}/{}, L2={}/{}, loads={}) — tune ep.cache L1 capacity/TTL "
+                                + "and review HotspotDetector output",
+                                String.format("%.2f%%", composite * 100),
+                                stats.l1Hits(), stats.l1Hits() + stats.l1Misses(),
+                                stats.l2Hits(), stats.l2Hits() + stats.l2Misses(),
+                                stats.loaderInvocations());
+                    }
+                }
             } catch (Exception e) {
                 log.debug("ep-cache stats log failed: {}", e.toString());
             }

@@ -1,12 +1,12 @@
 # education-platform · 多语言云原生在线教育平台
 
-> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**217 个架构决策（D-001 ~ D-217）全程留痕，架构评分卡 94.5 / A**。
+> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**233 个架构决策（D-001 ~ D-233）全程留痕，v7 逐项目群评分 91.8 / A-**（18 个项目单元逐项打分见 `docs/architecture/project-group-scorecard-v7.md`）。
 
 ![Java](https://img.shields.io/badge/Java%2021-Spring%20Boot%204.0.x-6DB33F?logo=springboot&logoColor=white)
 ![Go](https://img.shields.io/badge/Go%201.25-WebSocket%20%2B%20Live-00ADD8?logo=go&logoColor=white)
 ![Python](https://img.shields.io/badge/Python%203.12-Litestar%20%2B%20LangGraph-3776AB?logo=python&logoColor=white)
-![Architecture](https://img.shields.io/badge/scorecard-94.5%2F100%20(A)-orange)
-![ADR](https://img.shields.io/badge/decisions-217%20(D--001~D--217)-blueviolet)
+![Architecture](https://img.shields.io/badge/scorecard-v7_91.8%2F100%20(A--)-orange)
+![ADR](https://img.shields.io/badge/decisions-233%20(D--001~D--233)-blueviolet)
 ![Contracts](https://img.shields.io/badge/contracts-9%20OpenAPI%20%2B%208%20AsyncAPI-blue)
 
 ---
@@ -59,8 +59,8 @@
 ### 1.2 关键数字
 
 ```
-架构评分          v5 93.5 / 100（A，制品完备度标尺）→ v6 91.0（A-，实战有效性标尺，见 §13）
-架构决策          226 项（D-001 ~ D-226，decisions.jsonl 全程留痕）
+架构评分          v5 93.5 / 100（A，制品完备度标尺）→ v6 91.0（A-，实战有效性标尺）→ v7 91.8（A-，逐项目群矩阵 + 大厂标准对齐重构，见 §13）
+架构决策          233 项（D-001 ~ D-233，decisions.jsonl 全程留痕；D-233 = 风控滑动窗口 + 幂等重放 + 缓存热点闭环）
 后端服务          17 个：Java 14 + Go 2 + Python 1（AI 平台内含 9 模块）
 公共库            7 个：Java 5（ep-web-common / ep-disruptor / ep-cache / ep-data / ep-memory-java）
                           + Go 1（ep-common-go）+ Python 1（ep-common-python）
@@ -70,10 +70,11 @@ Java 测试         ≈ 1730 用例 0 失败（mvn -o test 全量实证）+ 21 �
 Python 测试       279 用例（pytest）
 Go 测试           全覆盖（-race 跑法，含 WS 限频 3 项）
 k6 压测           14 套脚本（1K → 百万级在线模拟、秒杀尖峰、跨语言对比、SDD 契约验证）
-前端测试          89 用例本轮实证（7/7 app 构建通过；历史累计 223）
+前端测试          89 用例本轮实证（7/7 app 构建通过；历史累计 223；12/12 typecheck 全绿）
 CI Workflows      14 条（测试矩阵/覆盖率/变异测试/AOT 门禁/铁律扫描/三重安全扫描）
 多活单元          4 个（cell-bj / cell-hz / cell-sz / cell-sg）
 真实集群          applications-cluster 双节点部署实证（Wave-1 六镜像双节点就绪，runbook 11 踩坑）
+风控效能          窗口边界放行 2×→1.0×；XFF 伪造绕过→不可行；崩溃重试等待 24h→≤5min；Redis 故障自愈 ≤30s（D-233）
 ```
 
 ### 1.3 技术栈总表
@@ -515,14 +516,18 @@ flowchart TB
     end
 ```
 
-### 3.0.4 缓存命中率目标（表格化）
+### 3.0.4 缓存命中率目标（表格化，v7 闭环增强）
 
-| 缓存层 | 策略 | 目标命中率 | TTL | 失效机制 |
-|---|---|---|---|---|
-| L1 Caffeine | 进程内 LRU | ≥ 60% | 5-10 min | Pulsar 广播失效 |
-| L2 Redis Cluster | 共享 Cache-Aside | ≥ 85% | 30-60 min | TTL + 主动失效 |
-| L3 DB | 兜底持久化 | — | — | 写入即最新 |
-| 空值哨兵 | 防穿透 | — | 60s | `__EP_CACHE_EMPTY__` |
+| 缓存层 | 策略 | 目标命中率 | TTL | 失效机制 | v7 增量 |
+|---|---|---|---|---|---|
+| L1 Caffeine | 进程内 LRU | ≥ 60% | 5-10 min | Pulsar 广播失效 | 热点探测供容量调参 |
+| L2 Redis Cluster | 共享 Cache-Aside | ≥ 85% | 30-60 min | TTL + 主动失效 | — |
+| L3 DB | 兜底持久化 | — | — | 写入即最新 | — |
+| 空值哨兵 | 防穿透 | — | 60s | `__EP_CACHE_EMPTY__` | — |
+| **综合（L1+L2）** | 两级协同 | **≥ 99%（SLO）** | — | — | ✅ `ep_cache_composite_hit_rate` 指标 + <99% WARN 告警（样本≥1000） |
+| **热点 key** | 探测→观测→调参 | 晋升 0 次/窗为健康 | 60s 滑窗 | — | ✅ `HotspotDetector`：回源 ≥5 次/窗 → `ep_cache_hotspot_promoted_total` 告警 |
+
+> **v7 命中率提升闭环**：L2 miss → loader fall-through 逐 key 滑窗计数（探测）→ Micrometer 指标 + 周期日志（观测）→ L1 容量/TTL 证据化调参（优化）。探测器刻意不做运行时自动 pin——有界 L1 中 pin 热点会饿死冷 key、再制造淘汰风暴，2025 行业实践是"探测供容量规划"。剩余提升手段：布隆过滤器（P2，空值哨兵已够用）、Redis 7 client-side caching（P3）。
 
 ### 3.1 LMAX Disruptor 多级流水线（全服务共用的高并发内核）
 
@@ -751,10 +756,10 @@ flowchart TB
 | Actuator 端点暴露 | 强制 Basic 认证 | ✅ | D-154 |
 | WebSocket 未授权 | fail-closed（无 JWT 公钥拒启） | ✅ | `ws-gateway/failclosed.go` |
 | 非法入参 | Bean Validation JSR-380 全栈 | ✅ | D-154 |
-| 流量暴刷 | RiskControlFilter IP+用户双维滑窗（默认启用，429+Retry-After）+ Resilience4j 注解 | ✅ | D-223 |
+| 流量暴刷 | RiskControlFilter IP+用户双维**滑动窗口**（任意 trailing 窗口精确计数，边界突刺消除）+ XFF 可信代理链（`ep.risk.trusted-proxies`，默认 0 防伪造）+ Redis 故障 30s 半开自愈 + Resilience4j 注解 | ✅ | D-223 + **D-233（v7）** |
 | 金额篡改（0.01元购课） | CoursePricingPort 服务端定价复核，fail-closed 拒单 | ✅ | D-218 |
 | 水平越权（IDOR 遍历他人订单/答卷） | OrderDubbo/Submission Controller 归属校验（本人或 ADMIN） | ✅ | D-218 |
-| 重复支付 | Redis SETNX + DB UNIQUE 双保险幂等 | ✅ | D-155/D-221 |
+| 重复支付 | Redis SETNX + DB UNIQUE 双保险幂等 + **重复请求响应重放**（Stripe 标准：2xx 缓存 24h 原样重放；PENDING 409+Retry-After；处理超时 5min 防崩溃僵尸；Lua CAS 原子落状态） | ✅ | D-155/D-221 + **D-233（v7）** |
 | 登录撞库 | LoginAttemptLimiter 5次/15分钟锁定（Redis+内存降级） | ✅ | D-219 |
 | WS 帧洪水/消息轰炸 | 64KB 帧上限 + 每连接 token bucket 10msg/s | ✅ | D-220 |
 | 全表爬取（size=10^6） | 分页 size 上限 100 | ✅ | D-218 |
@@ -766,19 +771,31 @@ flowchart TB
 | 人机验证（验证码/行为） | 无 | ❌ 缺失 | 下一前沿（D-223 剩余项） |
 | 设备指纹/风控规则引擎 | 无 | ❌ 缺失 | 大厂第四层（对标本期 2026） |
 
-#### 风控体系分层实测（v6 审计 → D-218~D-223 重构后）
+#### 风控体系分层实测（v6 审计 → D-218~D-223 重构 → D-233 v7 对标）
 
-大厂四层对标（边缘限流 → 网关限流 → 业务防重 → 风控引擎）：
+大厂五层对标（边缘限流 → 网关限流 → 业务防重 → 风控引擎 → 监控闭环，2025 美团/腾讯标准）：
 
 | 层 | 大厂标准 | 本项目现状 | 层级完善度 |
 |---|---|---|---|
 | ① 边缘 | WAF/CC/IP 信誉 | Traefik TLS+CORS（无 WAF） | 40% |
-| ② 网关 | 多维限流+防重放+人机验证 | IP+用户双维滑窗（默认启用）、JWT、幂等键 | 70% |
-| ③ 业务 | 幂等表/状态机/防超卖 | 订单金额 fail-closed、SETNX+UNIQUE、乐观锁 @Version、归属校验 | 85% |
+| ② 网关 | 多维限流+防重放+人机验证 | IP+用户双维**滑动窗口**（边界突刺 2×→1.0×）+ **XFF 可信代理链**（伪造不可行）+ Redis **半开自愈**（30s 自动恢复）+ JWT + 幂等**响应重放** | **85%（v6 70% → +15%）** |
+| ③ 业务 | 幂等表/状态机/防超卖 | 订单金额 fail-closed、SETNX+UNIQUE+**响应重放**、乐观锁 @Version、归属校验 | **95%（v6 85% → +10%）** |
 | ④ 引擎 | 规则引擎/名单/设备指纹 | 审计切面（留痕基础），引擎缺位 | 20% |
+| ⑤ 监控闭环 | 429 率/限流命中/自愈指标 | 限流 WARN 日志 + 审计 JSON | 60% |
+
+**v7 风控效能数字化（D-233 实施前后）：**
+
+| 效能指标 | v6 前 | v7 后 |
+|---|---|---|
+| 固定窗口边界最大放行 | 2× limit（59s+1s 突刺） | **1.0× limit**（滑动窗口精确） |
+| XFF 伪造轮换身份绕过限流 | 可行（无条件信任第一段） | **不可行**（默认 0 可信代理） |
+| 进程崩溃后客户端重试等待 | ≤ 24h（PENDING TTL=24h） | **≤ 5min**（处理超时独立短 TTL） |
+| 重试请求响应语义 | 409 Conflict（拿不到结果） | **原响应重放**（Stripe/IETF 幂等语义） |
+| Redis 故障后限流降级恢复 | 需重启（sticky degrade） | **≤ 30s 自动**（半开探测自愈） |
 
 > v6 审计教训（记入铁律 9 实践）：Resilience4j 曾"配置了但开关未开"——**配置存在 ≠ 能力生效**。
-> D-223 将 `ep.risk.enabled` 默认改为 true，限流才真正形成防线。
+> D-223 将 `ep.risk.enabled` 默认改为 true，限流才真正形成防线；D-233 进一步把限流算法从固定窗口升级为滑动窗口并对标 Stripe 幂等标准。
+> 验证：ep-web-common 74/74 + portal-bff 186/186 + ep-cache 95/95 测试全绿，全仓编译 EXIT=0。
 
 ### 3.8 工程铁律治理（表格化）
 
@@ -1357,7 +1374,17 @@ flowchart LR
 
 ### 13.1 评分总览
 
-> 来源：`docs/architecture/architecture-scorecard.md` v6 · 总分 **94.5 / 100（A）** · 技术子项 75.5 / 80
+> **v7（2026-10-26）**：`docs/architecture/project-group-scorecard-v7.md` — **18 个项目群单元逐项打分矩阵**（6 维度 × 100 分），项目群均值 **85.8 / B+**，加权总分 **91.8 / A-**（v6 91.0 → +0.8，D-233 风控滑动窗口 + 幂等重放 + 缓存热点闭环贡献）。逐项目评分速览：
+>
+> | 梯队 | 项目 | 得分 | 亮点 / 短板 |
+> |------|------|------|------------|
+> | A（≥93） | integration-tests / **libs-java（5 SDK）** | 93 / **95** | 跨服务契约大本营；v7 后风控+缓存效能为全项目天花板 |
+> | A-（88-89） | data-platform / order-platform / grading-service / knowledge-platform / grading-api | 88-89 | Outbox 唯一落地（order）；Outbox 缺失是 core-business 最大改进项 |
+> | B+（86-87） | core-business / portal-bff / frontend | 86-87 | 充血模型标杆 / v7 幂等重放；BFF 测试密度待加密 |
+> | B（79-84） | payment / ai-platform / libs-go / libs-python | 82-84 | 资金域测试单薄（6 文件）；Go/Python SDK 测试欠账 |
+> | B-/C+（75-79） | live-go / ws-gateway / boardgame / senior-care | 75-79 | 边缘域风控与缓存接入度低（P2 路线图覆盖） |
+>
+> v6 评分卡：`docs/architecture/architecture-scorecard.md` v6 · 总分 **94.5 / 100（A）** · 技术子项 75.5 / 80（制品完备度标尺，与 v7 实战有效性标尺互补）
 
 ### 13.2 十维评分明细表
 
@@ -1463,7 +1490,7 @@ flowchart LR
 
 ### 15.2 目录结构评分（v6 专项回答：services/ 混放符合软件工程要求吗）
 
-**已从 5/10 提升至 ~7/10（方案 A 已执行，D-229）**。`services/` 内共享库收敛为 `libs-java/`（5 个）、`libs-go/`、`libs-python/` 三目录，archive/ 移出顶层，22 项 → 16 项；Java/Go/Python 边界可辨。
+**已从 5/10 提升至 ~7.5/10（方案 A 已执行 D-229；v7 复审微升）**。`services/` 内共享库收敛为 `libs-java/`（5 个）、`libs-go/`、`libs-python/` 三目录，archive/ 移出顶层，22 项 → 16 项；Java/Go/Python 边界可辨。
 
 | 方案 | 描述 | 成本 | 结论 |
 |---|---|---|---|
@@ -1472,12 +1499,14 @@ flowchart LR
 | C | 领域分组 `domains/{learning,commerce,...}` | L（1-2周） | 收益存疑 |
 
 > `frontend/`（apps/ + packages/ 分离）已符合大厂 monorepo 惯例；差距集中在 services/。
+> **v7 复审残留（P2，不阻塞）**：① knowledge/order/payment 三处父级顶层 `src/` 为 GraalVM native-image 元数据（位置合法但易误读，建议迁 `build/graalvm/`）；② boardgame/senior-care 单层结构 vs order/payment 双层（api/service）风格不一，建议统一；③ grading-api 独立顶层建议并入 grading-service 子模块。
 
 ---
 
 <div align="center">
 
-**架构评分 v6 91.0/A-（实战有效性标尺）· 226 项决策留痕 · 10 条铁律 · 17 份契约先行 · 1730 Java 测试 0 失败**
+**架构评分 v7 91.8/A-（逐项目群实战标尺，18 单元矩阵）· 233 项决策留痕 · 10 条铁律 · 17 份契约先行 · 1730 Java 测试 0 失败**
+**v7 大厂标准对齐：风控滑动窗口 + XFF 可信代理链 + 幂等响应重放（Stripe 标准）+ 缓存命中率 ≥99% SLO 闭环（D-233）**
 
 _本仓库为工程实践参考实现，持续重构演进中。_
 
