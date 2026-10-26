@@ -825,3 +825,17 @@ Iron Law 8 三方案对比:
 - **功能实测**: T0健康矩阵 5/6 UP(ws-gateway节点curl路径待核); T1.1 captcha签发✓ T1.2错答400✓; T6 429+retry-after实弹✓
 - **待收口**: EP_DEV_SEED_ENABLED=true播种→login happy-path→T2/T3/T4链; ws-gateway节点curl路径核对
 - 决策总数: 233; commit ed24c9f3 已push
+
+
+## D-234: T0~T7 全链路功能实测全绿 (2026-10-26)
+
+| 项 | 结果 |
+|---|---|
+| T0 健康 | 6/6 服务 1/1 Running 0重启 (r21 mixed) |
+| T1 认证 | captcha✓ login=200(JWT+jti)✓ logout=204✓ 吊销→401✓ relogin✓ |
+| T2 课程 | 创建(带JWT)✓ 发布=204✓ 详情✓ (需X-Cell-Name: cell-hz) |
+| T3 订单 | 篡改0.01→服务端99.00覆盖(D-218实战拦截)✓ pay=204✓ status=PAID✓ |
+| T7 数据层 | CRDB: courses=1 orders=3 users=1 全通; EP_DATA_ENABLED=true PROVIDER=cockroachdb |
+| 修复 | DubboCoursePricingPort防御性extractPrice(缓存LinkedHashMap降级); core-business jwt-keys挂载补齐(base yaml+overlay); ddl-auto=update注入; seeding经JAVA_TOOL_OPTIONS生效 |
+| 遗留 | ws-gateway 8080/8081端口对齐(1/1运行但svc路径待核); ws-gateway Redis auth env(REdis_PASSWORD已注入CM) |
+| 决策 | 234 |

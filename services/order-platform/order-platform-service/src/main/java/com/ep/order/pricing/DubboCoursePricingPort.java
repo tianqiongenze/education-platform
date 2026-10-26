@@ -47,10 +47,36 @@ public class DubboCoursePricingPort implements CoursePricingPort {
             throw new IllegalStateException(
                     "D-218 fail-closed: course pricing lookup failed for courseId=" + courseId, e);
         }
-        if (course == null || course.getPrice() == null || course.getPrice().signum() <= 0) {
+        BigDecimal price = extractPrice(course);
+        if (price == null || price.signum() <= 0) {
             throw new IllegalStateException(
                     "D-218 fail-closed: no authoritative price for courseId=" + courseId);
         }
-        return course.getPrice();
+        return price;
+    }
+
+    /**
+     * D-232: defensive extraction. When the provider round-trips the course
+     * through the JSON cache (ep-cache), Dubbo deserializes it as a
+     * LinkedHashMap instead of {@code Course} — accept both shapes.
+     */
+    @SuppressWarnings("unchecked")
+    private BigDecimal extractPrice(Object course) {
+        if (course instanceof com.ep.business.course.Course c) {
+            return c.getPrice();
+        }
+        if (course instanceof java.util.Map<?, ?> m) {
+            Object v = m.get("price");
+            if (v instanceof java.math.BigDecimal bd) {
+                return bd;
+            }
+            if (v instanceof Number n) {
+                return new java.math.BigDecimal(n.toString());
+            }
+            if (v != null) {
+                return new java.math.BigDecimal(v.toString());
+            }
+        }
+        return null;
     }
 }

@@ -71,6 +71,10 @@ spec:
               value: "core-business"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=core-business,service.namespace=education-platform,deployment.environment=production"
+          volumeMounts:
+            - name: jwt-keys
+              mountPath: /etc/jwt
+              readOnly: true
           resources:
             requests:
               cpu: 500m

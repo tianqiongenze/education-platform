@@ -72,6 +72,9 @@ data:
 
   # --- JPA dialect: base yml hardcodes H2Dialect; CRDB needs PostgreSQL ---
   SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: "org.hibernate.dialect.PostgreSQLDialect"
+  # D-234: core-business base yml sets ddl-auto:none — override so the user/course
+  # schema bootstraps on CRDB (order/payment own ymls already use update).
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
 
   # --- Seata: no Seata TC / Nacos on this cluster (D-113 Saga engine is
   #     in-JVM; the global-tx client would fail startup against N/A registry) ---

@@ -218,3 +218,35 @@ RiskControlFilter 对节点 IP 触发 429 `{"code":"RATE_LIMITED","message":"Too
 3. T2/T3/T4 课程/订单/批改链（用 T1 token 走 BFF 10.97.98.252:80，D-218 金额篡改断言 0.01→服务端价）
 4. ws-gateway: 节点 curl /healthz 路径核对（监听 8080 vs svc 8081——PORT env 或 svc targetPort 对齐）
 5. 全绿后跑 `NODE=10.167.2.175 ./scripts/post-deploy-functional-test.sh`（T0~T7 完整版，需把脚本内 BFF 改为 ClusterIP 直连模式——port-forward 在本环境不可用）
+
+
+## 10. D-234 全链路实测通过快照（2026-10-26, r21）
+
+**6服务全绿（8 Pod 1/1 Running 0重启）+ T1/T2/T3/T7 功能链全通。**
+
+### 实测通过项
+| 项 | 证据 |
+|---|---|
+| T1.1 captcha 签发 | `{"captchaId","question":"8 - 5 = ?"}` |
+| T1.2 login | 200, JWT 含 jti/sub/role |
+| T1.3 logout | 204 |
+| T1.4 吊销 token | 401（JWT 黑名单闭环） |
+| T1.5 relogin | 200 |
+| T2 课程 CRUD via BFF | 创建(courseId=11660985107611648)✓ 发布=204✓ 详情✓ — 必须带 `X-Cell-Name: cell-hz`（CellRouter 307 校验） |
+| T3 金额篡改防线 | 客户端 `amount:0.01` → 服务端权威价 `99.00` 覆盖（D-218 实战拦截） |
+| T3 支付 | pay=204 → status=1 PAID, payMethod=ALIPAY |
+| T7 数据层 | CRDB `education`: ep_course=1, ep_order=3, ep_user=1 行；EP_DATA_ENABLED=true + PROVIDER=cockroachdb |
+
+### 实战发现并修复
+1. **DubboCoursePricingPort ClassCastException**：provider 经 ep-cache JSON 往返后 Dubbo 返回 LinkedHashMap → 消费端 extractPrice 双形态解析（Course 或 Map）
+2. **core-business 缺 jwt-keys 挂载**：base yaml 补 volumeMounts+volumes+env（声明式修复）
+3. **ddl-auto:none 挡 schema 自举**：ConfigMap 注入 SPRING_JPA_HIBERNATE_DDL_AUTO=update
+4. **种子账号**：env EP_DEV_SEED_ENABLED 不生效（Boolean.getBoolean 读系统属性）→ JAVA_TOOL_OPTIONS=-Dep.dev.seed-enabled=true
+
+### 残留（P3）
+- ws-gateway: 应用监听 8080（PORT env 缺省），svc targetPort=8081 — Pod 1/1（readiness 已过）但对外 8081 空响应；svc targetPort 或 PORT env 对齐即可
+- ws-gateway Redis AUTH：REDIS_PASSWORD 已注入 CM，crosspod XReadGroup 报错消失与否待 r22 验证
+
+### 客户端调用契约（实测沉淀）
+- BFF 需要头：`Authorization: Bearer <JWT>` + `X-Cell-Name: cell-hz`（缺省 307 重定向）
+- 角色注入：BFF AuthFilter 校验 JWT 后注入 X-Role/X-User-Id；直连 core 的写操作 403 anonymous 是防线正确行为
