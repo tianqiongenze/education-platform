@@ -82,6 +82,14 @@ public class PaymentEntity implements Serializable {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** D-240/B: agent provenance (五段式第5段) — null for human-initiated payments. */
+    @Column(name = "agent_id", length = 64)
+    private String agentId;
+
+    /** D-240/B: the authorization that covered this agent payment. */
+    @Column(name = "authorization_id", length = 64)
+    private String authorizationId;
+
     @Version
     @Column(name = "lock_version")
     private Integer lockVersion;
@@ -111,6 +119,10 @@ public class PaymentEntity implements Serializable {
     public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
     public Integer getLockVersion() { return lockVersion; }
     public void setLockVersion(Integer lockVersion) { this.lockVersion = lockVersion; }
+    public String getAgentId() { return agentId; }
+    public void setAgentId(String agentId) { this.agentId = agentId; }
+    public String getAuthorizationId() { return authorizationId; }
+    public void setAuthorizationId(String authorizationId) { this.authorizationId = authorizationId; }
 
     @Override
     public boolean equals(Object o) {

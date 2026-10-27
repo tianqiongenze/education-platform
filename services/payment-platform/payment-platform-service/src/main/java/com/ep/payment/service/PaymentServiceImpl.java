@@ -1,6 +1,8 @@
 package com.ep.payment.service;
 
 import com.ep.payment.api.Payment;
+import com.ep.payment.api.AgentPaymentRejectedException;
+import com.ep.payment.api.AgentPaymentRequest;
 import com.ep.payment.api.PaymentChannel;
 import com.ep.payment.api.PaymentChannelSpi;
 import com.ep.payment.api.PaymentRequest;
@@ -10,6 +12,10 @@ import com.ep.payment.api.PaymentStatus;
 import com.ep.payment.api.Refund;
 import com.ep.payment.api.RefundResult;
 import com.ep.payment.api.RefundStatus;
+import com.ep.payment.agent.AgentAuthorizationEntity;
+import com.ep.payment.agent.AgentAuthorizationException;
+import com.ep.payment.agent.AgentAuthorizationService;
+import com.ep.payment.agent.PaymentTokenService;
 import com.ep.payment.channel.MockPaymentChannel;
 import com.ep.payment.entity.PaymentEntity;
 import com.ep.payment.entity.RefundEntity;
@@ -107,6 +113,15 @@ public class PaymentServiceImpl implements PaymentService {
     private final CacheService cacheService;
 
     /**
+     * D-240/B: agent authorization envelope (optional via ObjectProvider).
+     * Present in every Spring context; null in pure-Mockito unit tests. When an
+     * agent payment arrives while absent the charge is REJECTED (fail-closed),
+     * never allowed without verification.
+     */
+    private final AgentAuthorizationService agentAuthorizationService;
+    private final PaymentTokenService paymentTokenService;
+
+    /**
      * Spring-managed constructor. The repositories are injected via
      * {@link ObjectProvider} so they are optional — when both are resolved the
      * service persists to TiDB; when neither is available (pure unit test) the
@@ -124,11 +139,81 @@ public class PaymentServiceImpl implements PaymentService {
                               ObjectProvider<PaymentJpaRepository> paymentRepositoryProvider,
                               ObjectProvider<RefundJpaRepository> refundRepositoryProvider,
                               @Value("${ep.payment.dev-guard:true}") boolean devGuard,
+                              CacheService cacheService,
+                              ObjectProvider<AgentAuthorizationService> agentAuthServiceProvider,
+                              ObjectProvider<PaymentTokenService> tokenServiceProvider) {
+        this(channelSpis,
+                paymentRepositoryProvider == null ? null : paymentRepositoryProvider.getIfAvailable(),
+                refundRepositoryProvider == null ? null : refundRepositoryProvider.getIfAvailable(),
+                devGuard, cacheService,
+                agentAuthServiceProvider == null ? null : agentAuthServiceProvider.getIfAvailable(),
+                tokenServiceProvider == null ? null : tokenServiceProvider.getIfAvailable());
+    }
+
+    /**
+     * Back-compat constructor for the pure-Mockito unit tests (no Spring context).
+     * Equivalent to the Spring constructor with {@code null} repository providers,
+     * so the service falls back to the in-memory store.
+     */
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard) {
+        this(channelSpis, (PaymentJpaRepository) null, (RefundJpaRepository) null, devGuard,
+                null, (AgentAuthorizationService) null, (PaymentTokenService) null);
+    }
+
+    /**
+     * D-182: Test constructor that accepts a CacheService for cache integration
+     * tests. Passes null for repository providers so in-memory store is used.
+     */
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard,
                               CacheService cacheService) {
+        this(channelSpis, (PaymentJpaRepository) null, (RefundJpaRepository) null, devGuard,
+                cacheService, (AgentAuthorizationService) null, (PaymentTokenService) null);
+    }
+
+    /**
+     * D-240/B: test constructor with the agent authorization envelope wired
+     * (for agent-payment unit tests against the in-memory store).
+     */
+    PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard,
+                       CacheService cacheService, AgentAuthorizationService agentAuthService,
+                       PaymentTokenService tokenService) {
+        this(channelSpis, (PaymentJpaRepository) null, (RefundJpaRepository) null, devGuard,
+                cacheService, agentAuthService, tokenService);
+    }
+
+    /**
+     * D-132 back-compat: 5-arg repository-provider constructor retained for the
+     * tests that wire repositories directly. The agent envelope is absent —
+     * agent payments are rejected (fail-closed) in those tests.
+     */
+    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis,
+                              ObjectProvider<PaymentJpaRepository> paymentRepositoryProvider,
+                              ObjectProvider<RefundJpaRepository> refundRepositoryProvider,
+                              boolean devGuard, CacheService cacheService) {
+        this(channelSpis,
+                paymentRepositoryProvider == null ? null : paymentRepositoryProvider.getIfAvailable(),
+                refundRepositoryProvider == null ? null : refundRepositoryProvider.getIfAvailable(),
+                devGuard, cacheService, (AgentAuthorizationService) null, (PaymentTokenService) null);
+    }
+
+    /**
+     * D-240/B: canonical constructor — takes fully-resolved (non-provider)
+     * dependencies so every other constructor can delegate. Null repositories
+     * switch the service to the in-memory store; null agent services mean the
+     * agent envelope is ABSENT and agent payments are rejected (fail-closed).
+     */
+    private PaymentServiceImpl(List<PaymentChannelSpi> channelSpis,
+                               PaymentJpaRepository paymentRepository,
+                               RefundJpaRepository refundRepository,
+                               boolean devGuard, CacheService cacheService,
+                               AgentAuthorizationService agentAuthService,
+                               PaymentTokenService tokenService) {
         this.devGuard = devGuard;
-        this.paymentRepository = paymentRepositoryProvider == null ? null : paymentRepositoryProvider.getIfAvailable();
-        this.refundRepository = refundRepositoryProvider == null ? null : refundRepositoryProvider.getIfAvailable();
+        this.paymentRepository = paymentRepository;
+        this.refundRepository = refundRepository;
         this.cacheService = cacheService;
+        this.agentAuthorizationService = agentAuthService;
+        this.paymentTokenService = tokenService;
         ConcurrentHashMap<PaymentChannel, PaymentChannelSpi> map = new ConcurrentHashMap<>();
         PaymentChannelSpi fallback = null;
         if (channelSpis != null) {
@@ -152,27 +237,10 @@ public class PaymentServiceImpl implements PaymentService {
         }
         this.channels = map;
         this.defaultChannel = fallback;
-        log.info("PaymentServiceImpl initialised: channels={}, devGuard={}, defaultChannel={}, persistence={}",
+        log.info("PaymentServiceImpl initialised: channels={}, devGuard={}, defaultChannel={}, persistence={}, agentEnvelope={}",
                 map.keySet(), devGuard, defaultChannel.getChannel(),
-                paymentRepository != null ? "JPA" : "in-memory");
-    }
-
-    /**
-     * Back-compat constructor for the pure-Mockito unit tests (no Spring context).
-     * Equivalent to the Spring constructor with {@code null} repository providers,
-     * so the service falls back to the in-memory store.
-     */
-    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard) {
-        this(channelSpis, null, null, devGuard, null);
-    }
-
-    /**
-     * D-182: Test constructor that accepts a CacheService for cache integration
-     * tests. Passes null for repository providers so in-memory store is used.
-     */
-    public PaymentServiceImpl(List<PaymentChannelSpi> channelSpis, boolean devGuard,
-                              CacheService cacheService) {
-        this(channelSpis, null, null, devGuard, cacheService);
+                paymentRepository != null ? "JPA" : "in-memory",
+                agentAuthService != null ? "wired" : "absent");
     }
 
     private boolean isJpa() {
@@ -187,6 +255,85 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResult createPayment(PaymentRequest request) {
+        return doCreatePayment(request, null, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PaymentResult createAgentPayment(AgentPaymentRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        requireNonBlank(request.orderId(), "orderId");
+        requireNonBlank(request.agentId(), "agentId");
+        requireNonBlank(request.authorizationId(), "authorizationId");
+        Objects.requireNonNull(request.amount(), "amount must not be null");
+        if (request.amount().signum() <= 0) {
+            throw new AgentPaymentRejectedException("BAD_REQUEST", "amount must be > 0");
+        }
+        // D-240/B fail-closed: no envelope wired → no agent payment. There is no
+        // scenario where an unverified agent charge is allowed to proceed.
+        if (agentAuthorizationService == null) {
+            throw new AgentPaymentRejectedException("ENVELOPE_ABSENT",
+                    "agent authorization envelope is not wired — agent payment refused");
+        }
+        Instant now = Instant.now();
+        AgentAuthorizationEntity auth;
+        try {
+            auth = agentAuthorizationService.verifyAndReserve(request.agentId(),
+                    request.authorizationId(), request.amount(), now);
+        } catch (AgentAuthorizationException e) {
+            log.warn("agent payment rejected: code={} msg={}", e.getCode(), e.getMessage());
+            throw new AgentPaymentRejectedException(e.getCode(), e.getMessage());
+        }
+        String paymentId = UUID.randomUUID().toString();
+        // 笔笔确认: CONFIRM_REQUIRED authorizations must present a one-time token
+        // minted by the principal's wallet console. Atomic single-use consume.
+        if (auth.requiresConfirmation()) {
+            if (!request.hasToken()) {
+                throw new AgentPaymentRejectedException("TOKEN_REQUIRED",
+                        "authorization " + request.authorizationId()
+                                + " requires per-payment confirmation (CONFIRM_REQUIRED)");
+            }
+            if (paymentTokenService == null) {
+                throw new AgentPaymentRejectedException("ENVELOPE_ABSENT",
+                        "payment token service is not wired — CONFIRM_REQUIRED payment refused");
+            }
+            try {
+                paymentTokenService.consume(request.paymentToken(), paymentId,
+                        request.amount(), now);
+            } catch (AgentAuthorizationException e) {
+                log.warn("agent payment token rejected: code={} msg={}", e.getCode(), e.getMessage());
+                throw new AgentPaymentRejectedException(e.getCode(), e.getMessage());
+            }
+        }
+        PaymentRequest base = new PaymentRequest(request.orderId(), request.tenantId(),
+                request.channel(), request.amount(), request.currency());
+        PaymentResult result = doCreatePayment(base, request.agentId(),
+                request.authorizationId(), paymentId);
+        // 五段式对账第5段: intent evidence chain. Logged after the charge attempt;
+        // a logging failure must not roll back the payment itself.
+        try {
+            agentAuthorizationService.logIntent(request.authorizationId(), request.agentId(),
+                    auth.getPrincipalUserId(), "agent payment " + paymentId,
+                    "agent charge authorized by " + request.authorizationId()
+                            + " (mode=" + auth.getMode() + ")",
+                    paymentId,
+                    result.status() == PaymentStatus.SUCCESS ? "ALLOW" : "DENY",
+                    null, now);
+        } catch (Exception e) {
+            log.warn("intent log failed for payment {}: {}", paymentId, e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Shared core of the human ({@link #createPayment}) and agent
+     * ({@link #createAgentPayment}) flows. {@code agentId}/{@code authorizationId}
+     * are non-null only for agent payments and are persisted as provenance
+     * (五段式第5段); {@code forcedPaymentId} lets the agent flow pre-mint the id
+     * so the confirmation token can bind to it before the channel runs.
+     */
+    private PaymentResult doCreatePayment(PaymentRequest request, String agentId,
+                                          String authorizationId, String forcedPaymentId) {
         Objects.requireNonNull(request, "request must not be null");
         requireNonBlank(request.orderId(), "orderId");
         requireNonBlank(request.tenantId(), "tenantId");
@@ -217,11 +364,16 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentChannel effective = devGuard ? PaymentChannel.MOCK : request.channel();
         PaymentChannelSpi spi = resolveChannel(effective);
 
-        String paymentId = UUID.randomUUID().toString();
+        String paymentId = forcedPaymentId != null ? forcedPaymentId : UUID.randomUUID().toString();
         Instant now = Instant.now();
         Payment payment = new Payment(paymentId, request.orderId(), request.tenantId(),
                 request.amount(), request.currency() == null ? "CNY" : request.currency(),
                 spi.getChannel(), PaymentStatus.PENDING, now);
+        // D-240/B: agent provenance (null for human payments).
+        if (agentId != null) {
+            payment.setAgentId(agentId);
+            payment.setAuthorizationId(authorizationId);
+        }
 
         // Drive the channel. The mock is synchronous and returns SUCCESS; a real
         // channel may return PROCESSING and complete via callback.
@@ -238,6 +390,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (isJpa()) {
             PaymentEntity entity = toEntity(payment);
+            // D-240/B (r28): toEntity nulls the @Version for this new row, so
+            // save() persists (INSERT) for both human and agent flows; the
+            // earlier existsById/saveAndFlush workaround is obsolete.
             paymentRepository.save(entity);
         } else {
             paymentsById.put(paymentId, payment);
@@ -427,7 +582,16 @@ public class PaymentServiceImpl implements PaymentService {
         e.setChannelTxId(p.getChannelTxId());
         e.setCreatedAt(p.getCreatedAt());
         e.setPaidAt(p.getPaidAt());
-        e.setLockVersion(p.getLockVersion() == null ? 0 : p.getLockVersion());
+        e.setAgentId(p.getAgentId());
+        e.setAuthorizationId(p.getAuthorizationId());
+        // D-240/B fix (r28): sole call site is new-row creation. The domain
+        // constructor initialises lockVersion=0, and a NON-NULL version makes
+        // Spring Data isNew()=false → save() merges → Hibernate 7 sees
+        // "detached entity with version + missing row" = concurrent delete →
+        // StaleObjectStateException (CRDB: 0 rows inserted). Force null so
+        // save() persists; Hibernate assigns 0 on INSERT. Loaded entities carry
+        // their version via toDomain, which is unaffected.
+        e.setLockVersion(null);
         return e;
     }
 
@@ -436,6 +600,8 @@ public class PaymentServiceImpl implements PaymentService {
                 e.getAmount(), e.getCurrency(), e.getChannel(), e.getStatus(), e.getCreatedAt());
         p.setChannelTxId(e.getChannelTxId());
         p.setPaidAt(e.getPaidAt());
+        p.setAgentId(e.getAgentId());
+        p.setAuthorizationId(e.getAuthorizationId());
         p.setLockVersion(e.getLockVersion());
         return p;
     }
@@ -451,7 +617,8 @@ public class PaymentServiceImpl implements PaymentService {
         e.setReason(r.getReason());
         e.setCreatedAt(r.getCreatedAt());
         e.setRefundedAt(r.getRefundedAt());
-        e.setLockVersion(0);
+        // D-240/B fix (r27): new refunds always INSERT (status flips go through
+        // @Modifying SQL) — leave the @Version field null so save() persists.
         return e;
     }
 }

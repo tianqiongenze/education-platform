@@ -250,3 +250,56 @@ RiskControlFilter 对节点 IP 触发 429 `{"code":"RATE_LIMITED","message":"Too
 ### 客户端调用契约（实测沉淀）
 - BFF 需要头：`Authorization: Bearer <JWT>` + `X-Cell-Name: cell-hz`（缺省 307 重定向）
 - 角色注入：BFF AuthFilter 校验 JWT 后注入 X-Role/X-User-Id；直连 core 的写操作 403 anonymous 是防线正确行为
+
+---
+
+## 11. AI 支付链（D-235~D-240）部署与实测实录（2026-10-27, r23→r26）
+
+### 11.1 交付内容（代码层全绿）
+| 包 | 决策 | 内容 | 测试 |
+|---|---|---|---|
+| A1 | D-235 | 显式支付状态机 `PaymentStatusMachine`（含 PENDING→SUCCESS 同步渠道语义） | 6t |
+| A2 | D-237 | 智能路由 `PaymentChannelRouter` + RouteAdvisor（无 bean 降级 rules-only，no-arg 构造器防 CrashLoop） | 8t |
+| A3 | D-238 | 5 套账务底座 12 科目 `LedgerSubject` 复式记账（Σ借=Σ贷校验） | 10t |
+| A4 | D-239 | 交易对账（五段式，第 5 段=意图留痕 SHA-256 指令摘要，不存原文） | 6t |
+| B | D-240 | AI 支付授权 envelope：KYA 注册（幂等）/授权四要素/三种决策模式（CONFIRM_REQUIRED 强制一次性 token）/支付标记化（DB 级条件 UPDATE 原子单次消费）/AI 钱包控制台 REST/意图留痕/agentId+authorizationId 溯源落库 | 23t |
+
+**payment-platform-service 合计 112 tests 全绿**；fail-closed：ENVELOPE_ABSENT 时 agent 支付直接拒绝、授权校验失败永不降级放行。
+
+### 11.2 部署链 r23→r26（关键坑实录）
+| 轮 | 问题 | 修复 |
+|---|---|---|
+| r23 | CrashLoop：`PaymentChannelRouter` 无默认构造器 | 补 public no-arg（Spring 无 RouteAdvisor bean 时 rules-only） |
+| r24 | E2E register 500 duplicate key（AG-E2E-1 已存在） | register 幂等化：同 principal 返 existing，异 principal 抛 AGENT_TAKEN |
+| r25 | agent 支付 500 `StaleObjectStateException`：agent 流程预铸 paymentId（token 绑定）→ detached entity 带 preset id → `save()` 走 merge → UPDATE 0 行 | `existsById` 判定 + `saveAndFlush` 强制 INSERT（r26 落地） |
+| r26 | 本机 Rancher Desktop VM 挂死（qemu 活、SSH/daemon 无响应） | **绕过本地 docker**：jib `buildTar` 产物直接 scp master `docker load` → tag → save\|gzip → worker1 load |
+
+**BVV 指纹校验（r26 双节点通过）**：镜像内 `/app/classes/.../PaymentServiceImpl.class` md5 = `97050483a278ddd617edce75ce1e1ad3` == 本地编译产物；master/worker1 同为 `95723950ddd5`。pod `edu-payment-platform-6d8b857fdd-z24bg` Running（worker1），启动日志 `agentEnvelope=wired`。
+
+### 11.3 E2E 全绿实录（r28 终局，Iron Law 9 ✅）
+
+**T1~T10 十项全部 PASS**（2026-10-28，r28 双节点）：
+
+| 项 | 断言 | 结果 |
+|---|---|---|
+| T1 | KYA 注册（幂等） | 201 REGISTERED |
+| T2 | PRE_AUTHORIZED 签发 perTx=100/daily=150 | 201 ACTIVE |
+| T3 | 额度内支付 60 | paymentId 返回 |
+| T4 | 60+80=140 额度内，再付 20 超 daily → 拒 | LIMIT_DAILY 403 |
+| T5 | 越权 agent 持他人授权 | AGENT_MISMATCH 403 |
+| T6 | 撤销后支付 | AUTH_INACTIVE 403 |
+| T7 | CONFIRM_REQUIRED 无 token | TOKEN_REQUIRED 403 |
+| T8 | confirm→token→带 token 支付 | SUCCESS |
+| T9 | 同 token 重放 | TOKEN_REPLAYED 403 |
+| T10 | 意图留痕 | /api/agents/intents 非空 |
+
+**CRDB 实证**：`ep_payment` 3 行 SUCCESS 全带 agent_id+authorization_id；`ep_agent_intent_log`=3；`ep_payment_token` 出现 CONSUMED（原子单次消费生效）。
+
+### 11.4 r26→r28 修复链（StaleObjectState 三轮根治）
+| 轮 | 假设 | 实证 |
+|---|---|---|
+| r26 | saveAndFlush + existsById 可解 | 仍 500（merge 依旧） |
+| r27 | toEntity 透传 lockVersion | 仍 500——**真根因**：`Payment` 领域构造器把 lockVersion 初始化为 0（Payment.java:61），0 非 null → Spring Data `isNew()`=false → merge → Hibernate 7 视"带 version 的 detached entity + 行不存在"为并发删除 |
+| r28 | toEntity 无条件 `setLockVersion(null)`（r28 是唯一新建调用点，loaded 路径走 toDomain 不受影响）+ 删掉 existsById workaround | **T1~T10 全绿**；CRDB 0 行→3 行 SUCCESS |
+
+新增契约测试 `PaymentRepositoryNewRowTest`（纯 Hibernate + H2/PG-mode，无 Spring 上下文）：好形状（preset id + null version → persist INSERT + version 回填）+ 坏形状（version=0 + 行缺失 → merge 抛 OptimisticLock/StaleObjectState）双向钉死，suite 112→**114t 全绿**。

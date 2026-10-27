@@ -70,11 +70,8 @@ public class Payment implements Serializable {
      * @throws IllegalStateException if the Payment is not in a payable state.
      */
     public void markSuccess(String channelTxId, Instant paidAt) {
-        if (status != PaymentStatus.PENDING && status != PaymentStatus.PROCESSING) {
-            throw new IllegalStateException(
-                    "Payment not in PENDING/PROCESSING status, cannot mark SUCCESS. paymentId="
-                            + paymentId + " status=" + status);
-        }
+        // D-235/A1: single source of truth for the transition table.
+        PaymentStatusMachine.requireTransition(status, PaymentStatus.SUCCESS);
         if (channelTxId == null || channelTxId.isBlank()) {
             throw new IllegalArgumentException("channelTxId must not be blank on success");
         }
@@ -89,11 +86,7 @@ public class Payment implements Serializable {
      * @throws IllegalStateException if the Payment is already terminal.
      */
     public void markFailed() {
-        if (status != PaymentStatus.PENDING && status != PaymentStatus.PROCESSING) {
-            throw new IllegalStateException(
-                    "Payment not in PENDING/PROCESSING status, cannot mark FAILED. paymentId="
-                            + paymentId + " status=" + status);
-        }
+        PaymentStatusMachine.requireTransition(status, PaymentStatus.FAILED);
         this.status = PaymentStatus.FAILED;
     }
 
@@ -102,11 +95,7 @@ public class Payment implements Serializable {
      * channel is synchronous (e.g. Mock).
      */
     public void beginProcessing() {
-        if (status != PaymentStatus.PENDING) {
-            throw new IllegalStateException(
-                    "Payment not in PENDING status, cannot begin processing. paymentId="
-                            + paymentId + " status=" + status);
-        }
+        PaymentStatusMachine.requireTransition(status, PaymentStatus.PROCESSING);
         this.status = PaymentStatus.PROCESSING;
     }
 
@@ -121,18 +110,28 @@ public class Payment implements Serializable {
      * so further refunds are possible.
      */
     public void markRefunded() {
-        if (status != PaymentStatus.SUCCESS) {
-            throw new IllegalStateException(
-                    "Payment not in SUCCESS status, cannot mark REFUNDED. paymentId="
-                            + paymentId + " status=" + status);
-        }
+        PaymentStatusMachine.requireTransition(status, PaymentStatus.REFUNDED);
         this.status = PaymentStatus.REFUNDED;
     }
+
+    /**
+     * D-240/B: agent provenance (五段式第5段) — who actually initiated this
+     * charge. Null for human-initiated payments; set for agent-driven ones
+     * after the L2 authorization envelope verified the charge.
+     */
+    private String agentId;
+    private String authorizationId;
 
     // --------------------- accessors ---------------------
 
     public String getPaymentId() { return paymentId; }
     public void setPaymentId(String paymentId) { this.paymentId = paymentId; }
+    /** D-240/B: agent provenance (null for human payments). */
+    public String getAgentId() { return agentId; }
+    public void setAgentId(String agentId) { this.agentId = agentId; }
+    /** D-240/B: the authorization that covered this agent payment (null for human payments). */
+    public String getAuthorizationId() { return authorizationId; }
+    public void setAuthorizationId(String authorizationId) { this.authorizationId = authorizationId; }
     public String getOrderId() { return orderId; }
     public void setOrderId(String orderId) { this.orderId = orderId; }
     public String getTenantId() { return tenantId; }

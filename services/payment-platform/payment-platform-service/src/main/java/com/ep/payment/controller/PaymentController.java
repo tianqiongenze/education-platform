@@ -1,5 +1,6 @@
 package com.ep.payment.controller;
 
+import com.ep.payment.api.AgentPaymentRequest;
 import com.ep.payment.api.Payment;
 import com.ep.payment.api.PaymentChannel;
 import com.ep.payment.api.PaymentRequest;
@@ -92,6 +93,38 @@ public class PaymentController {
                 "amount", request.amount()));
     }
 
+    /**
+     * D-240/B: create a payment on behalf of an AI agent (「AI支付」· L2 控制层).
+     * The service verifies the authorization envelope (KYA agent, ACTIVE
+     * authorization, per-tx/daily limits, one-time confirmation token for
+     * CONFIRM_REQUIRED) before dispatching to the channel — fail-closed.
+     * Rejections surface as 403 with a stable {@code code} via
+     * {@link AgentApiExceptionHandler}.
+     *
+     * @param body the agent create-payment request
+     */
+    @PostMapping("/agent")
+    public ResponseEntity<Map<String, Object>> createAgent(@Valid @RequestBody CreateAgentPaymentHttp request) {
+        PaymentChannel channel = parseChannel(request.channel());
+        AgentPaymentRequest apr = new AgentPaymentRequest(
+                request.orderId(),
+                request.tenantId() == null ? "default" : request.tenantId(),
+                channel,
+                new BigDecimal(request.amount()),
+                request.currency() == null ? "CNY" : request.currency(),
+                request.agentId(),
+                request.authorizationId(),
+                request.paymentToken());
+        PaymentResult result = paymentService.createAgentPayment(apr);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "paymentId", result.paymentId(),
+                "status", result.status().name(),
+                "channelTxId", result.channelTxId() == null ? "" : result.channelTxId(),
+                "orderId", request.orderId(),
+                "agentId", request.agentId(),
+                "authorizationId", request.authorizationId()));
+    }
+
     private static PaymentChannel parseChannel(String channel) {
         if (channel == null || channel.isBlank()) {
             return PaymentChannel.MOCK;
@@ -112,6 +145,20 @@ public class PaymentController {
             String channel,
             @NotBlank String amount,
             String currency
+    ) implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+    }
+
+    /** HTTP request body for POST /api/payments/agent (D-240/B). */
+    public record CreateAgentPaymentHttp(
+            @NotBlank String orderId,
+            String tenantId,
+            String channel,
+            @NotBlank String amount,
+            String currency,
+            @NotBlank String agentId,
+            @NotBlank String authorizationId,
+            String paymentToken
     ) implements java.io.Serializable {
         private static final long serialVersionUID = 1L;
     }

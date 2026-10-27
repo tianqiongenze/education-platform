@@ -36,4 +36,18 @@ public interface PaymentService {
      * @return the recorded Refund entity
      */
     Refund refund(String orderId, BigDecimal amount, String reason);
+
+    /**
+     * D-240/B: create a payment on behalf of a KYA-registered AI agent
+     * (「AI支付」· L2 control layer). The server verifies the authorization
+     * (status/window/per-tx/daily limits — fail-closed) before dispatching to
+     * the channel, and consumes the one-time confirmation token when the
+     * authorization mode is CONFIRM_REQUIRED.
+     *
+     * @param request the agent charge request (must carry agentId + authorizationId)
+     * @return the Payment result
+     * @throws com.ep.payment.api.AgentPaymentRejectedException when the
+     *         authorization or token validation fails (403-equivalent)
+     */
+    PaymentResult createAgentPayment(AgentPaymentRequest request);
 }

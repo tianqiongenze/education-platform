@@ -839,3 +839,20 @@ Iron Law 8 三方案对比:
 | 修复 | DubboCoursePricingPort防御性extractPrice(缓存LinkedHashMap降级); core-business jwt-keys挂载补齐(base yaml+overlay); ddl-auto=update注入; seeding经JAVA_TOOL_OPTIONS生效 |
 | 遗留 | ws-gateway 8080/8081端口对齐(1/1运行但svc路径待核); ws-gateway Redis auth env(REdis_PASSWORD已注入CM) |
 | 决策 | 234 |
+
+## D-235~D-240: AI 支付重构 A+B 包 + 集群 E2E 全绿 (2026-10-28)
+
+| 项 | 结果 |
+|---|---|
+| A1 状态机 | D-235: PaymentStatusMachine 显式转移表（PENDING→SUCCESS 同步渠道语义）, 6t |
+| A2 路由 | D-237: PaymentChannelRouter + RouteAdvisor 规则闸门（无 bean 降级 rules-only）, 8t |
+| A3 账务 | D-238: 5套账务底座 12科目 LedgerSubject 复式记账 Σ借=Σ贷, 10t |
+| A4 对账 | D-239: 五段式对账（第5段=意图留痕 SHA-256 摘要, PIPL 最小化）, 6t |
+| B AI支付 | D-240: KYA幂等注册/授权四要素/三决策模式/一次性token原子消费/钱包REST/意图留痕/agent溯源, 23t |
+| 测试 | payment 114t 全绿（含 PaymentRepositoryNewRowTest 契约: persist好形状+merge坏形状双向钉死） |
+| 部署 | r23→r28 六轮; BVV md5 指纹双节点一致(74680c58); 绕过本地docker: jib buildTar→scp→load→tag→save|gzip→worker1 |
+| 根因 | StaleObjectState 三轮: r27 透传无效→**真根因 Payment构造器 lockVersion=0 → isNew()=false → merge → Hibernate7 判并发删除**; r28 toEntity 置 null 根治 |
+| E2E | **T1~T10 全 PASS**: 注册/签发/额度内/超日限/AGENT_MISMATCH/AUTH_INACTIVE/TOKEN_REQUIRED/token支付/TOKEN_REPLAYED/意图留痕 |
+| CRDB | ep_payment 3行 SUCCESS 带 agent_id+authorization_id; ep_agent_intent_log=3; ep_payment_token CONSUMED |
+| 遗留 | ws-gateway 8080/8081 端口对齐(P3); 授权审批流+scopeJson 细化(DEFERRED) |
+| 决策 | 240 |
