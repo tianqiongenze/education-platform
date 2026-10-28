@@ -131,6 +131,18 @@ public class RiskControlFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String path = request.getRequestURI() == null ? "" : request.getRequestURI();
+        // D-241 P0-0: actuator endpoints bypass risk control entirely —
+        // liveness/readiness probes and operational scrape traffic must never
+        // queue behind Redis sliding-window counters. Under the 50-VU load
+        // test every /actuator request paid ~4 Redis commands (ZADD +
+        // ZREMRANGEBYSCORE x2) on a shared Lettuce connection, which is
+        // exactly the mechanism that stalled /actuator/health past the
+        // liveness budget (SIGTERM at 10-15 VU). Probes are not abuse
+        // surface; per-IP abuse protection on them is meaningless.
+        if (path.startsWith("/actuator")) {
+            chain.doFilter(request, response);
+            return;
+        }
         int limit = isAuthPath(path) ? authLimit : defaultLimit;
 
         String ip = clientIp(request, trustedProxies);

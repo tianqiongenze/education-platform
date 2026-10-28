@@ -872,4 +872,6 @@ Iron Law 8 三方案对比:
 | 修复链 | BFF d241崩→回滚→修@Autowired→d241b双节点BVV双指纹(adapter a564825a/RiskControl dedbf741)；core d241 |
 | 报告 | docs/testing/comprehensive-test-report-v3.md（含P0-0~P1-5路线图） |
 | 遗留 | P0-0 BFF舱壁化；NetworkPolicy CNI审计；测试脚本T1自动化（captcha答案读取）；GQ e2e MockMvc async限位 |
+| P0-0 | **第二晚收口**：RiskControl /actuator旁路 + JwtBlacklist本地TTL缓存(10s)；ep-web-common 91t；50VU重压 **0重启/health 0失败/p95 8.7ms**（阈值10~15VU→≥50VU）；BFF/core p0镜像BVV 82ee937a |
+| 功能脚本 | T0~T7全自动 17/19 PASS（captcha答案Redis读取+base64三层引号根治+T2带token全链：create/publish/detail/order fail-closed）；残2长尾(logout无token500应400、grading契约)记P2 |
 | 决策 | 241 |

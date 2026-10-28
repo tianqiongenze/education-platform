@@ -26,6 +26,17 @@
 | Agent 支付链 | **T1~T10 全 PASS**（r28 当日已证） | KYA 注册/授权/额度/AGENT_MISMATCH/AUTH_INACTIVE/TOKEN_REQUIRED/token 支付/TOKEN_REPLAYED/意图留痕；CRDB `ep_payment` 3 行 SUCCESS 带 agent 溯源 |
 | T7 数据层 | CRDB 连通（D-234 已证）；脚本 T7.2/7.3 为 exec 姿势问题 | — |
 
+### 2.0 P0-0 修复与验收（2026-10-28 晚，第二轮实弹）
+
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 修复① | RiskControlFilter **/actuator/** 旁路**（liveness 探针不再排队 Redis 滑窗） | RiskControlActuatorBypassTest 3t |
+| 修复② | JwtBlacklistService **本地 TTL 缓存**（10s 窗口，revoke 本实例即时生效，跨实例收敛 ≤10s） | JwtBlacklistServiceTest 更新，ep-web-common **91t 全绿** |
+| 部署 | BFF/core `:1.0.0-p0` 双节点，BVV md5 `82ee937a` 双端一致 | 4 pod Running 0 重启 |
+| **50VU 重压验收** | **BFF/core 0 重启（此前 ×4 SIGTERM）；health 0 失败（此前 92% refused）；p95 8.7ms**；剩余 32.9% 失败全部为 captcha 设计内 429（ipCount 52>50，且 userCount=0 证明 anon 修复同时生效） | **BFF liveness 容量阈值 10~15 VU → ≥50 VU（≥3.3 倍）** |
+| 功能脚本 T1 自动化 | captcha 答案从 redis8 读取（重试 3×1s 抗复制延迟）+ base64 body 三层引号根治 + T2 带 token + T5.2 租户隔离语义 | **T0~T7 + T3 17/19 PASS**（T2.1 course created id=11680160859029504；publish 204；detail 200） |
+| 残余 2 FAIL（长尾） | ① logout 无 token 时 500（应 400，CLC 缺陷）；② grading assignments 契约未对齐（500） | 记 P2；非主线阻塞 |
+
 ### 2.1 本轮新发现并修复的功能缺陷（重构 R1~R5）
 
 | # | 缺陷 | 根因 | 修复 | 验证 |
@@ -78,4 +89,5 @@
 
 - 测试脚本 T1.2~T5 的自动断言 FAIL 是**脚本工程缺陷**（captcha 答案不可读 + 引号嵌套），已用手动等效验证补证（login 200 实录在案）；脚本改造为自动化全绿列入 P2。
 - NetworkPolicy CNI 误拦为**集群 CNI 实现问题**，策略暂离线（DEFERRED 注释已回写 base yaml），恢复前 ws-gateway 无 L3 白名单防护——风险已记录。
-- BFF liveness 崩溃阈值（10~15 VU）是**当前镜像**的实测值；RiskControl/JWT 修复已部署但**未重压验证提升幅度**（列入 P0-1 复测）。
+- ~~BFF liveness 阈值未复测~~ → **已复测**：P0-0 修复后 50VU liveness 稳定（≥50 VU），业务并发安全水位待 P1 压测矩阵细化。
+- 功能脚本残余 2 FAIL（logout 无 token 500→应 400；grading assignments 契约）为服务端长尾缺陷，记录于 §2.0，修复列入 P2。

@@ -68,8 +68,14 @@ class JwtBlacklistServiceTest {
         when(valueOps.get(KEY)).thenReturn("1");
         assertTrue(service.isRevoked("jti-123"));
 
+        // D-241 P0-0: the second lookup within the 10s window hits the local
+        // cache — that is the designed semantics (Redis GET off the hot path).
+        // A fresh service instance sees the absent entry and returns false.
         when(valueOps.get(KEY)).thenReturn(null);
-        assertFalse(service.isRevoked("jti-123"), "absent entry means not revoked");
+        assertTrue(service.isRevoked("jti-123"), "cached revoked verdict within TTL window");
+
+        JwtBlacklistService fresh = new JwtBlacklistService(redis);
+        assertFalse(fresh.isRevoked("jti-123"), "absent entry means not revoked");
     }
 
     @Test
