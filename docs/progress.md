@@ -856,3 +856,20 @@ Iron Law 8 三方案对比:
 | CRDB | ep_payment 3行 SUCCESS 带 agent_id+authorization_id; ep_agent_intent_log=3; ep_payment_token CONSUMED |
 | 遗留 | ws-gateway 8080/8081 端口对齐(P3); 授权审批流+scopeJson 细化(DEFERRED) |
 | 决策 | 240 |
+
+## D-241: 100万CCU全面审查+实弹压测+五项重构 (2026-10-28)
+
+| 项 | 结果 |
+|---|---|
+| 审查 | v8 评分 82.5/B+（GB/T 25000.10 八特性+TOGAF10+100万CCU容量数学首次量化）；docs/architecture/architecture-scorecard-v8.md |
+| 重构R1 | ws-gateway CrashLoop 538次根除（端口8081→8080/HPA min2/topologySpread软约束/NetworkPolicy CNI误拦DEFERRED） |
+| 重构R2 | RiskControlFilter anon全局桶自我DoS修复（ep-web-common 88t绿；captcha 429误伤→真限流） |
+| 重构R3 | GraphQL网关落portal-bff（spring-graphql 2.0.4/graphql-java 25；@Autowired双构造器坑修复；resolver级契约测试4t；MockMvc async空body陷阱文档化） |
+| 重构R4 | BDD层：零依赖Gherkin runner（中英关键字）+3场景；integration-tests 112t绿 |
+| 重构R5 | cache命中元数据HTTP透传（X-Cache-Hit/X-Cache-Layer）；ep-cache 109t+bff 197t绿 |
+| 压测 | **首次真实集群实弹**：k6 v1.7.1集群内Job（registry library/k6:1.7.1）+Locust隧道业务流；BFF容量阈值实测10~15VU新建连接（liveness假死，filter链同步Redis IO根因→P0-0修复项）；Locust course 158次0失败/429限流正确命中 |
+| 功能 | T0 5/5；T1认证链手动全链200（captcha→Redis答案→RS256 JWT）；Agent链T1~T10（r28） |
+| 修复链 | BFF d241崩→回滚→修@Autowired→d241b双节点BVV双指纹(adapter a564825a/RiskControl dedbf741)；core d241 |
+| 报告 | docs/testing/comprehensive-test-report-v3.md（含P0-0~P1-5路线图） |
+| 遗留 | P0-0 BFF舱壁化；NetworkPolicy CNI审计；测试脚本T1自动化（captcha答案读取）；GQ e2e MockMvc async限位 |
+| 决策 | 241 |

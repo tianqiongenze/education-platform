@@ -149,7 +149,15 @@ public class RiskControlFilter extends OncePerRequestFilter {
         String userKey = user == null || user.isBlank() ? "anon" : user.trim();
 
         long ipCount = safeIncrement(KEY_PREFIX + "ip:" + ip, windowSeconds);
-        long userCount = safeIncrement(KEY_PREFIX + "user:" + userKey, windowSeconds);
+        // D-241 fix: anonymous traffic (pre-auth endpoints like captcha/login)
+        // must NOT share one global "anon" bucket — every unauthenticated
+        // visitor lands there, so 5 anonymous users in a window trip the limit
+        // and the endpoint self-DoSes (observed live: userCount=9 > limit=5
+        // with ipCount=1 per fresh IP). User-dimension limiting only applies
+        // once a real identity exists; anonymous clients are covered by the
+        // per-IP counter above.
+        long userCount = "anon".equals(userKey) ? 0
+                : safeIncrement(KEY_PREFIX + "user:" + userKey, windowSeconds);
 
         if (ipCount > limit || userCount > limit) {
             long retryAfter = Math.max(1, counter.remainingSeconds(KEY_PREFIX

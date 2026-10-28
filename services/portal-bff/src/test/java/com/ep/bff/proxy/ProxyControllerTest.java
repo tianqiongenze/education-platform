@@ -2,12 +2,19 @@ package com.ep.bff.proxy;
 
 import com.ep.bff.config.ProxyConfig.ProxyProps;
 import com.ep.bff.proxy.ProxyController.Match;
+import com.ep.cache.CacheBroadcast;
+import com.ep.cache.CacheCallContext;
 import com.ep.cache.CacheService;
 import com.ep.web.common.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.concurrent.ConcurrentMapCache;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -58,11 +65,13 @@ class ProxyControllerTest {
     @BeforeEach
     void setUp() {
         TenantContext.clear();
+        CacheCallContext.clear();
     }
 
     @AfterEach
     void tearDown() {
         TenantContext.clear();
+        CacheCallContext.clear();
     }
 
     /**
@@ -398,6 +407,112 @@ class ProxyControllerTest {
         assertEquals(200, resp.getStatusCode().value());
         assertArrayEquals("{\"cached\":true}".getBytes(), resp.getBody());
         // No upstream call should have been made.
+        w.server.verify();
+    }
+
+    // ---- OSW observability: X-Cache-Hit / X-Cache-Layer response headers ----
+    //
+    // These cases wire a REAL CacheService (fake L1 ConcurrentMapCache +
+    // mock/fake L2) so the per-call CacheCallContext actually gets recorded,
+    // and assert the response carries cache metadata headers.
+
+    @SuppressWarnings("unchecked")
+    private static CacheService realCacheService(RedisTemplate<String, Object> redisOrNull) {
+        CacheManager cm = mock(CacheManager.class);
+        when(cm.getCache(anyString())).thenReturn(new ConcurrentMapCache("test"));
+        ObjectProvider<CacheManager> cmP = mock(ObjectProvider.class);
+        when(cmP.getIfAvailable()).thenReturn(cm);
+        ObjectProvider<RedisTemplate<String, Object>> redisP = mock(ObjectProvider.class);
+        when(redisP.getIfAvailable()).thenReturn(redisOrNull);
+        ObjectProvider<CacheBroadcast> bP = mock(ObjectProvider.class);
+        when(bP.getIfAvailable()).thenReturn(null);
+        return new CacheService(cmP, redisP, bP);
+    }
+
+    @Test
+    @DisplayName("OSW: cache-backed GET miss carries X-Cache-Hit=false / X-Cache-Layer=NONE")
+    void cache_metadata_headers_miss() {
+        CacheService cs = realCacheService(null); // no L2 → first call falls through to loader
+        RestClient.Builder b = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(b).build();
+        ProxyController c = new ProxyController(b.build(),
+            new ProxyProps(true, 10000, ROUTES), cs);
+
+        server.expect(requestTo("http://localhost:8082/v3/api-docs"))
+            .andRespond(withSuccess("{\"openapi\":\"3.0.1\"}".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = c.proxy(req("GET", "/proxy/data/v3/api-docs"));
+        assertEquals(200, resp.getStatusCode().value());
+        assertEquals("false", resp.getHeaders().getFirst("X-Cache-Hit"));
+        assertEquals("NONE", resp.getHeaders().getFirst("X-Cache-Layer"));
+        server.verify();
+        // finally-block clearing: the per-thread context must not leak past the request.
+        assertTrue(CacheCallContext.snapshot().isEmpty());
+    }
+
+    @Test
+    @DisplayName("OSW: second identical GET hits L1 → X-Cache-Hit=true / X-Cache-Layer=L1, one upstream call")
+    void cache_metadata_headers_l1_hit() {
+        CacheService cs = realCacheService(null);
+        RestClient.Builder b = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(b).build();
+        ProxyController c = new ProxyController(b.build(),
+            new ProxyProps(true, 10000, ROUTES), cs);
+
+        server.expect(requestTo("http://localhost:8082/v3/api-docs"))
+            .andRespond(withSuccess("{\"openapi\":\"3.0.1\"}".getBytes(), MediaType.APPLICATION_JSON));
+        c.proxy(req("GET", "/proxy/data/v3/api-docs")); // miss → loads + populates L1
+        var resp2 = c.proxy(req("GET", "/proxy/data/v3/api-docs")); // L1 hit
+        assertEquals(200, resp2.getStatusCode().value());
+        assertArrayEquals("{\"openapi\":\"3.0.1\"}".getBytes(), resp2.getBody());
+        assertEquals("true", resp2.getHeaders().getFirst("X-Cache-Hit"));
+        assertEquals("L1", resp2.getHeaders().getFirst("X-Cache-Layer"));
+        // exactly one upstream call (MockRestServiceServer rejects unexpected requests)
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("OSW: L2 hit → X-Cache-Hit=true / X-Cache-Layer=L2, upstream not called")
+    void cache_metadata_headers_l2_hit() {
+        @SuppressWarnings("unchecked")
+        ValueOperations<String, Object> vops = mock(ValueOperations.class);
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, Object> redis = mock(RedisTemplate.class);
+        when(redis.opsForValue()).thenReturn(vops);
+        ResponseEntity<byte[]> cached = ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("{\"l2\":1}".getBytes());
+        when(vops.get(anyString())).thenReturn(cached);
+
+        CacheService cs = realCacheService(redis);
+        RestClient.Builder b = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(b).build();
+        ProxyController c = new ProxyController(b.build(),
+            new ProxyProps(true, 10000, ROUTES), cs);
+
+        // No server.expect(...) — an L2 hit must not trigger a forward.
+        var resp = c.proxy(req("GET", "/proxy/data/v3/api-docs"));
+        assertEquals(200, resp.getStatusCode().value());
+        assertArrayEquals("{\"l2\":1}".getBytes(), resp.getBody());
+        assertEquals("true", resp.getHeaders().getFirst("X-Cache-Hit"));
+        assertEquals("L2", resp.getHeaders().getFirst("X-Cache-Layer"));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("OSW: cache bypass (POST) carries NO cache metadata headers")
+    void cache_metadata_headers_omitted_when_cache_bypassed() {
+        CacheService cs = cacheMiss();
+        Wired w = new Wired(RestClient.builder(), cs);
+        w.server.expect(requestTo("http://localhost:8082/items"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("{}".getBytes(), MediaType.APPLICATION_JSON));
+        var resp = w.controller.proxy(req("POST", "/proxy/data/items"));
+        assertEquals(200, resp.getStatusCode().value());
+        // The request never went through CacheService — headers must be omitted.
+        assertTrue(resp.getHeaders().headerSet().stream()
+                .noneMatch(e -> e.getKey().equalsIgnoreCase("X-Cache-Hit")
+                    || e.getKey().equalsIgnoreCase("X-Cache-Layer")),
+            "non-cache-backed responses must not carry cache metadata headers");
         w.server.verify();
     }
 

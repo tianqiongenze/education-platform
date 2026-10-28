@@ -9,6 +9,11 @@ server:
 spring:
   application:
     name: portal-bff
+  graphql:
+    # D-graphql: no interactive UI on the aggregation endpoint — the BFF
+    # serves machine clients only. POST /graphql is the single surface.
+    graphiql:
+      enabled: false
   # P1-4: Actuator endpoint security — HTTP Basic user for /actuator/** (non health/info).
   security:
     user:

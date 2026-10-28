@@ -1,0 +1,16 @@
+# D-graphql: read-only course read model exposed through the BFF GraphQL
+# aggregation endpoint (POST /graphql). Schema-first — consumed by the
+# spring-boot-starter-graphql auto-configuration from classpath:graphql/**.
+type Course {
+  id: ID!
+  title: String!
+  price: Float!
+}
+
+type Query {
+  "Single course by id; null when the downstream read model does not know it."
+  course(id: ID!): Course
+
+  "Courses visible to the given tenant; batch-loaded via the Course DataLoader (N+1-safe)."
+  coursesByTenant(tenantId: ID!): [Course!]!
+}

@@ -199,7 +199,9 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: ws-gateway
-  minReplicas: 3
+  # D-241: 2-node validation cluster cannot host 3 pods (topology spread +
+  # CPU); min=2 is the honest capacity for this cell.
+  minReplicas: 2
   maxReplicas: 10
   metrics:
     - type: Resource

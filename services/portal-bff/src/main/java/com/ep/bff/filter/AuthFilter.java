@@ -21,14 +21,17 @@ import java.util.Set;
  * 白名单: /api/auth/, /api/v1/auth/, /healthz, /actuator/, /.well-known/,
  *         /proxy/ (D-107: aggregated Swagger UI fetches api-docs via
  *                 the proxy from the browser without a Bearer token),
- *         /v3/api-docs, /swagger-ui (D-070/D-107: serve the UI itself).
+ *         /v3/api-docs, /swagger-ui (D-070/D-107: serve the UI itself),
+ *         /graphql (D-graphql: read-only course aggregation — same
+ *                 pass-through posture as /proxy/**; only public course reads
+ *                 are exposed, no user-scoped fields).
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AuthFilter extends OncePerRequestFilter {
     private static final Set<String> WHITELIST = Set.of(
         "/api/auth/", "/api/v1/auth/", "/healthz", "/actuator/", "/.well-known/", "/error",
-        "/proxy/", "/v3/api-docs", "/swagger-ui"
+        "/proxy/", "/v3/api-docs", "/swagger-ui", "/graphql"
     );
     private final JwtService jwtService;
 

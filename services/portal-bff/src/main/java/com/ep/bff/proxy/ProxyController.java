@@ -14,6 +14,7 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ep.bff.config.ProxyConfig;
+import com.ep.cache.CacheCallContext;
 import com.ep.cache.CacheService;
 import com.ep.web.common.tenant.TenantContext;
 import com.ep.web.common.tenant.TenantContextFilter;
@@ -24,6 +25,7 @@ import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -49,7 +51,11 @@ import java.util.Set;
  *       returns 503 with a clear message instead of attempting to proxy.</li>
  *   <li>D-039: stateless per-request handling, no synchronized blocks.</li>
  *   <li>D-040: only JDK + Spring built-ins, GraalVM friendly.</li>
- *   <li>D-182: GET responses cached 120s via ep-cache SDK (L1+L2+Pub/Sub).</li>
+     *   <li>D-182: GET responses cached 120s via ep-cache SDK (L1+L2+Pub/Sub).</li>
+     *   <li>OSW: cache-backed responses carry {@code X-Cache-Hit}/{@code
+     *       X-Cache-Layer} headers; the per-thread {@link CacheCallContext}
+     *       is cleared in a {@code finally} block so nothing leaks across
+     *       requests on the same worker thread.</li>
  *   <li>Cache audit fix (BFF 聚合缓存串号): only whitelisted public read-only
  *       GET paths ({@code ep.bff.cache-paths}) are cached, and the cache key
  *       carries the tenant dimension — personalized responses are never
@@ -192,16 +198,48 @@ public class ProxyController {
         // served another tenant's aggregated response.
         if (shouldCache(method, path)) {
             String cacheKey = method.name() + ":" + target.toString();
-            ResponseEntity<byte[]> cached = cacheService.getOrLoad(
-                    CACHE_AGGREGATION, currentTenant(request), cacheKey,
-                    () -> doForward(method, target, request),
-                    AGGREGATION_TTL_SEC, false);
-            if (cached != null) {
-                return cached;
+            try {
+                ResponseEntity<byte[]> cached = cacheService.getOrLoad(
+                        CACHE_AGGREGATION, currentTenant(request), cacheKey,
+                        () -> doForward(method, target, request),
+                        AGGREGATION_TTL_SEC, false);
+                ResponseEntity<byte[]> response = cached != null
+                    ? cached
+                    : doForward(method, target, request);
+                // OSW: surface the per-call cache outcome in response headers —
+                // only when this request actually went through CacheService.
+                return withCacheMetadata(response);
+            } finally {
+                // OSW: the per-thread cache context is request-scoped; without
+                // this clear() a cached value recorded on this worker thread
+                // would leak into the next request served by the same thread.
+                CacheCallContext.clear();
             }
         }
 
         return doForward(method, target, request);
+    }
+
+    /**
+     * OSW (observability wiring): appends {@code X-Cache-Hit: true|false} and
+     * {@code X-Cache-Layer: L1|L2|NONE} when the response was produced via
+     * {@link CacheService#getOrLoad} (i.e. the per-call
+     * {@link CacheCallContext} was recorded). Responses from non-cache-backed
+     * paths carry no cache metadata headers.
+     */
+    private static ResponseEntity<byte[]> withCacheMetadata(ResponseEntity<byte[]> response) {
+        Optional<CacheCallContext.Hit> snap = CacheCallContext.snapshot();
+        if (snap.isEmpty()) {
+            return response;
+        }
+        CacheCallContext.Hit hit = snap.get();
+        HttpHeaders merged = new HttpHeaders();
+        merged.addAll(response.getHeaders());
+        merged.set("X-Cache-Hit", hit.hit() ? "true" : "false");
+        merged.set("X-Cache-Layer", hit.level().name());
+        return ResponseEntity.status(response.getStatusCode())
+            .headers(merged)
+            .body(response.getBody());
     }
 
     /**

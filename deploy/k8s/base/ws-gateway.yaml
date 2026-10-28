@@ -30,13 +30,13 @@ spec:
         ep.io/cell: cell-hz
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8081"
+        prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway # D-241: 2-node cell has no zone labels; hard spread made pods permanently unschedulable
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: ws-gateway
@@ -52,7 +52,7 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8081
+              containerPort: 8080
               protocol: TCP
           envFrom:
             - configMapRef:
@@ -139,7 +139,7 @@ spec:
     app.kubernetes.io/name: ws-gateway
   ports:
     - name: http
-      port: 8081
+      port: 8080
       targetPort: http
       protocol: TCP
 ---

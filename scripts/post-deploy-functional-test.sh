@@ -29,9 +29,9 @@ bad()  { FAIL=$((FAIL+1)); FAILED_TESTS+=("$1"); log "FAIL  $1 — $2"; }
 
 # run an HTTP request inside the cluster via a curl pod
 http() { # method path [json-body] [svc-port]
-  local method="$1" path="$2" body="${3:-}" svc="${4:-edu-portal-bff:8080}"
+  local method="$1" path="$2" body="${3:-}" svc="${4:-edu-portal-bff:80}"
   ssh root@"$NODE" "kubectl -n $NS run http-$(date +%s%N) --rm -i --restart=Never \
-    --image=curlimages/curl:8.7.1 --quiet -- \
+    --image=10.167.2.175:30500/library/curl:8.23.0 --quiet -- \
     curl -s -o /dev/stdout -w '\n%{http_code}' -X $method \
     -H 'Content-Type: application/json' -H 'X-Tenant-Id: ${TENANT:-default}' \
     ${body:+-d '$body'} --max-time 10 http://$svc$path" 2>/dev/null
@@ -43,7 +43,7 @@ split_body() { head -n -1 <<<"$1"; }
 # ---------- T0: health matrix ----------
 log "== T0 service health matrix =="
 for svc in edu-core-business:8083 edu-grading-service:8085 edu-order-platform:8084 \
-           edu-payment-platform:8086 edu-portal-bff:8080; do
+           edu-payment-platform:8087 edu-portal-bff:80; do
   r=$(http GET /actuator/health "" "$svc")
   code=$(split_code "$r")
   if [[ "$code" == "200" && "$r" == *'"UP"'* || "$code" == "200" && "$r" == *'UP'* ]]; then
@@ -55,7 +55,7 @@ done
 
 # ---------- T1: auth chain ----------
 log "== T1 auth chain (captcha → login → logout → revocation) =="
-r=$(http GET /api/auth/captcha)
+r=$(http GET /api/auth/captcha "" "edu-core-business:8083")
 cap_id=$(split_body "$r" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("captchaId",""))' 2>/dev/null)
 code=$(split_code "$r")
 [[ "$code" == "200" && -n "$cap_id" ]] && ok "T1.1 captcha issued ($cap_id)" || bad "T1.1 captcha" "code=$code"
@@ -63,7 +63,7 @@ code=$(split_code "$r")
 # login requires a seeded dev credential (seedDevDefaults: demo/13800000000/demo123)
 # captcha answer unknown to the script — server-side answer is in Redis; for the
 # functional run we accept either 200 (if captcha optional) or 400 (captcha enforced).
-r=$(http POST /api/auth/login '{"phone":"13800000000","password":"demo123","captchaId":"'"$cap_id"'","captchaAnswer":"1"}')
+r=$(http POST /api/auth/login '{"phone":"13800000000","password":"demo123","captchaId":"'"$cap_id"'","captchaAnswer":"1"}' "edu-core-business:8083")
 code=$(split_code "$r")
 case "$code" in
   200) ok "T1.2 login OK (captcha matched or optional)"; TOKEN=$(split_body "$r" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("token",""))' 2>/dev/null) ;;
@@ -74,14 +74,14 @@ esac
 
 if [[ -n "${TOKEN:-}" ]]; then
   hdr_auth="Authorization: Bearer $TOKEN"
-  r=$(ssh root@"$NODE" "kubectl -n $NS run lo-$(date +%s%N) --rm -i --restart=Never --image=curlimages/curl:8.7.1 --quiet -- \
+  r=$(ssh root@"$NODE" "kubectl -n $NS run lo-$(date +%s%N) --rm -i --restart=Never --image=10.167.2.175:30500/library/curl:8.23.0 --quiet -- \
       curl -s -o /dev/stdout -w '\n%{http_code}' -X POST -H '$hdr_auth' --max-time 10 \
-      http://edu-portal-bff:8080/api/auth/logout -d '{}'" 2>/dev/null)
+      http://edu-portal-bff:80/api/auth/logout -d '{}'" 2>/dev/null)
   code=$(split_code "$r")
   [[ "$code" == "204" || "$code" == "200" ]] && ok "T1.3 logout 204" || bad "T1.3 logout" "code=$code"
-  r=$(ssh root@"$NODE" "kubectl -n $NS run lv-$(date +%s%N) --rm -i --restart=Never --image=curlimages/curl:8.7.1 --quiet -- \
+  r=$(ssh root@"$NODE" "kubectl -n $NS run lv-$(date +%s%N) --rm -i --restart=Never --image=10.167.2.175:30500/library/curl:8.23.0 --quiet -- \
       curl -s -o /dev/stdout -w '\n%{http_code}' -H '$hdr_auth' --max-time 10 \
-      http://edu-portal-bff:8080/api/v1/orders/1" 2>/dev/null)
+      http://edu-portal-bff:80/api/v1/orders/1" 2>/dev/null)
   code=$(split_code "$r")
   [[ "$code" == "401" ]] && ok "T1.4 revoked token rejected 401" || bad "T1.4 revocation" "code=$code (logout→blacklist path)"
 fi
@@ -137,10 +137,10 @@ code=$(split_code "$r")
 
 # ---------- T5: tenant isolation ----------
 log "== T5 tenant isolation =="
-r=$(http GET /api/v1/courses "" "edu-portal-bff:8080")   # default tenant
+r=$(http GET /api/v1/courses "" "edu-portal-bff:80")   # default tenant
 code=$(split_code "$r")
 [[ "$code" == "200" ]] && ok "T5.1 tenant=default list OK" || bad "T5.1" "code=$code"
-TENANT=tenant-b r=$(http GET /api/v1/courses "" "edu-portal-bff:8080")
+TENANT=tenant-b r=$(http GET /api/v1/courses "" "edu-portal-bff:80")
 code=$(split_code "$r")
 [[ "$code" == "200" ]] && ok "T5.2 tenant=tenant-b list OK (no cross-tenant error)" || bad "T5.2" "code=$code"
 

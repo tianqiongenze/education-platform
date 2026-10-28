@@ -192,6 +192,25 @@
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- D-graphql: read-only GraphQL aggregation endpoint (POST /graphql).
+         Starter version managed by spring-boot-starter-parent 4.0.7
+         (spring-graphql 2.0.4 + graphql-java 25.0, both present in the
+         offline repository). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-graphql</artifactId>
+    </dependency>
+    <!-- D-graphql: MockMvc transport + GraphQlTester for the /graphql tests. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.graphql</groupId>
+      <artifactId>spring-graphql-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

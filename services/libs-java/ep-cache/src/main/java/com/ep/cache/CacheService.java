@@ -42,9 +42,12 @@ import java.util.function.Supplier;
  *       business id can never observe each other's cached value.</li>
  *   <li><b>SCAN-based evictAll</b>: bulk invalidation uses a Redis SCAN cursor
  *       instead of the blocking KEYS command.</li>
- *   <li><b>Observability</b>: L1/L2 hit-miss counters are exposed through
- *       {@link #getStats()} (and optionally exported to Micrometer by
- *       {@code CacheConfig}).</li>
+     *   <li><b>Observability</b>: L1/L2 hit-miss counters are exposed through
+     *       {@link #getStats()} (and optionally exported to Micrometer by
+     *       {@code CacheConfig}); in addition, every {@code getOrLoad} call
+     *       records its per-call outcome (hit level, key, latency) in the
+     *       per-thread {@link CacheCallContext} so HTTP layers can surface
+     *       it in responses (OSW). The web layer owns clearing it.</li>
  * </ul>
  *
  * <p>Note: loaders must not recursively call {@code getOrLoad} for the same
@@ -133,6 +136,7 @@ public class CacheService {
 
     @SuppressWarnings("unchecked")
     private <T> T getOrLoadInternal(String cacheName, String effKey, Supplier<T> loader, long ttlSec, boolean cacheEmpty) {
+        long startNanos = System.nanoTime();
         // L1 Caffeine (via Spring CacheManager)
         CacheManager cm = cmProvider.getIfAvailable();
         Cache cache = cm == null ? null : cm.getCache(cacheName);
@@ -140,6 +144,7 @@ public class CacheService {
             Cache.ValueWrapper w = cache.get(effKey);
             if (w != null) {
                 l1Hits.incrementAndGet();
+                CacheCallContext.record(CacheCallContext.Level.L1, effKey, elapsedMicros(startNanos));
                 return unwrap((T) w.get());
             }
         }
@@ -156,6 +161,7 @@ public class CacheService {
                     if (cache != null) {
                         cache.put(effKey, raw);
                     }
+                    CacheCallContext.record(CacheCallContext.Level.L2, effKey, elapsedMicros(startNanos));
                     if (EMPTY_SENTINEL.equals(raw)) return null;
                     return (T) raw;
                 }
@@ -169,7 +175,15 @@ public class CacheService {
                 log.warn("L2 redis miss/degrade: {}", e.getMessage());
             }
         }
-        return loadWithSingleflight(cacheName, effKey, fullKey, loader, ttlSec, cacheEmpty);
+        T result = loadWithSingleflight(cacheName, effKey, fullKey, loader, ttlSec, cacheEmpty);
+        // OSW: the fall-through (loader) outcome is also observable per call.
+        CacheCallContext.record(CacheCallContext.Level.NONE, effKey, elapsedMicros(startNanos));
+        return result;
+    }
+
+    /** Latency helper for {@link CacheCallContext} (>= 0 micros, never negative). */
+    private static long elapsedMicros(long startNanos) {
+        return Math.max(0L, TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startNanos));
     }
 
     /**
