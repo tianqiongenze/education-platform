@@ -57,4 +57,16 @@ public class AuthExceptionHandler {
         log.warn("Login rejected (account locked): {}", ex.getMessage());
         return body("ACCOUNT_LOCKED", ex.getMessage(), HttpStatus.LOCKED);
     }
+
+    /**
+     * D-241 (CLC): malformed requests (missing phone/captcha fields, logout
+     * without a token) are CLIENT errors and must surface as 400 — throwing
+     * IllegalArgumentException without a mapping leaked a 500 and tripped
+     * the functional test suite (T1.3 observed 415/500 family).
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
+        log.warn("Auth request rejected (client error): {}", ex.getMessage());
+        return body("INVALID_ARGUMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

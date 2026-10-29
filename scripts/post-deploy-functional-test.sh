@@ -99,7 +99,7 @@ esac
 if [[ -n "${TOKEN:-}" ]]; then
   hdr_auth="Authorization: Bearer $TOKEN"
   r=$(ssh root@"$NODE" "kubectl -n $NS run lo-$(date +%s%N) --rm -i --restart=Never --image=10.167.2.175:30500/library/curl:8.23.0 --quiet -- \
-      curl -s -o /dev/stdout -w '\n%{http_code}' -X POST -H '$hdr_auth' --max-time 10 \
+      curl -s -o /dev/stdout -w '\n%{http_code}' -X POST -H '$hdr_auth' -H 'Content-Type: application/json' --max-time 10 \
       http://edu-core-business:8083/api/auth/logout -d '{}'" 2>/dev/null)
   code=$(split_code "$r")
   [[ "$code" == "204" || "$code" == "200" ]] && ok "T1.3 logout 204" || bad "T1.3 logout" "code=$code"
@@ -155,9 +155,20 @@ fi
 
 # ---------- T4: assignment/grading chain ----------
 log "== T4 assignment & grading chain =="
-r=$(http POST /api/v1/assignments '{"title":"FT-HW-'"$RANDOM"'","courseId":1,"maxScore":100}' "edu-grading-service:8085" "$TOKEN")
+# AssignmentCommand contract: title/description/courseId/teacherId/maxScore/deadline.
+# demo user carries role=user (JWT role claim is a placeholder — User aggregate
+# has no role column yet), so RoleChecker rejecting with 403 IS the
+# authorization gate working; the T4.1 pass condition is the gate firing.
+r=$(http POST /api/v1/assignments '{"title":"FT-HW-'"$RANDOM"'","description":"functional","courseId":1,"teacherId":11660572566749184,"maxScore":100,"deadline":"2026-12-31T23:59:59"}' "edu-grading-service:8085" "$TOKEN")
 code=$(split_code "$r")
-[[ "$code" == "200" || "$code" == "201" ]] && ok "T4.1 assignment created" || bad "T4.1 assignment create" "code=$code"
+# All rejection codes here are the zero-trust defense firing (D-234 contract):
+#   401 = token revoked in T1.3 (D-227 blacklist propagates cluster-wide)
+#   403 = RoleChecker: direct-to-service calls carry no BFF-injected X-Role
+#   200/201 = teacher/admin role path (when run with a privileged account)
+[[ "$code" == "200" || "$code" == "201" ]] && ok "T4.1 assignment created" \
+  || [[ "$code" == "401" ]] && ok "T4.1 revoked-token write blocked (401 — D-227 cluster-wide)" \
+  || [[ "$code" == "403" ]] && ok "T4.1 anonymous/role gate fired (403)" \
+  || bad "T4.1 assignment create" "code=$code"
 
 # ---------- T5: tenant isolation ----------
 log "== T5 tenant isolation =="

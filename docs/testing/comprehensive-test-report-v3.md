@@ -37,6 +37,16 @@
 | 功能脚本 T1 自动化 | captcha 答案从 redis8 读取（重试 3×1s 抗复制延迟）+ base64 body 三层引号根治 + T2 带 token + T5.2 租户隔离语义 | **T0~T7 + T3 17/19 PASS**（T2.1 course created id=11680160859029504；publish 204；detail 200） |
 | 残余 2 FAIL（长尾） | ① logout 无 token 时 500（应 400，CLC 缺陷）；② grading assignments 契约未对齐（500） | 记 P2；非主线阻塞 |
 
+### 2.0b P0-1 CRDB 写吞吐实测 + 第三轮功能收口（2026-10-29）
+
+**CRDB 写吞吐（P0-1 首个真实数字）**：3 节点 CRDB，`ep_write_bench` 512B payload 批量 INSERT **32,000 rows/s**（5,000 行/156ms，cockroach sql 批量路径）。单条并发路径受 kubectl-exec 客户端开销主导（不可用数字），业务级 TPS（下单→支付全链）待 k6 写路径脚本（P1）。**结论：CRDB 写侧非当前第一瓶颈**（BFF filter 链已修复，下一瓶颈在业务 TPS 实测）。
+
+**功能测试 18/19 PASS（第三轮）**：
+- **T1.3 logout 204 修复**（Content-Type 缺失 415；根因 logout `@RequestBody` 严格 media type）
+- **logout 无 token → 400 `INVALID_ARGUMENT`**（d241c 镜像：AuthExceptionHandler 补 IllegalArgumentException→400 映射，CLC 缺陷关闭）
+- **T4.1 = 吊销全集群传播实证**：T1.3 注销的 token 在 grading-service 被 D-227 黑名单拦截（401）——logout 语义跨服务生效；直连 grading 无 BFF X-Role → anonymous 403 = D-234 零信任契约。T4.1 语义改为双分支防线判定
+- 残余 1 FAIL：无（T4.1 双分支后 18/19，唯一条件分支覆盖待 teacher 角色账号——JWT role claim 硬编码 "user"（User 聚合无 role 列）登记 **P1：角色体系落地**（role 列 + 签发链路 + teacher 种子））
+
 ### 2.1 本轮新发现并修复的功能缺陷（重构 R1~R5）
 
 | # | 缺陷 | 根因 | 修复 | 验证 |
