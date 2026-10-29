@@ -26,8 +26,13 @@ public class CourseDubboController {
     @DubboReference(check = false, timeout = 10000, url = "${dubbo.ref.course.url:}")
     private CourseService courseService;
 
+    // D-242 (P1-1): the Dubbo path bypassed the core HTTP RoleChecker gates —
+    // any logged-in user (role=user) could create/publish/archive courses.
+    // Gate at the BFF HTTP entry with the same role contract as core.
     @PostMapping
-    public ResponseEntity<Course> create(@RequestBody CreateCourseCmd cmd) {
+    public ResponseEntity<Course> create(@RequestBody CreateCourseCmd cmd,
+                                         jakarta.servlet.http.HttpServletRequest request) {
+        com.ep.web.common.RoleChecker.requireRole(request, "admin", "super_admin", "teacher");
         return ResponseEntity.ok(courseService.createCourse(cmd));
     }
 
@@ -49,13 +54,17 @@ public class CourseDubboController {
     }
 
     @PostMapping("/{id}/publish")
-    public ResponseEntity<Void> publish(@PathVariable Long id) {
+    public ResponseEntity<Void> publish(@PathVariable Long id,
+                                        jakarta.servlet.http.HttpServletRequest request) {
+        com.ep.web.common.RoleChecker.requireRole(request, "admin", "super_admin", "teacher");
         courseService.publishCourse(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/archive")
-    public ResponseEntity<Void> archive(@PathVariable Long id) {
+    public ResponseEntity<Void> archive(@PathVariable Long id,
+                                        jakarta.servlet.http.HttpServletRequest request) {
+        com.ep.web.common.RoleChecker.requireRole(request, "admin", "super_admin", "teacher");
         courseService.archiveCourse(id);
         return ResponseEntity.noContent().build();
     }

@@ -6,6 +6,7 @@ import com.ep.business.course.CourseStatus;
 import com.ep.business.course.CreateCourseCmd;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -18,7 +19,10 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -41,7 +45,9 @@ class CourseDubboControllerTest {
         courseService = mock(CourseService.class);
         CourseDubboController controller = new CourseDubboController();
         ReflectionTestUtils.setField(controller, "courseService", courseService);
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new com.ep.bff.config.ForbiddenExceptionAdvice())
+                .build();
     }
 
     private CreateCourseCmd cmd() {
@@ -57,10 +63,43 @@ class CourseDubboControllerTest {
     }
 
     @Test
+    @DisplayName("D-242 gate: create without X-Role -> 403 anonymous")
+    void create_anonymousRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/courses")
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(cmd())))
+                .andExpect(status().isForbidden());
+        verify(courseService, never()).createCourse(any());
+    }
+
+    @Test
+    @DisplayName("D-242 gate: create with role=user -> 403")
+    void create_userRoleRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/courses")
+                        .header("X-Role", "user")
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(cmd())))
+                .andExpect(status().isForbidden());
+        verify(courseService, never()).createCourse(any());
+    }
+
+    @Test
+    @DisplayName("D-242 gate: create with role=teacher -> passes gate")
+    void create_teacherAllowed() throws Exception {
+        when(courseService.createCourse(any())).thenReturn(courseWith(1L, "t"));
+        mockMvc.perform(post("/api/v1/courses")
+                        .header("X-Role", "teacher")
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(cmd())))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void create_endpoint() throws Exception {
         when(courseService.createCourse(any())).thenReturn(courseWith(1L, "Java Basics"));
 
         mockMvc.perform(post("/api/v1/courses")
+                        .header("X-Role", "teacher")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(cmd())))
                 .andExpect(status().isOk())
@@ -108,7 +147,7 @@ class CourseDubboControllerTest {
 
     @Test
     void publish_endpoint() throws Exception {
-        mockMvc.perform(post("/api/v1/courses/{id}/publish", 1L))
+        mockMvc.perform(post("/api/v1/courses/{id}/publish", 1L).header("X-Role", "teacher"))
                 .andExpect(status().isNoContent());
 
         verify(courseService).publishCourse(1L);
@@ -116,7 +155,7 @@ class CourseDubboControllerTest {
 
     @Test
     void archive_endpoint() throws Exception {
-        mockMvc.perform(post("/api/v1/courses/{id}/archive", 1L))
+        mockMvc.perform(post("/api/v1/courses/{id}/archive", 1L).header("X-Role", "teacher"))
                 .andExpect(status().isNoContent());
 
         verify(courseService).archiveCourse(1L);
