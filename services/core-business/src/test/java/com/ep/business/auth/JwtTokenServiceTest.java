@@ -44,7 +44,12 @@ class JwtTokenServiceTest {
     @Test
     @DisplayName("issued token is a three-segment JWS carrying a UUID jti and a 1h expiry")
     void issuesTokenWithJti() {
-        JwtTokenService.IssuedToken issued = service().issue(42L, "demo", "13800000000", "demo@ep.com");
+        JwtTokenService.IssuedToken issued = service().issue(42L, "demo", "13800000000", "demo@ep.com", "teacher");
+        // D-242: the role claim must come from the aggregate, not the old
+        // hardcoded "user" placeholder.
+        org.junit.jupiter.api.Assertions.assertEquals("teacher",
+                com.ep.web.common.security.JwtPayloadReader.stringClaim(issued.token(), "role"),
+                "role claim must be the aggregate role");
 
         assertNotNull(issued.token());
         String jti = issued.jti();
@@ -58,7 +63,8 @@ class JwtTokenServiceTest {
                 "the jti returned to the caller must be the one inside the token");
         assertEquals("demo", JwtPayloadReader.stringClaim(issued.token(), "username"));
         assertEquals("13800000000", JwtPayloadReader.stringClaim(issued.token(), "phone"));
-        assertEquals("user", JwtPayloadReader.stringClaim(issued.token(), "role"));
+        // D-242: role claim now flows from the aggregate (teacher in this call).
+        assertEquals("teacher", JwtPayloadReader.stringClaim(issued.token(), "role"));
 
         Long exp = JwtPayloadReader.numericClaim(issued.token(), "exp");
         assertNotNull(exp);
@@ -75,8 +81,8 @@ class JwtTokenServiceTest {
     @DisplayName("every issue produces a unique jti")
     void jtiIsUniquePerToken() {
         JwtTokenService svc = service();
-        String first = svc.issue(1L, "a", "p", "e").jti();
-        String second = svc.issue(1L, "a", "p", "e").jti();
+        String first = svc.issue(1L, "a", "p", "e", "user").jti();
+        String second = svc.issue(1L, "a", "p", "e", "user").jti();
         assertNotEquals(first, second);
     }
 
@@ -85,7 +91,7 @@ class JwtTokenServiceTest {
     void missingKeyFailsFastAtIssue() {
         JwtTokenService unconfigured = new JwtTokenService(" ", 3600);
         IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> unconfigured.issue(1L, "a", "p", "e"));
+                () -> unconfigured.issue(1L, "a", "p", "e", "user"));
         assertTrue(ex.getMessage().contains("JWT private key not configured"));
     }
 
@@ -100,7 +106,7 @@ class JwtTokenServiceTest {
     @DisplayName("invalid PEM body is rejected with a clear error")
     void invalidPemRejected() {
         JwtTokenService bad = new JwtTokenService("-----BEGIN PRIVATE KEY-----\nnot-base64!!\n-----END PRIVATE KEY-----", 3600);
-        assertThrows(IllegalStateException.class, () -> bad.issue(1L, "a", "p", "e"));
+        assertThrows(IllegalStateException.class, () -> bad.issue(1L, "a", "p", "e", "user"));
     }
 
     @Test

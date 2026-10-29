@@ -66,8 +66,28 @@ public class UserServiceImpl implements UserService {
                 demo.setTenantId(0L);
                 demo.setCreatedAt(now);
                 demo.setUpdatedAt(now);
+                demo.setRole("user");
                 userRepository.save(demo);
                 log.info("Seeded dev demo user (phone=13800000000)");
+            }
+            // D-242 (P1-1): a teacher demo account — course publish and
+            // assignment create are RoleChecker-gated on teacher/admin.
+            if (userRepository.findByPhone("13900000000").isEmpty()) {
+                long now = System.currentTimeMillis();
+                User teacher = new User();
+                teacher.setUserId(SnowflakeIdGenerator.getInstance().nextId());
+                teacher.setUsername("teacher");
+                teacher.setPhone("13900000000");
+                teacher.setEmail("teacher@ep.com");
+                teacher.setPasswordHash(passwordEncoder.encode("teacher123"));
+                teacher.setNickname("Teacher");
+                teacher.setStatus(UserStatus.ACTIVE.getCode());
+                teacher.setRole("teacher");
+                teacher.setTenantId(0L);
+                teacher.setCreatedAt(now);
+                teacher.setUpdatedAt(now);
+                userRepository.save(teacher);
+                log.info("Seeded dev teacher user (phone=13900000000, role=teacher)");
             }
         } catch (Exception e) {
             log.warn("Dev seed skipped: {}", e.getMessage());

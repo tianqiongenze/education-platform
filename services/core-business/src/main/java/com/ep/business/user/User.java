@@ -58,6 +58,15 @@ public class User implements Serializable {
     @Column(name = "updated_at", nullable = false)
     private Long updatedAt;
 
+    /**
+     * D-242: authorization role. P1-1 角色体系落地 — the JWT {@code role}
+     * claim was hardcoded to "user"; this column is its source of truth.
+     * Nullable for pre-existing rows (login defensively defaults null →
+     * "user"); seeded teacher/admin accounts carry their real role here.
+     */
+    @Column(length = 32)
+    private String role;
+
     @Version
     @Column(name = "lock_version")
     private Long lockVersion;
@@ -110,6 +119,10 @@ public class User implements Serializable {
     public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
     public Long getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Long updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getRole() { return role; }
+
+    public void setRole(String role) { this.role = role; }
     public Long getLockVersion() { return lockVersion; }
     public void setLockVersion(Long lockVersion) { this.lockVersion = lockVersion; }
 

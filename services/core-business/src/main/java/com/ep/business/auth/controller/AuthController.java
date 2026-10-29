@@ -82,7 +82,9 @@ public class AuthController {
                     "Captcha verification failed: the answer is wrong or the captcha expired");
         }
         var user = authService.authenticate(request.phone(), request.password());
-        var issued = tokenService.issue(user.getUserId(), user.getUsername(), user.getPhone(), user.getEmail());
+        // D-242: role from the aggregate; legacy rows (null role) fall back to "user".
+        var issued = tokenService.issue(user.getUserId(), user.getUsername(), user.getPhone(), user.getEmail(),
+                user.getRole() == null ? "user" : user.getRole());
         return LoginResponse.of(issued, user);
     }
 

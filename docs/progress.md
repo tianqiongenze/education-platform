@@ -875,4 +875,8 @@ Iron Law 8 三方案对比:
 | P0-0 | **第二晚收口**：RiskControl /actuator旁路 + JwtBlacklist本地TTL缓存(10s)；ep-web-common 91t；50VU重压 **0重启/health 0失败/p95 8.7ms**（阈值10~15VU→≥50VU）；BFF/core p0镜像BVV 82ee937a |
 | 功能脚本 | T0~T7全自动 17/19 PASS（captcha答案Redis读取+base64三层引号根治+T2带token全链：create/publish/detail/order fail-closed）；残2长尾(logout无token500应400、grading契约)记P2 |
 | P0-1+第三轮 | CRDB写吞吐实测 32K rows/s(512B批量,3节点); logout→400 INVALID_ARGUMENT(d241c); T1.3 logout 204修复; T4.1=吊销全集群传播实证(401)+D-234契约(403); 功能18/19; JWT role硬编码缺口记P1角色体系 |
-| 决策 | 241 |
+| D-242 P1-1 | **角色体系落地**: User.role列+issue(5参,role来自聚合)+teacher种子(13900000000/teacher123); core 105t全绿(含role契约断言); d242双节点; teacher JWT role=teacher实证; **T4.1三分支 201/401/403 = 正向链+吊销全集群传播+零信任契约**; 功能21/21全PASS |
+| D-242 事故 | CRDB cockroachdb-a OOMKilled(3Gi爆, docker inspect OOM=true 定位)→pod重建恢复三副本; P1: limit上调6Gi+OOM告警 |
+| D-242 P0-1b | 写吞吐诚实修正: k6-write 10.7K RPS为429拒绝吞吐(RiskControl 200/min/IP钳制), 落库109行=配额内; 真实写容量需白名单复测(P1); CRDB批量32K rows/s不变 |
+| D-242 P1-5 | 14/14 workflows YAML校验通过; java-test覆盖core-business |
+| 决策 | 242 |

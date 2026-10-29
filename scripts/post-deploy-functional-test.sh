@@ -28,10 +28,14 @@ ok()   { PASS=$((PASS+1)); log "PASS  $1"; }
 bad()  { FAIL=$((FAIL+1)); FAILED_TESTS+=("$1"); log "FAIL  $1 — $2"; }
 
 # run an HTTP request inside the cluster via a curl pod
-http() { # method path [json-body] [svc-port] [bearer-token]
-  local method="$1" path="$2" body="${3:-}" svc="${4:-edu-portal-bff:80}" tok="${5:-}"
+http() { # method path [json-body] [svc-port] [bearer-token] [role] [uid]
+  local method="$1" path="$2" body="${3:-}" svc="${4:-edu-portal-bff:80}" tok="${5:-}" role="${6:-}" uid="${7:-}"
   local auth=""
   [[ -n "$tok" ]] && auth="-H \"Authorization: Bearer $tok\""
+  # D-234 contract: direct-to-service calls must present the X-Role/X-User-Id
+  # pair exactly as the BFF AuthFilter would inject them from the JWT.
+  [[ -n "$role" ]] && auth="$auth -H \"X-Role: $role\""
+  [[ -n "$uid" ]] && auth="$auth -H \"X-User-Id: $uid\""
   ssh root@"$NODE" "kubectl -n $NS run http-$(date +%s%N) --rm -i --restart=Never \
     --labels=app.kubernetes.io/part-of=education-platform \
     --image=10.167.2.175:30500/library/curl:8.23.0 --quiet -- \
@@ -159,7 +163,11 @@ log "== T4 assignment & grading chain =="
 # demo user carries role=user (JWT role claim is a placeholder — User aggregate
 # has no role column yet), so RoleChecker rejecting with 403 IS the
 # authorization gate working; the T4.1 pass condition is the gate firing.
-r=$(http POST /api/v1/assignments '{"title":"FT-HW-'"$RANDOM"'","description":"functional","courseId":1,"teacherId":11660572566749184,"maxScore":100,"deadline":"2026-12-31T23:59:59"}' "edu-grading-service:8085" "$TOKEN")
+# T4.1 exercises the TEACHER path end to end: teacher login (D-242 role
+# column -> JWT role claim) + BFF-style header injection -> RoleChecker pass.
+r=$(http POST /api/auth/login '{"phone":"13900000000","password":"teacher123","captchaId":"'"$cap_id"'","captchaAnswer":"'"$CAP_ANS"'"}' "edu-core-business:8083")
+TTOKEN=$(split_body "$r" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("token",""))' 2>/dev/null)
+r=$(http POST /api/v1/assignments '{"title":"FT-HW-'"$RANDOM"'","description":"functional","courseId":1,"teacherId":11687819111170048,"maxScore":100,"deadline":"2026-12-31T23:59:59"}' "edu-grading-service:8085" "$TTOKEN" "teacher" "11687819111170048")
 code=$(split_code "$r")
 # All rejection codes here are the zero-trust defense firing (D-234 contract):
 #   401 = token revoked in T1.3 (D-227 blacklist propagates cluster-wide)

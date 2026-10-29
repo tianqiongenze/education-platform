@@ -67,7 +67,7 @@ public class JwtTokenService {
      * @return the issued token with its jti and lifetime
      * @throws IllegalStateException when no private key is configured
      */
-    public IssuedToken issue(long userId, String username, String phone, String email) {
+    public IssuedToken issue(long userId, String username, String phone, String email, String role) {
         Instant now = Instant.now();
         String jti = UUID.randomUUID().toString();
         String token = Jwts.builder()
@@ -76,9 +76,9 @@ public class JwtTokenService {
                 .claim("username", username)
                 .claim("phone", phone)
                 .claim("email", email)
-                // The User aggregate has no role column yet; "user" is a
-                // placeholder claim kept for BFF JwtService.issue() parity.
-                .claim("role", "user")
+                // D-242: role comes from the User aggregate (P1-1); null
+                // rows (pre-migration) default to "user" at the caller.
+                .claim("role", role == null || role.isBlank() ? "user" : role)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(ttlSeconds)))
                 .signWith(privateKey(), Jwts.SIG.RS256)

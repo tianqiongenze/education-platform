@@ -227,7 +227,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("logout via Authorization header blacklists the jti with the token's remaining TTL → 204")
     void logoutViaHeader() throws Exception {
-        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com");
+        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com", "user");
 
         mockMvc.perform(post("/api/auth/logout")
                         .header("Authorization", "Bearer " + issued.token()))
@@ -243,7 +243,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("logout via JSON body token → 204")
     void logoutViaBody() throws Exception {
-        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com");
+        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com", "user");
 
         mockMvc.perform(post("/api/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -278,7 +278,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("closed loop: after logout the blacklisted jti makes the revocation filter answer 401")
     void logoutThenFilterRejects() throws Exception {
-        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com");
+        JwtTokenService.IssuedToken issued = tokenService.issue(42L, "demo", "13800000000", "demo@ep.com", "user");
 
         when(valueOps.get(eq(JwtBlacklistService.KEY_PREFIX + issued.jti()))).thenReturn("1");
 

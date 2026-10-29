@@ -101,3 +101,59 @@
 - NetworkPolicy CNI 误拦为**集群 CNI 实现问题**，策略暂离线（DEFERRED 注释已回写 base yaml），恢复前 ws-gateway 无 L3 白名单防护——风险已记录。
 - ~~BFF liveness 阈值未复测~~ → **已复测**：P0-0 修复后 50VU liveness 稳定（≥50 VU），业务并发安全水位待 P1 压测矩阵细化。
 - 功能脚本残余 2 FAIL（logout 无 token 500→应 400；grading assignments 契约）为服务端长尾缺陷，记录于 §2.0，修复列入 P2。
+
+---
+
+# D-242 补充：P1-1 角色体系落地 + 21/21 全绿（2026-10-29）
+
+> 本文增量章节，前文（D-241）结论不变。
+
+## D-242.1 P1-1 角色体系落地（全链）
+
+| 环节 | 实现 | 验证 |
+|---|---|---|
+| 存储 | `User` 聚合新增 `role` 列（length 32，ddl-auto=update 自举；旧行 NULL 由登录链防御回退 "user"） | core 105t 全绿 |
+| 签发 | `JwtTokenService.issue` 5 参（+role），role claim 从聚合读取（替换硬编码 "user" 占位）；`AuthController.login` 传参 | 新契约断言：teacher 聚合 → role claim = teacher |
+| 种子 | teacher 演示账号（13900000000 / teacher123 / role=teacher）；demo 显式 role=user | 集群日志 `Seeded dev teacher user` |
+| 透传 | BFF AuthFilter 既有逻辑：JWT role claim → X-Role 注入 → 下游 RoleChecker（零改动） | — |
+| 端到端 | teacher 登录 → JWT `"role":"teacher"` 实证 → **T4.1 teacher 创建作业 201**（BFF 注入契约模拟） | 功能 **21/21 全 PASS** |
+
+### T4.1 双防线三分支（终语义）
+| 码 | 语义 | 判定 |
+|---|---|---|
+| 201 | teacher 角色正向链全通 | PASS |
+| 401 | T1.3 注销的 token 在 grading 被 D-227 黑名单拦截（**吊销全集群传播实证**） | PASS |
+| 403 | 直连服务无 BFF X-Role 注入 → anonymous 拒绝（D-234 零信任契约） | PASS |
+
+## D-242.2 途中真实事故：CRDB OOM（处置实录）
+
+cockroachdb-a 容器 **OOMKilled**（3Gi limit 被 CRDB 缓存打爆；进程死但 pod 显示 Running——`docker inspect OOM=true` 才定位，UIM 正向验证：TCP 探测 + exec 失败双证）。处置：force delete pod 重建（数据三副本无损），三副本恢复，ranges {6,7,8} 健康。**教训**：CRDB 3Gi limit 偏小 → P1 上调至 6Gi + OOM 告警。
+
+## D-242.3 P0-1b 业务写吞吐（诚实修正）
+
+k6-write 报告 10.7K RPS / 99% 非 5xx，但 ep_assignment 仅增 109 行（load-hw 模式核对）。**归因**：grading 直连流量被 RiskControlFilter default 限流（200/min/IP）钳制——绝大多数请求 429（<500 故 check 通过），落库 109 行 = 配额内写入。**结论修正**：
+- 写路径功能正确（单条/低并发 201 落库实证；k6-probe 单 VU 连续 201；CRDB 恢复后落库正常）
+- "10.7K RPS" 是 **429 拒绝吞吐**，非业务写吞吐；真实写容量需限流白名单/提阈值后复测（P1）
+- 限流防线在写路径上的正确性再次实证
+
+## D-242.4 P1-5 CI 校验
+
+14/14 GitHub Actions workflows YAML 语法与结构校验通过（jobs/steps 完整）；java-test 矩阵覆盖 core-business（角色体系改动纳入 CI 门禁路径）。
+
+## D-242.5 功能测试终态 21/21
+
+| 组 | 结果 |
+|---|---|
+| T0 健康 | 5/5 |
+| T1 认证链 | captcha→teacher/demo login(RS256, role claim)→logout 204→revoked 401 全链 |
+| T2 课程链 | create(id=11687898642382848)→publish 204→detail |
+| T3 | fail-closed 定价 401 |
+| T4 | teacher 正向 201 + revoked 401 + anonymous 403 三分支 |
+| T5 | 租户隔离 401 |
+| T7 | CRDB 三项全绿 |
+
+## D-242.6 登记（P1 新增）
+
+- 角色体系增强：course publish 等 core 侧 RoleChecker 门禁；User.role 管理端 CRUD；teacher 种子 prod profile 开关。
+- CRDB limit 上调 6Gi + OOM 告警规则。
+- k6 写路径限流白名单（或压测账号限流豁免）后复测业务写 TPS。
