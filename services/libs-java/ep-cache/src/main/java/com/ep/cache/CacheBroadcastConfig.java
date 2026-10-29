@@ -55,17 +55,22 @@ public class CacheBroadcastConfig {
      * Redis Pub/Sub listener container. Receives eviction notifications from
      * other nodes and delegates to {@link CacheEvictionListener} which clears
      * the local L1 (Caffeine) cache. Only active for the Redis broadcast mode.
+     * v8 (D-243): the L3 hotspot mirror is wired into the listener so broadcast
+     * evictions clear it too.
      */
     @Bean
     @ConditionalOnProperty(name = "ep.cache.broadcast", havingValue = "redis", matchIfMissing = true)
     public RedisMessageListenerContainer cacheEvictionListenerContainer(
             ObjectProvider<RedisConnectionFactory> cfProvider,
-            ObjectProvider<org.springframework.cache.CacheManager> cmProvider) {
+            ObjectProvider<org.springframework.cache.CacheManager> cmProvider,
+            ObjectProvider<CacheService> cacheServiceProvider) {
         RedisConnectionFactory cf = cfProvider.getIfAvailable();
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         if (cf != null) {
             container.setConnectionFactory(cf);
-            CacheEvictionListener listener = new CacheEvictionListener(cmProvider);
+            CacheService cacheService = cacheServiceProvider.getIfAvailable();
+            CacheEvictionListener listener = new CacheEvictionListener(cmProvider,
+                    cacheService != null ? cacheService.getHotspotMirror() : null);
             container.addMessageListener(
                     new MessageListenerAdapter(listener, "onMessage"),
                     RedisCacheBroadcast.channelTopic());

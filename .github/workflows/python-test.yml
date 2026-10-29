@@ -2,14 +2,14 @@ name: Python Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
     paths:
       - 'services/ai-platform/**/*.py'
       - 'services/ai-platform/pyproject.toml'
       - 'services/libs-python/ep-common-python/**/*.py'
       - 'services/libs-python/ep-common-python/pyproject.toml'
   push:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
   workflow_dispatch:
 
 jobs:

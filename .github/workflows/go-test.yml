@@ -2,14 +2,14 @@ name: Go Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
     paths:
       - 'services/ws-gateway/**'
       - 'services/libs-go/ep-common-go/**'
       - 'services/**/go.mod'
       - 'services/**/go.sum'
   push:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
   workflow_dispatch:
 
 jobs:

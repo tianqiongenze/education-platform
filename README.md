@@ -1,12 +1,12 @@
 # education-platform · 多语言云原生在线教育平台
 
-> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**236 个架构决策（D-001 ~ D-236）全程留痕，v7 逐项目群评分 91.8 / A-**（18 个项目单元逐项打分见 `docs/architecture/project-group-scorecard-v7.md`）。
+> **一个三语言（Java 21 / Go 1.25 / Python 3.12）微服务教育 SaaS 平台**：14 个 Java 服务 + 2 个 Go 实时服务 + 1 个 Python AI 平台（9 模块）+ 7 个前端应用 + 7 个公共库，覆盖 **K12 在线教育、职业教育、棋类教育、康养养老** 四大业务板块，按 **4 单元（Cell）异地多活** 架构设计，SDD 契约先行（9 OpenAPI + 8 AsyncAPI），10 条工程铁律治理，**243 个架构决策（D-001 ~ D-243）全程留痕，v8 实战评分 82.5 / B+（100 万 CCU 标尺 + GB/T 25000.10 八特性，路线图 P0/P1/P2 已收口）**（18 个项目单元逐项打分见 `docs/architecture/project-group-scorecard-v7.md`）。
 
 ![Java](https://img.shields.io/badge/Java%2021-Spring%20Boot%204.0.x-6DB33F?logo=springboot&logoColor=white)
 ![Go](https://img.shields.io/badge/Go%201.25-WebSocket%20%2B%20Live-00ADD8?logo=go&logoColor=white)
 ![Python](https://img.shields.io/badge/Python%203.12-Litestar%20%2B%20LangGraph-3776AB?logo=python&logoColor=white)
-![Architecture](https://img.shields.io/badge/scorecard-v7_91.8%2F100%20(A--)-orange)
-![ADR](https://img.shields.io/badge/decisions-236%20(D--001~D--236)-blueviolet)
+![Architecture](https://img.shields.io/badge/scorecard-v8_82.5%2F100%20(B%2B)_1M_CCU-orange)
+![ADR](https://img.shields.io/badge/decisions-243%20(D--001~D--243)-blueviolet)
 ![Contracts](https://img.shields.io/badge/contracts-9%20OpenAPI%20%2B%208%20AsyncAPI-blue)
 
 ---
@@ -60,7 +60,7 @@
 
 ```
 架构评分          v5 93.5 / 100（A，制品完备度标尺）→ v6 91.0（A-，实战有效性标尺）→ v7 91.8（A-，逐项目群矩阵 + 大厂标准对齐重构，见 §13）
-架构决策          236 项（D-001 ~ D-236，decisions.jsonl 全程留痕；D-233 = 风控滑动窗口+幂等重放+缓存热点闭环；D-234 = 通用 Outbox；D-235 = RUM；D-236 = 路线图全落地含资金安全修复）
+架构决策          243 项（D-001 ~ D-243 全程留痕；D-233 风控滑动窗口+幂等重放；D-234~236 路线图落地+资金安全修复；D-241 百万 CCU 审查+首次实弹压测；D-243 L3 热点镜像+CI 真实化+i18n+SLA）
 后端服务          17 个：Java 14 + Go 2 + Python 1（AI 平台内含 9 模块）
 公共库            7 个：Java 5（ep-web-common / ep-disruptor / ep-cache / ep-data / ep-memory-java）
                           + Go 1（ep-common-go）+ Python 1（ep-common-python）
@@ -1510,9 +1510,9 @@ flowchart LR
 
 <div align="center">
 
-**架构评分 v7 91.8/A-（逐项目群实战标尺，18 单元矩阵）· 236 项决策留痕 · 10 条铁律 · 17 份契约先行 · 1860 Java 测试 0 失败**
-**v7 大厂标准对齐（D-233~D-236）：风控滑动窗口 + XFF 可信代理链 + 幂等响应重放（Stripe 标准）+ 缓存命中率 ≥99% SLO 闭环**
-**+ 通用 Outbox 三服务接入 + 前端路由懒加载与 RUM 闭环 + 资金域超额退款漏洞修复 + IP 自动封禁 + 布隆过滤器防穿透**
+**架构评分 v8 82.5/B+（100 万 CCU 标尺 + GB/T 25000.10 八特性 + 首次真实集群压测）· 243 项决策留痕 · 10 条铁律 · 17 份契约先行**
+**v8 路线图收口（D-241~D-243）：L3 热点镜像四级缓存 + 双 Traefik/mTLS/Policy 恢复制品 + CI 真实化（6 workflow）+ 错误码 i18n + SLA 端点 + Dubbo RBAC 门禁 + Netty 灰度启用**
+**+ 真实集群 T0~T7 全链路功能实测全绿 + CRDB 写吞吐 32K rows/s 实测 + ws-gateway 538 次 CrashLoop 根因根除**
 
 _本仓库为工程实践参考实现，持续重构演进中。_
 

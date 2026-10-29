@@ -2,11 +2,11 @@ name: Frontend Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
     paths:
       - 'frontend/**'
   push:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
   workflow_dispatch:
 
 jobs:

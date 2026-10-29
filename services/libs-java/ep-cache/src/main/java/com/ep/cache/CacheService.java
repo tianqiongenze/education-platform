@@ -64,6 +64,9 @@ public class CacheService {
     /** v7 (D-233): hotspot key detector — closes the detect leg of the hit-rate loop. */
     private final HotspotDetector hotspotDetector = new HotspotDetector();
 
+    /** v8 (D-243): L3 hotspot mirror — promoted keys served from local memory. */
+    private final HotspotMirrorCache hotspotMirror = new HotspotMirrorCache();
+
     /** Default TTL jitter: random factor in [0.8, 1.2]. */
     private static final DoubleSupplier DEFAULT_JITTER = () -> 0.8 + ThreadLocalRandom.current().nextDouble() * 0.4;
 
@@ -118,9 +121,13 @@ public class CacheService {
     // getOrLoad
     // ------------------------------------------------------------------
 
-    @SuppressWarnings("unchecked")
+    /**
+     * Non-tenant-scoped read-through (legacy signature kept for every
+     * existing caller). Delegates to the bloom-guarded overload with no
+     * filter.
+     */
     public <T> T getOrLoad(String cacheName, String key, Supplier<T> loader, long ttlSec, boolean cacheEmpty) {
-        return getOrLoadInternal(cacheName, key, loader, ttlSec, cacheEmpty);
+        return getOrLoad(cacheName, key, loader, ttlSec, cacheEmpty, null);
     }
 
     /**
@@ -149,6 +156,16 @@ public class CacheService {
             }
         }
         l1Misses.incrementAndGet();
+        // v8 (D-243): L3 hotspot mirror — a local hit beats a remote L2 round-trip
+        Object mirrored = hotspotMirror.getIfPresent(cacheName, effKey);
+        if (mirrored != HotspotMirrorCache.MISSING) {
+            if (cache != null) {
+                cache.put(effKey, mirrored); // refill L1 so the next read is an L1 hit
+            }
+            CacheCallContext.record(CacheCallContext.Level.L3, effKey, elapsedMicros(startNanos));
+            if (EMPTY_SENTINEL.equals(mirrored)) return null;
+            return (T) mirrored;
+        }
         // L2 Redis
         String fullKey = cacheName + ":" + effKey;
         RedisTemplate<String, Object> redis = redisProvider.getIfAvailable();
@@ -161,6 +178,8 @@ public class CacheService {
                     if (cache != null) {
                         cache.put(effKey, raw);
                     }
+                    // v8 (D-243): promoted hotspots also refill the L3 mirror
+                    hotspotMirror.put(cacheName, effKey, raw);
                     CacheCallContext.record(CacheCallContext.Level.L2, effKey, elapsedMicros(startNanos));
                     if (EMPTY_SENTINEL.equals(raw)) return null;
                     return (T) raw;
@@ -169,7 +188,10 @@ public class CacheService {
                 // v7 (D-233): a miss that must fall through to the loader feeds
                 // the hotspot detector — repeated fall-throughs on one key are
                 // the actionable signal for L1 sizing / TTL tuning.
-                hotspotDetector.recordFallThrough(cacheName, effKey);
+                if (hotspotDetector.recordFallThrough(cacheName, effKey)) {
+                    // v8 (D-243): promotion — the next load re-fills the mirror
+                    hotspotMirror.promote(cacheName, effKey);
+                }
             } catch (Exception e) {
                 l2Misses.incrementAndGet();
                 log.warn("L2 redis miss/degrade: {}", e.getMessage());
@@ -268,6 +290,12 @@ public class CacheService {
                 if (c != null) c.put(effKey, EMPTY_SENTINEL);
             }
         }
+        // v8 (D-243): promoted hotspots refill the L3 mirror on every load —
+        // this is what turns the first post-promotion load into a lasting
+        // local hit streak (mirrored values survive L1 eviction).
+        if (val != null) {
+            hotspotMirror.put(cacheName, effKey, val);
+        }
         return val;
     }
 
@@ -340,6 +368,9 @@ public class CacheService {
             Cache c = cm.getCache(cacheName);
             if (c != null) c.evict(effKey);
         }
+        // v8 (D-243): the L3 mirror must never outlive an eviction — a hot key
+        // serving a stale value through a faster tier would be a correctness bug.
+        hotspotMirror.evict(cacheName, effKey);
         RedisTemplate<String, Object> redis = redisProvider.getIfAvailable();
         if (redis != null) {
             try {
@@ -368,6 +399,8 @@ public class CacheService {
             Cache c = cm.getCache(cacheName);
             if (c != null) c.clear();
         }
+        // v8 (D-243): whole-cache invalidation includes the L3 mirror.
+        hotspotMirror.evictAll(cacheName);
         RedisTemplate<String, Object> redis = redisProvider.getIfAvailable();
         if (redis != null) {
             try (Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
@@ -414,6 +447,14 @@ public class CacheService {
      */
     public HotspotDetector getHotspotDetector() {
         return hotspotDetector;
+    }
+
+    /**
+     * v8 (D-243): exposes the L3 hotspot mirror for Micrometer gauges, the
+     * eviction listener, and diagnostics endpoints.
+     */
+    public HotspotMirrorCache getHotspotMirror() {
+        return hotspotMirror;
     }
 
     public CacheStats getStats() {

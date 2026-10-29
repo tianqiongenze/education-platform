@@ -2,7 +2,7 @@ name: Load Test Smoke (k6)
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sp01-tech-platform-m0]
   schedule:
     # Nightly at 2 AM UTC
     - cron: '0 2 * * *'

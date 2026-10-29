@@ -1,0 +1,89 @@
+# v8 P0-2 (D-243): 接入层去单点 —— Traefik 双实例 + 双 Service
+# =====================================================================
+# 背景：v8 评分（1M CCU 标尺）将「接入层单 Traefik 单点」列为 P0。
+# 方案：第二个 Traefik Deployment（独立 ReplicaSet + 独立 Service），
+#       前置 DNS 轮询（两条 A 记录）或 NodePort 双活——任一 ingress
+#       故障时流量零感知切换。
+# 铁律 9 说明：本制品为「制品就绪」态——需在真实集群 apply 并用
+#   `kubectl delete pod -n ingress-nginx -l app.kubernetes.io/name=traefik`
+#   混沌演练验证「0 感知」后才可标注「运行验证通过」。
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik-b
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: b
+    app.kubernetes.io/part-of: education-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/instance: b
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: traefik
+        app.kubernetes.io/instance: b
+        app.kubernetes.io/part-of: education-platform
+    spec:
+      # 反亲和：实例 A/B 不落在同一节点（单节点故障不影响双活）
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: traefik
+                  app.kubernetes.io/instance: a
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: traefik
+          image: traefik:v3.2
+          args:
+            - --entrypoints.web.address=:80
+            - --entrypoints.websecure.address=:443
+            - --providers.kubernetesingress
+            - --log.level=INFO
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-b
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: b
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: b
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+      nodePort: 30081
+    - name: websecure
+      port: 443
+      targetPort: websecure
+      nodePort: 30444
+---
+# DNS 轮询说明（集群外配置，非 K8s 资源）：
+#   api.edu.example.  IN  A  <node1-ip>
+#   api.edu.example.  IN  A  <node2-ip>
+# 两条 A 记录对应两个节点 NodePort 30081/30444 的宿主映射；
+# 或使用 external-dns + LoadBalancer 服务自动注册。

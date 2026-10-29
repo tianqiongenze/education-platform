@@ -131,6 +131,12 @@ management:
     web:
       exposure:
         include: health,prometheus,info
+  # v8 P2 (D-243): SLA endpoint reads p95 percentiles from http.server
+  # requests — histogram publication must be on for the SLA verdicts.
+  metrics:
+    distribution:
+      percentiles:
+        http.server.requests: 0.95, 0.99
   endpoint:
     health:
       show-details: when-authorized

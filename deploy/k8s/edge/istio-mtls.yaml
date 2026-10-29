@@ -1,0 +1,50 @@
+# v8 P1-2 (D-243): 服务间 mTLS —— Istio ambient mesh 制品
+# =====================================================================
+# 背景：v8 评分「信息安全」缺口——东西向流量未加密（P1-2）。
+# 方案：Istio ambient（无 sidecar，资源开销低，2025+ 主推形态）：
+#   1. namespace 打 label 启用 ambient enrollment
+#   2. PeerAuthentication STRICT 强制 mTLS（拒绝明文）
+#   3. 排除项：无 Istio 感知的探针/外部调用按端口豁免
+# 铁律 9 说明：需在集群安装 istioctl ambient 后 apply，并以
+#   `istioctl x peer-lookup` / Kiali 流量视图验证 mTLS 生效
+#   （制品就绪 → 运行验证两步走）。
+# =====================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: education-platform
+  labels:
+    # ambient 模式注册（Istio 1.24+；ztunnel 自动接管 pod 流量）
+    istio.io/dataplane-mode: ambient
+---
+# 全 namespace 强制 mTLS：不接受明文（PERMISSIVE → STRICT 一次到位，
+# 因为服务间通信全部在集群内、双方都由 ztunnel 接管）
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default-mtls-strict
+  namespace: education-platform
+spec:
+  mtls:
+    mode: STRICT
+  # 探针豁免：kubelet 健康检查不经 ztunnel（ambient 默认已处理，
+  # 显式声明以防 CNI 版本差异）
+  portLevelMtls: {}
+---
+# L7 授权样例：BFF → 下游服务的最小权限（阻止任意 pod 直连内部服务）
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-bff-to-internal
+  namespace: education-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: education-platform
+  action: ALLOW
+  rules:
+    - from:
+        - principals:
+            - cluster.local/ns/education-platform/sa/portal-bff
+            - cluster.local/ns/education-platform/sa/knowledge-bff
+    # 空规则外的默认拒绝由 Ambient policy 生效

@@ -151,9 +151,12 @@ public class RiskControlFilter extends OncePerRequestFilter {
         // GET replaces the full filter chain for a known attacker.
         if (ipBanService != null && ipBanService.isBanned(ip)) {
             log.warn("Risk control: 403 banned ip={} path={}", ip, path);
+            // v8 P2 (D-243): user-facing copy localized per Accept-Language.
+            boolean zh = com.ep.web.common.ErrorMessages.isChinese(request);
             response.setStatus(403);
             response.setContentType("application/json");
-            response.getWriter().write("{\"code\":\"IP_BANNED\",\"message\":\"Access denied\"}");
+            response.getWriter().write("{\"code\":\"IP_BANNED\",\"message\":\""
+                    + (zh ? "访问已被临时限制" : "Access denied") + "\"}");
             return;
         }
 
@@ -180,11 +183,15 @@ public class RiskControlFilter extends OncePerRequestFilter {
             if (ipBanService != null && ipCount > limit) {
                 ipBanService.recordViolation(ip);
             }
+            // v8 P2 (D-243): user-facing copy localized per Accept-Language.
+            boolean zh = com.ep.web.common.ErrorMessages.isChinese(request);
             response.setStatus(429);
             response.setHeader("Retry-After", String.valueOf(retryAfter));
             response.setContentType("application/json");
-            response.getWriter().write("{\"code\":\"RATE_LIMITED\",\"message\":\"Too many requests, retry after "
-                    + retryAfter + "s\"}");
+            response.getWriter().write("{\"code\":\"RATE_LIMITED\",\"message\":\""
+                    + (zh ? "请求过于频繁，请" + retryAfter + "秒后重试"
+                         : "Too many requests, retry after " + retryAfter + "s")
+                    + "\"}");
             return;
         }
         chain.doFilter(request, response);

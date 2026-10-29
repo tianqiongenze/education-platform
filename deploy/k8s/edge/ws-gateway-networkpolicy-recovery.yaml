@@ -1,0 +1,79 @@
+# v8 P1-3 (D-243): ws-gateway NetworkPolicy 恢复版
+# =====================================================================
+# 背景（D-241 实证）：原 policy（podSelector-in-from 同 namespace 规则）
+# 在 2 节点验证集群上被 CNI 误处理——apply 后所有 in-cluster 流量被黑洞
+# （kubelet 探针例外），ws-gateway 累计 538 次 CrashLoop 后 policy 下线
+# （DEFERRED 注释见 networkpolicy-internal.yaml）。
+#
+# 恢复前置条件（按序执行，全部通过才可 apply）：
+#   1. CNI policy 审计：kubectl get -n kube-system pods | grep cni
+#      确认 CNI 版本 ≥ flannel 0.22 / calico 3.27（已知修复版）
+#   2. 冒烟验证：在测试 namespace apply 本文件的「audit 探针版」
+#      （下方第二个文档），用 curl 从 bff pod 打 ws-gateway:8080，
+#      200/升级 101 即通过
+#   3. 灰度：先 apply 本文件第一个文档（宽松版，仅限 ingress + 同 ns），
+#      观察 24h 无黑洞再收紧到端口级
+# =====================================================================
+---
+# 宽松恢复版：按来源 namespace 分两条规则（不再用 podSelector-in-from
+# 组合，规避 CNI 已知误处理形态）
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ws-gateway-ingress-recovery
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.polycy/recovery: "v8-p13"
+  annotations:
+    ep.io/recovery-plan: "v8 scorecard P1-3; rollback = kubectl delete networkpolicy ws-gateway-ingress-recovery"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ws-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    # ① 外部 WebSocket：经 nginx ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # ② 同 namespace 内部（portal-bff 等）——与被 blackhole 的旧规则不同，
+    #    这里用「namespaceSelector 自引用」而非 podSelector-in-from 组合
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: education-platform
+      ports:
+        - protocol: TCP
+          port: 8080
+    # ③ Prometheus 抓取
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# audit 探针版：仅放行全部入站（等价无 policy），用于第 2 步 CNI 行为
+# 基线标定——如果这个都黑洞，说明 CNI policy 引擎本身损坏，升级 CNI。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ws-gateway-cni-audit-probe
+  namespace: education-platform
+  labels:
+    ep.polycy/audit: "baseline"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ws-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}  # 全放行：验证 CNI 对「存在 policy 的 pod」的基本放行能力

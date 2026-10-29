@@ -29,7 +29,7 @@ import java.util.Optional;
 public final class CacheCallContext {
 
     /** Which tier served the call. */
-    public enum Level { NONE, L1, L2 }
+    public enum Level { NONE, L1, L2, L3 }
 
     /** Immutable snapshot of one cache operation. */
     public record Hit(Level level, String key, long latencyMicros) {

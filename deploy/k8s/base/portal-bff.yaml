@@ -72,6 +72,10 @@ spec:
               value: "/etc/jwt/private.pem"
             - name: JWT_PUBLIC_KEY_PATH
               value: "/etc/jwt/public.pem"
+            # v8 P0-3 (D-243): Netty 边缘服务器灰度启用——生产集群开启（dev
+            # 默认 false 不受影响）。验收口径：100K 长连压测通过后全量。
+            - name: EP_GATEWAY_NETTY_ENABLED
+              value: "true"
           # D-117: 挂载 jwt-keys Secret（由 SealedSecret Controller 解密生成）
           volumeMounts:
             - name: jwt-keys

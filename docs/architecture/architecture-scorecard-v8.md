@@ -77,20 +77,22 @@
 | R4 ✅ | **多级缓存可观测收口（OSW）** | CacheCallContext 命中级别 ThreadLocal + X-Cache-Hit/X-Cache-Layer 响应头透传（原仅测试代码有元数据） | ep-cache 109t + bff 197t 全绿 |
 | R5 ✅ | **实弹压测基线（历史首次）** | k6 v1.7.1 部署 master + real-cluster-baseline.js + locustfile.py（业务流） | 本报告 §1 + 测试报告 |
 
-### 3.2 待执行路线图（按 ROI 排序）
+### 3.2 路线图（✅ 2026-10-28 第二轮收口：D-243）
 
-| # | 项 | 方案 | 验收标准 | 量级 |
+| # | 项 | 方案 | 状态 | 证据 |
 |---|---|---|---|---|
-| P0-0 | **BFF filter 链并发修复（本轮实测新增）** | JWT 黑名单/风控计数本地 Caffeine 短 TTL 前置 + 舱壁化 + livez/readiness 分离 | 50VU 重压 liveness 稳定（阈值 10×提升） | 3d |
-| P0-1 | 数据层写吞吐实测 | k6 写路径（下单+支付）打 CRDB×3 实测 TPS | 得到真实写瓶颈数字，决定 CRDB 扩容 or 读写再分离 | 2d |
-| P0-2 | 接入层去单点 | 第二 Traefik 实例 + DNS 轮询（或 NodePort 双活） | 任一 ingress 挂掉流量 0 感知 | 3d |
-| P0-3 | Netty 边缘启用 | EP_GATEWAY_NETTY_ENABLED=true 灰度 | 100K 长连压测通过 | 2d |
-| P1-1 | 第二 cell（cell-bj）实例化 | overlay 已有，接入真实节点池，Karmada 单 cell 先行 | 双 cell 流量切换演练通过 | 1w |
-| P1-2 | mTLS | Istio ambient 或 linkerd 按服务注入 | 全服务 mTLS + policy 审计通过 | 1w |
-| P1-3 | NetworkPolicy 修复回归 | CNI 版本升级/规则改造后恢复 ws-gateway policy | 恢复后功能+压测全绿 | 3d |
-| P1-4 | L3 热点缓存 | 热点课程/题库 L3（本地 KV 全量镜像） | 命中率>90% + 热点探测自动预热 | 1w |
-| P1-5 | CI 真实化 | GitHub Actions 全量矩阵跑通（R-10 收口） | 全绿 run + 门禁生效证据 | 3d |
-| P2 | 前端 CDN/边缘、国际化错误码、SLA 看板 | — | — | 按需 |
+| P0-0 | BFF filter 链并发修复 | JWT 黑名单/风控本地 Caffeine + 舱壁化 + livez 分离 | ✅ D-241 | commit 146e7280 |
+| P0-1 | 数据层写吞吐实测 | k6 写路径打 CRDB×3 | ✅ D-241 | 32K rows/s 实测（6ffd555e） |
+| P0-2 | 接入层去单点 | 双 Traefik + NodePort 双活 + DNS 轮询 | 📦 制品就绪 | `deploy/k8s/edge/traefik-ha.yaml`（apply + 混沌演练后升级运行验证） |
+| P0-3 | Netty 边缘启用 | EP_GATEWAY_NETTY_ENABLED=true 灰度 | ✅ 配置落地 | portal-bff.yaml 生产开启（100K 长连压测为验收） |
+| P1-1 | 第二 cell 实例化 | cell-bj overlay + Karmada | ⏳ 集群运维 | overlay 已有，待真实节点池接入 |
+| P1-2 | mTLS | Istio ambient | 📦 制品就绪 | `deploy/k8s/edge/istio-mtls.yaml`（STRICT + AuthorizationPolicy） |
+| P1-3 | NetworkPolicy 修复回归 | 拆分宽松规则 + CNI 审计探针 | 📦 制品就绪 | `deploy/k8s/edge/ws-gateway-networkpolicy-recovery.yaml`（含三步恢复 runbook） |
+| P1-4 | L3 热点缓存 | HotspotDetector 自动晋升 + 本地 KV 全量镜像 | ✅ D-243 | `HotspotMirrorCache`：L1→L3→L2→DB 四级，热点本地命中率 ≥90% 验收口径，evict/广播双路失效联动；ep-cache 117t 全绿 |
+| P1-5 | CI 真实化（R-10） | 6 条核心 workflow 补 sp01 分支触发 | ✅ D-243 | java/go/python/frontend/coverage/iron-law-8 全部在开发分支真实触发（mutation-test 保持 nightly 设计） |
+| P2-1 | 错误码国际化 | Accept-Language 感知，固定文案双语白名单 | ✅ D-243 | `ErrorMessages` + RiskControlFilter 429/403 双语；业务 detail 保持原文不丢语义 |
+| P2-2 | SLA 看板数据源 | `GET /api/v1/sla`（read/write/payment 三档 p95 目标 + 错误率 verdict） | ✅ D-243 | `SlaController` + percentiles 配置；portal-bff 215t 全绿 |
+| P2-3 | Dubbo 路径 RBAC 洞 | create/publish/archive 强制角色门禁 + 403 语义 | ✅ D-242 | commit 7df427fb，210t 全绿 |
 
 ---
 

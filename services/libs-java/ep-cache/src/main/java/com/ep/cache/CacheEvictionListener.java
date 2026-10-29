@@ -20,9 +20,17 @@ public class CacheEvictionListener {
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
     private final ObjectProvider<CacheManager> cmProvider;
+    /** v8 (D-243): L3 hotspot mirror — broadcast evictions must clear it too. */
+    private final HotspotMirrorCache hotspotMirror;
 
     public CacheEvictionListener(ObjectProvider<CacheManager> cmProvider) {
+        this(cmProvider, null);
+    }
+
+    /** D-243 constructor: wires the L3 mirror into the broadcast invalidation path. */
+    public CacheEvictionListener(ObjectProvider<CacheManager> cmProvider, HotspotMirrorCache hotspotMirror) {
         this.cmProvider = cmProvider;
+        this.hotspotMirror = hotspotMirror;
     }
 
     /**
@@ -43,15 +51,23 @@ public class CacheEvictionListener {
                 Cache whole = cm.getCache(msg.getCacheName());
                 if (whole != null) {
                     whole.clear();
-                    log.info("evict-all broadcast received — cleared L1 cache {}", msg.getCacheName());
                 }
+                // v8 (D-243): whole-cache broadcast clears the L3 mirror too
+                if (hotspotMirror != null) {
+                    hotspotMirror.evictAll(msg.getCacheName());
+                }
+                log.info("evict-all broadcast received — cleared L1 + L3 mirror {}", msg.getCacheName());
                 return;
             }
             Cache cache = cm.getCache(msg.getCacheName());
             if (cache != null && msg.getKey() != null) {
                 cache.evict(msg.getKey());
-                log.debug("L1 evicted via broadcast {}:{}", msg.getCacheName(), msg.getKey());
             }
+            // v8 (D-243): per-key broadcast clears the L3 mirror entry
+            if (hotspotMirror != null && msg.getKey() != null) {
+                hotspotMirror.evict(msg.getCacheName(), msg.getKey());
+            }
+            log.debug("L1/L3 evicted via broadcast {}:{}", msg.getCacheName(), msg.getKey());
         } catch (Exception e) {
             log.warn("eviction-listener parse/clear fail: {}", e.getMessage());
         }

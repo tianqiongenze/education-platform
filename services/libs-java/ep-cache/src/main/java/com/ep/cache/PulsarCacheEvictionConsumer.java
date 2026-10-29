@@ -54,10 +54,19 @@ public class PulsarCacheEvictionConsumer {
             ObjectProvider<PulsarClient> clientProvider,
             ObjectProvider<org.springframework.cache.CacheManager> cmProvider,
             String topic) {
+        this(clientProvider, cmProvider, topic, null);
+    }
+
+    /** D-243 constructor: wires the L3 hotspot mirror into the Pulsar invalidation path. */
+    public PulsarCacheEvictionConsumer(
+            ObjectProvider<PulsarClient> clientProvider,
+            ObjectProvider<org.springframework.cache.CacheManager> cmProvider,
+            String topic,
+            HotspotMirrorCache hotspotMirror) {
         this.clientProvider = clientProvider;
         this.cmProvider = cmProvider;
         this.topic = topic;
-        this.listener = new CacheEvictionListener(cmProvider);
+        this.listener = new CacheEvictionListener(cmProvider, hotspotMirror);
     }
 
     /**
