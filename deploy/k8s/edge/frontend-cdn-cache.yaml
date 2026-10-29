@@ -1,0 +1,95 @@
+# v8 P2 (D-244): 前端 CDN/边缘缓存策略
+# =====================================================================
+# 背景：v8 评分「前端 CDN/边缘」P2 缺口——静态资源未区分不可变/协商
+# 缓存。本制品定义 Traefik 中间件 + nginx fallback 两套 Cache-Control
+# 策略，与 Vite 的 content-hash 文件名约定（portal/admin/knowledge-admin
+# 三个 web 应用构建产物）配套。
+#
+# 策略（行业基线）：
+#   /assets/*.{js,css,woff2,...}  → immutable, max-age=31536000
+#     （Vite 输出带 content hash，文件内容变 = 文件名变，可缓存一年）
+#   index.html                    → no-cache（每次校验，保证 hash 引用最新）
+#   /graphql, /api/*              → no-store（动态数据永不边缘缓存）
+#
+# 铁律 9：apply 后以 curl -I 实证三类路径的 Cache-Control 头。
+# =====================================================================
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: static-assets-immutable
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: D-244
+spec:
+  headers:
+    customResponseHeaders:
+      Cache-Control: "public, max-age=31536000, immutable"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: index-html-no-cache
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: D-244
+spec:
+  headers:
+    customResponseHeaders:
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: api-no-store
+  namespace: education-platform
+  labels:
+    app.kubernetes.io/part-of: education-platform
+    ep.io/decision: D-244
+spec:
+  headers:
+    customResponseHeaders:
+      Cache-Control: "no-store"
+---
+# IngressRoute 组装：按路径挂中间件（portal-web 为例；
+# admin-web / knowledge-admin 的 frontend-* IngressRoute 同构套用）
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: portal-web-cdn
+  namespace: education-platform
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: "Host(`edu.example.com`) && PathPrefix(`/assets`)"
+      kind: Rule
+      middlewares:
+        - name: static-assets-immutable
+      services:
+        - name: frontend-portal
+          port: 80
+    - match: "Host(`edu.example.com`) && PathPrefix(`/api`)"
+      kind: Rule
+      middlewares:
+        - name: api-no-store
+      services:
+        - name: portal-bff
+          port: 8090
+    - match: "Host(`edu.example.com`)"
+      kind: Rule
+      middlewares:
+        - name: index-html-no-cache
+      services:
+        - name: frontend-portal
+          port: 80
+---
+# 验收清单（apply 后逐条 curl -I 实证）：
+#   curl -I https://edu.example.com/assets/index-<hash>.js
+#     → Cache-Control: public, max-age=31536000, immutable
+#   curl -I https://edu.example.com/
+#     → Cache-Control: no-cache
+#   curl -I https://edu.example.com/api/v1/sla
+#     → Cache-Control: no-store

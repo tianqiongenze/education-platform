@@ -14,6 +14,7 @@ import {
   ApartmentOutlined,
   ProfileOutlined,
   ShoppingCartOutlined,
+  SafetyOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -37,6 +38,7 @@ const MENU_ITEMS: MenuItemConfig[] = [
   { key: '/live', icon: <VideoCameraOutlined />, label: 'Live' },
   { key: '/coding', icon: <CodeOutlined />, label: 'Coding' },
   { key: '/grades', icon: <TrophyOutlined />, label: 'Grades' },
+  { key: '/sla', icon: <SafetyOutlined />, label: 'SLA 看板' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
 ];
 

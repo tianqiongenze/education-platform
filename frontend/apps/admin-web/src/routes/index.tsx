@@ -18,6 +18,7 @@ const LiveMgmtPage = lazy(() => import('../pages/LiveMgmt'));
 const CodingMgmtPage = lazy(() => import('../pages/CodingMgmt'));
 const GradeMgmtPage = lazy(() => import('../pages/GradeMgmt'));
 const SystemSettingsPage = lazy(() => import('../pages/SystemSettings'));
+const SlaDashboardPage = lazy(() => import('../pages/SlaDashboard'));
 const ForbiddenPage = lazy(() => import('../pages/Forbidden'));
 const NotFoundPage = lazy(() => import('../pages/NotFound'));
 
@@ -109,6 +110,7 @@ export function AppRoutes() {
           <Route path="business/orders" element={<OrderListPage />} />
           <Route path="business/orders/:id" element={<OrderDetailPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
+          <Route path="sla" element={<SlaDashboardPage />} />
           <Route path="403" element={<ForbiddenPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

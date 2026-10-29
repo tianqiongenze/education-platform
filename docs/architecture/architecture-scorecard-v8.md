@@ -85,7 +85,7 @@
 | P0-1 | 数据层写吞吐实测 | k6 写路径打 CRDB×3 | ✅ D-241 | 32K rows/s 实测（6ffd555e） |
 | P0-2 | 接入层去单点 | 双 Traefik + NodePort 双活 + DNS 轮询 | 📦 制品就绪 | `deploy/k8s/edge/traefik-ha.yaml`（apply + 混沌演练后升级运行验证） |
 | P0-3 | Netty 边缘启用 | EP_GATEWAY_NETTY_ENABLED=true 灰度 | ✅ 配置落地 | portal-bff.yaml 生产开启（100K 长连压测为验收） |
-| P1-1 | 第二 cell 实例化 | cell-bj overlay + Karmada | ⏳ 集群运维 | overlay 已有，待真实节点池接入 |
+| P1-1 | 第二 cell 实例化 | cell-bj overlay + Karmada | 📦 runbook 就绪 | `docs/deployment/dual-cell-failover-runbook.md`（三段演练+验收表，D-244） |
 | P1-2 | mTLS | Istio ambient | 📦 制品就绪 | `deploy/k8s/edge/istio-mtls.yaml`（STRICT + AuthorizationPolicy） |
 | P1-3 | NetworkPolicy 修复回归 | 拆分宽松规则 + CNI 审计探针 | 📦 制品就绪 | `deploy/k8s/edge/ws-gateway-networkpolicy-recovery.yaml`（含三步恢复 runbook） |
 | P1-4 | L3 热点缓存 | HotspotDetector 自动晋升 + 本地 KV 全量镜像 | ✅ D-243 | `HotspotMirrorCache`：L1→L3→L2→DB 四级，热点本地命中率 ≥90% 验收口径，evict/广播双路失效联动；ep-cache 117t 全绿 |
@@ -93,6 +93,9 @@
 | P2-1 | 错误码国际化 | Accept-Language 感知，固定文案双语白名单 | ✅ D-243 | `ErrorMessages` + RiskControlFilter 429/403 双语；业务 detail 保持原文不丢语义 |
 | P2-2 | SLA 看板数据源 | `GET /api/v1/sla`（read/write/payment 三档 p95 目标 + 错误率 verdict） | ✅ D-243 | `SlaController` + percentiles 配置；portal-bff 215t 全绿 |
 | P2-3 | Dubbo 路径 RBAC 洞 | create/publish/archive 强制角色门禁 + 403 语义 | ✅ D-242 | commit 7df427fb，210t 全绿 |
+| P2-4 | GraphQL/REST 双协议一致性 | resolver/adapter 投影对比 + schema 反射守护 | ✅ D-244 | `GraphQlRestConsistencyTest` 5 例；portal-bff 219t 全绿 |
+| P2-5 | 前端 SLA 看板 | admin-web `/sla` 页（30s 刷新，三档 verdict 可视） | ✅ D-244 | `SlaDashboard` + 4 测试；前端 24/24 |
+| P2-6 | 前端 CDN/边缘缓存 | Traefik Middleware（immutable/no-cache/no-store 三段） | 📦 制品就绪 | `deploy/k8s/edge/frontend-cdn-cache.yaml`（curl 验收清单） |
 
 ---
 
