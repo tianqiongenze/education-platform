@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download all coverage artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: jacoco-*
           path: coverage-reports
@@ -137,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download coverage artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: jacoco-${{ matrix.service }}
           path: coverage-${{ matrix.service }}
