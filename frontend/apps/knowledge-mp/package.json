@@ -40,7 +40,7 @@
     "react-refresh": "0.16.0",
     "typescript": "5.8.3",
     "vitest": "2.1.9",
-    "jsdom": "25.0.1",
+    "jsdom": "30.0.1",
     "@testing-library/react": "16.1.0",
     "sass": "1.83.4",
     "@vitejs/plugin-react": "4.3.4"
