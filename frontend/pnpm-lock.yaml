@@ -191,8 +191,8 @@ importers:
         specifier: 4.0.9
         version: 4.0.9(react@19.0.0)
       '@tarojs/router':
-        specifier: 4.0.9
-        version: 4.0.9(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))
+        specifier: 4.2.1
+        version: 4.2.1(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))
       '@tarojs/runtime':
         specifier: 4.0.9
         version: 4.0.9
@@ -382,6 +382,9 @@ importers:
       '@ep/lint-config':
         specifier: workspace:*
         version: link:../../packages/lint-config
+      '@playwright/test':
+        specifier: ^1.49.0
+        version: 1.62.1
       '@testing-library/jest-dom':
         specifier: 6.6.3
         version: 6.6.3
@@ -446,8 +449,8 @@ importers:
         specifier: 4.0.9
         version: 4.0.9(react@19.0.0)
       '@tarojs/router':
-        specifier: 4.0.9
-        version: 4.0.9(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))
+        specifier: 4.2.1
+        version: 4.2.1(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))
       '@tarojs/runtime':
         specifier: 4.0.9
         version: 4.0.9
@@ -467,6 +470,9 @@ importers:
       '@ep/lint-config':
         specifier: workspace:*
         version: link:../../packages/lint-config
+      '@playwright/test':
+        specifier: ^1.49.0
+        version: 1.62.1
       '@tarojs/cli':
         specifier: 4.0.9
         version: 4.0.9
@@ -690,6 +696,9 @@ importers:
       '@ep/lint-config':
         specifier: workspace:*
         version: link:../lint-config
+      '@playwright/test':
+        specifier: ^1.49.0
+        version: 1.62.1
       eslint:
         specifier: 9.18.0
         version: 9.18.0(jiti@2.7.0)
@@ -2026,10 +2035,6 @@ packages:
     resolution: {integrity: sha512-IbtjvqI9+eS1qFnOIEL7ggWmT+iK/U+Vde9cGWtYb/b6XgKb3X44ZAe/z9YZzoAAZ/E92m0DqrilF934IGNnQA==}
     engines: {node: '>= 10.14.2'}
 
-  '@jest/types@27.0.2':
-    resolution: {integrity: sha512-XpjCtJ/99HB4PmyJ2vgmN7vT+JLP7RW1FBT9RgnMFS4Dt7cvIyBee8O3/j98aUZ34ZpenPZFqmaaObWSeL65dg==}
-    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
-
   '@jest/types@29.6.3':
     resolution: {integrity: sha512-u3UPsIilWKOM3F9CXtrG8LEJmNxwoCQC/XVj4IKYXvvpx7QIi/Kg1LI5uDmDpKlac62NUtX7eLjRh+jVZcLOzw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -2232,6 +2237,11 @@ packages:
   '@playwright/test@1.49.1':
     resolution: {integrity: sha512-Ky+BVzPz8pL6PQxHqNRW1k3mIyv933LML7HktS8uik0bUXNCdPhoS/kLihiO1tMf/egaJb4IutXd7UywvXEW+g==}
     engines: {node: '>=18'}
+    hasBin: true
+
+  '@playwright/test@1.62.1':
+    resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
+    engines: {node: '>=20'}
     hasBin: true
 
   '@rc-component/async-validator@5.1.2':
@@ -2810,6 +2820,14 @@ packages:
       '@tarojs/shared': 4.0.9
       '@tarojs/taro': 4.0.9
 
+  '@tarojs/router@4.2.1':
+    resolution: {integrity: sha512-ZO1UBbWm6wJy7+FJqQXn4y4+fBlKDalK0oqLpCiR5W861IEYAq0WmV6KBDcHa/tyR/23o0gpJyeY0aRjmyhefg==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@tarojs/runtime': 4.2.1
+      '@tarojs/shared': 4.2.1
+      '@tarojs/taro': 4.2.1
+
   '@tarojs/runner-utils@4.0.9':
     resolution: {integrity: sha512-MRY7mGrMFdPtVL6iajO2a/2Oc7RVN1wGHzoR2ywDiyr5zWX6BSKo35HZuaCsmNg71wbVVBR5Ax4SiLe5dsQrjg==}
     engines: {node: '>= 18'}
@@ -2955,8 +2973,8 @@ packages:
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
 
-  '@types/eslint-scope@3.7.3':
-    resolution: {integrity: sha512-PB3ldyrcnAicT35TWPs5IcwKD8S333HMaa2VVv4+wdvebJkjWuW/xESoB8IwRcog8HYVYamb1g/R31Qv5Bx03g==}
+  '@types/eslint-scope@3.7.7':
+    resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
 
   '@types/eslint@9.6.1':
     resolution: {integrity: sha512-FXx2pKgId/WyYo2jXw63kk7/+TY7u7AziEJxJAnSFzHlqTAS3Ync6SvgYAN/k4/PQpnnVuzoMuVnByKK2qp0ag==}
@@ -3075,9 +3093,6 @@ packages:
 
   '@types/yargs@15.0.20':
     resolution: {integrity: sha512-KIkX+/GgfFitlASYCGoSF+T4XRXhOubJLhkLVtSfsRTe9jWMmuM2g28zQ41BtPTG7TRBb2xHW+LCNVE9QR/vsg==}
-
-  '@types/yargs@16.0.11':
-    resolution: {integrity: sha512-sbtvk8wDN+JvEdabmZExoW/HNr1cB7D/j4LT08rMiuikfA7m/JNJg7ATQcgzs34zHnoScDkY0ZRSl29Fkmk36g==}
 
   '@types/yargs@17.0.35':
     resolution: {integrity: sha512-qUHkeCyQFxMXg79wQfTtfndEC+N9ZZg76HJftDJp+qH2tV7Gj4OJi7l+PiWwJ+pWtW8GwSmqsDj/oymhrTWXjg==}
@@ -3327,8 +3342,8 @@ packages:
     resolution: {integrity: sha512-Qts4KCLKG+waHc9C4m07weIY8qyeixoS0h6RnbsNVD6Fw+pEZGW3vTyObL3WXpE09Mq4Oi7/lBEyLmOiLtlYWQ==}
     engines: {node: '>=8'}
 
-  ansi-styles@5.0.0:
-    resolution: {integrity: sha512-6564t0m0fuQMnockqBv7wJxo9T5C2V9JpYXyNScfRDPVLusOQQhkpMGrFC17QbiolraQ1sMXX+Y5nJpjqozL4g==}
+  ansi-styles@5.2.0:
+    resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
     engines: {node: '>=10'}
 
   ansi-styles@6.1.0:
@@ -4089,8 +4104,8 @@ packages:
   decimal.js@10.6.0:
     resolution: {integrity: sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==}
 
-  decode-uri-component@0.4.1:
-    resolution: {integrity: sha512-+8VxcR21HhTy8nOt6jf20w0c9CADrw1O8d+VZ/YzzCt4bJ3uBjw+D1q2osAB8RnpwwaeYBxy0HyKQxD5JBMuuQ==}
+  decode-uri-component@0.5.0:
+    resolution: {integrity: sha512-1BiQVoK8C9gUbQU6NzAtO/tkz2qOFpEObMWpcFvhx4fYnj4Oc5yzaJN/LD36ihkVUdXyh5ZekzX+yM+ty/SrPg==}
     engines: {node: '>=14.16'}
 
   decompress-response@3.3.0:
@@ -4190,8 +4205,8 @@ packages:
     engines: {node: '>= 4.0.0'}
     hasBin: true
 
-  dingtalk-jsapi@2.15.2:
-    resolution: {integrity: sha512-ZN1zSPAb3BdHQviz7xO0j865QyKbOT+/YhDC9aOa89dPgVKrAO7RGzw5v1CxZPtOaWXSRDy1R07GJTeBXkUNHA==}
+  dingtalk-jsapi@2.15.6:
+    resolution: {integrity: sha512-804mFz2AFV/H9ysmo7dLqMjSGOQgREsgQIuep+Xg+yNQeQtnUOYntElEzlB798Sj/691e4mMKz9mtQ7v9qdjuA==}
 
   dns-packet@5.6.1:
     resolution: {integrity: sha512-l4gcSouhcgIKRvyy99RNVOgxXiicE+2jZoNmaNmZ6JXiGajBOJAesk1OBlJuM5k2c+eudGdLxDqXuPCKIj6kpw==}
@@ -4363,11 +4378,11 @@ packages:
   es-module-lexer@0.10.5:
     resolution: {integrity: sha512-+7IwY/kiGAacQfY+YBhKMvEmyAJnw5grTUgjG85Pe7vcUI/6b7pZjZG8nQ7+48YhzEAEqrEgD2dCz/JIK+AYvw==}
 
-  es-module-lexer@1.2.1:
-    resolution: {integrity: sha512-9978wrXM50Y4rTMmW5kXIC09ZdXQZqkE4mxhwkd8VbzsGkXGPgV4zWuqQJgCEzYngdo2dYDa0l8xhX4fkSwJSg==}
-
   es-module-lexer@1.5.4:
     resolution: {integrity: sha512-MVNK56NiMrOwitFB7cqDwq0CQutbw+0BvLshJSse0MUNU+y1FC3bUS/AQg7oUng+/wKrrki7JfmwtVHkVfPLlw==}
+
+  es-module-lexer@1.7.0:
+    resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
 
   es-object-atoms@1.1.2:
     resolution: {integrity: sha512-HWcBoN6NileqtSydK2FqHbS/LoDd2pqrnQHLyJzBj4kOp/ky2MWMN694xOfkK8/SnUsW2DH7EfyVlydKCsm1Zw==}
@@ -4825,6 +4840,7 @@ packages:
   glob@10.2.6:
     resolution: {integrity: sha512-U/rnDpXJGF414QQQZv5uVsabTVxMSwzS5CH0p3DRCIV6ownl4f7PzGnkGmvlum2wB+9RlJWJZ6ACU1INnBqiPA==}
     engines: {node: '>=16 || 14 >=14.17'}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   glob@10.5.0:
@@ -4834,6 +4850,10 @@ packages:
 
   glob@7.2.0:
     resolution: {integrity: sha512-lmLf6gtyrPq8tTjSmrO94wBeQbFR3HbLHbuyD69wuyQkImp2hWqMGB47OX65FBkPffO641IP9jWa1z4ivqG26Q==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+  glob@7.2.3:
+    resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
     deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   glob@9.3.5:
@@ -5785,10 +5805,6 @@ packages:
     resolution: {integrity: sha512-jYdeOMPy9vnxEqFRRo6ZvTZ8d9oPb+k18PKoYNYUe2stVEBPPwsln/qWzdbmaIvnhZ9v2P+CuecK+fpUfsV2mA==}
     engines: {node: '>= 0.6'}
 
-  mime-db@1.44.0:
-    resolution: {integrity: sha512-/NOTfLrsPBVeH7YtFPgsVWveuL+4SjjYxaQ1xtM1KMFj7HdxlBlxeyNLzhyJVx7r4rZGJAZ/6lkKCitSc/Nmpg==}
-    engines: {node: '>= 0.6'}
-
   mime-db@1.48.0:
     resolution: {integrity: sha512-FM3QwxV+TnZYQ2aRqhlKBMHxk10lTbMt3bBkMAp54ddrNeVSfcQYOOKuGuy3Ddrm38I04If834fOUSq1yzslJQ==}
     engines: {node: '>= 0.6'}
@@ -5811,10 +5827,6 @@ packages:
 
   mime-types@2.1.24:
     resolution: {integrity: sha512-WaFHS3MCl5fapm3oLxU4eYDw77IQM2ACcxQ9RIxfaC3ooc6PFuBMGZZsYpvoXS5D5QTWPieo1jjLdAm3TBP3cQ==}
-    engines: {node: '>= 0.6'}
-
-  mime-types@2.1.27:
-    resolution: {integrity: sha512-JIhqnCasI9yD+SsmkquHBxTSEuZdQX5BuQnS2Vc7puQQQ+8yiP5AY5uWhpdv4YL4VM5c6iliiYWPgJ/nJQLp7w==}
     engines: {node: '>= 0.6'}
 
   mime-types@2.1.31:
@@ -6220,8 +6232,8 @@ packages:
   path-to-regexp@3.3.0:
     resolution: {integrity: sha512-qyCH421YQPS2WFDxDjftfc1ZR5WKQzVzqsp4n9M2kQhVOo/ByahFoUNJfl58kOcEGfQ//7weFTDhm+ss8Ecxgw==}
 
-  path-to-regexp@6.2.0:
-    resolution: {integrity: sha512-f66KywYG6+43afgE/8j/GoiNyygk/bnoCbps++3ErRKsIYkGGupyv07R2Ok5m9i67Iqc+T2g1eAUGUPzWhYTyg==}
+  path-to-regexp@6.3.0:
+    resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
   path-type@5.0.0:
     resolution: {integrity: sha512-5HviZNaZcfqP95rwpv+1HDgUamezbqdSYTyzjTvwtJSnIH+3vnbmWsItli8OFEndS984VT55M3jduxZbX351gg==}
@@ -6287,9 +6299,19 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   playwright@1.49.1:
     resolution: {integrity: sha512-VYL8zLoNTBxVOrJBbDuRgDWa3i+mfQgDTrL8Ah9QXZ7ax4Dsj0MSq5bYgytRnDVVe+njoKnfsYkH3HzqVj5UZA==}
     engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
     hasBin: true
 
   possible-typed-array-names@1.1.0:
@@ -6571,8 +6593,8 @@ packages:
     resolution: {integrity: sha512-SWxz6MbupT3ZSlL0Po4WF/KujhQaVehijR2blyRDCzk9e45EaYMVhMBn49fnRuHxtkSpXTes1GxNpVmH86Bxfw==}
     engines: {node: '>= 10.14.2'}
 
-  pretty-format@27.0.2:
-    resolution: {integrity: sha512-mXKbbBPnYTG7Yra9qFBtqj+IXcsvxsvOBco3QHxtxTl+hHKq6QdzMZ+q0CtL4ORHZgwGImRr2XZUX2EWzORxig==}
+  pretty-format@27.5.1:
+    resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
 
   pretty-time@1.1.0:
@@ -6636,12 +6658,12 @@ packages:
     resolution: {integrity: sha512-mzR4sElr1bfCaPJe7m8ilJ6ZXdDaGoObcYR0ZHSsktM/Lt21MVHj5De30GQH2eiZ1qGRTO7LCAzQsUeXTNexWQ==}
     engines: {node: '>=0.6'}
 
-  query-string@4.1.0:
-    resolution: {integrity: sha512-BzP7hP/0tkc0+pMeVwV1KOagiHCI3F9msxfsnga3myFkLg66xyY+0LHwI7Z1BYzSZne/QjoHGU3TTcIzTpdE8g==}
+  query-string@4.3.4:
+    resolution: {integrity: sha512-O2XLNDBIg1DnTOa+2XrIwSiXEV8h2KImXUnjhhn2+UsvZ+Es2uyd5CCRTNQlDGbzUQOW3aYCBx9rVA6dzsiY7Q==}
     engines: {node: '>=0.10.0'}
 
-  query-string@9.4.1:
-    resolution: {integrity: sha512-lSyJeN3RuaG7DZGWThtYRhk96+kEyZ/+doZpERuWbjeFL+Ok3vEat/swU498rAI0NcVt5/RJp8UDuLz7FckxrA==}
+  query-string@9.5.0:
+    resolution: {integrity: sha512-YlJmwNyi0RGYjlxYcuDncMsxFU7YyutbuI7gTm8ySxIGBlwx5yiBCOD5ig9ZNoHkawk/1Dey0N5mEfcUybMVAA==}
     engines: {node: '>=18'}
 
   querystringify@2.2.0:
@@ -6908,8 +6930,8 @@ packages:
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
-  react-is@17.0.1:
-    resolution: {integrity: sha512-NAnt2iGDXohE5LI7uBnLnqvLQMtzhkiAOLXTmv+qnF9Ky7xAPcX8Up/xWIhxvLVGJvuLiNc4xQLtuqDRzb4fSA==}
+  react-is@17.0.2:
+    resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
   react-is@18.2.0:
     resolution: {integrity: sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==}
@@ -7401,9 +7423,9 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
-  source-map@0.7.3:
-    resolution: {integrity: sha512-CkCj6giN3S+n9qrYiBTX5gystlENnRW5jZeNLHpe6aue+SrHcG5VYwujhW9s4dY31mEGsxBDrHR6oI69fTXsaQ==}
-    engines: {node: '>= 8'}
+  source-map@0.7.6:
+    resolution: {integrity: sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ==}
+    engines: {node: '>= 12'}
 
   spawn-command@0.0.2:
     resolution: {integrity: sha512-zC8zGoGkmc8J9ndvml8Xksr1Amk9qBujgbF0JAIWO7kXr43w0h/0GJNM/Vustixu+YE8N/MTrQ7N31FvHUACxQ==}
@@ -7458,6 +7480,10 @@ packages:
 
   string-width@4.2.0:
     resolution: {integrity: sha512-zUz5JD+tgqtuDjMhwIg5uFVV3dtqZ9yQJlZVfq4I01/K5Paj5UHj7VyrQOJvzawSVlKpObApbfD0Ed6yJc+1eg==}
+    engines: {node: '>=8'}
+
+  string-width@4.2.3:
+    resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
 
   string-width@5.1.2:
@@ -7928,8 +7954,8 @@ packages:
     resolution: {integrity: sha512-lRfVq8fE8gz6QMBuDM6a+LO3IAzTi05H6gCVaUpir2E1Rwpo4ZUog45KpNXKC/Mn3Yb9UDuHumeFTo9iV/D9FQ==}
     engines: {node: '>=18'}
 
-  universal-router@9.2.0:
-    resolution: {integrity: sha512-V5PyhtX7JaUDF+EM8YvP4NlfPcqYfswMJV3J0LVPqBC70sabj6UAu3rPI7kSMNwRDZ+F6Wf0zcEmECcglHx2xg==}
+  universal-router@9.2.1:
+    resolution: {integrity: sha512-i3XDhyfg0znwCu2Ue1zwWIWgfed+XYDqlUYXgriGnS58tzO3RgKHe4KWtq9HLQOl/Tknnh0C6jEH0+FLTrrBiQ==}
 
   universalify@0.1.2:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
@@ -7988,11 +8014,12 @@ packages:
 
   uuid@3.3.2:
     resolution: {integrity: sha512-yXJmeNaw3DnnKAOKJE51sL/ZaYfWJRl1pK9dr19YFCu0ObS231AB1/LbqTKRAQ5kw8A90rA6fr4riOUpTZvQZA==}
-    deprecated: Please upgrade  to version 7 or higher.  Older versions may use Math.random() in certain circumstances, which is known to be problematic.  See https://v8.dev/blog/math-random for details.
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   validate-html-nesting@1.2.4:
@@ -9504,7 +9531,7 @@ snapshots:
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
-      string-width-cjs: string-width@4.2.0
+      string-width-cjs: string-width@4.2.3
       strip-ansi: 7.2.0
       strip-ansi-cjs: strip-ansi@6.0.1
       wrap-ansi: 8.1.0
@@ -9519,14 +9546,6 @@ snapshots:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 1.1.2
       '@types/yargs': 15.0.20
-      chalk: 4.0.0
-
-  '@jest/types@27.0.2':
-    dependencies:
-      '@types/istanbul-lib-coverage': 2.0.6
-      '@types/istanbul-reports': 3.0.4
-      '@types/node': 26.1.2
-      '@types/yargs': 16.0.11
       chalk: 4.0.0
 
   '@jest/types@29.6.3':
@@ -9724,6 +9743,10 @@ snapshots:
   '@playwright/test@1.49.1':
     dependencies:
       playwright: 1.49.1
+
+  '@playwright/test@1.62.1':
+    dependencies:
+      playwright: 1.62.1
 
   '@rc-component/async-validator@5.1.2':
     dependencies:
@@ -10377,24 +10400,48 @@ snapshots:
       '@tarojs/runtime': 4.0.9
       '@tarojs/shared': 4.0.9
       '@tarojs/taro': 4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25))
-      dingtalk-jsapi: 2.15.2
+      dingtalk-jsapi: 2.15.6
       history: 5.3.0
       mobile-detect: 1.4.5
-      query-string: 9.4.1
+      query-string: 9.5.0
       tslib: 2.8.1
-      universal-router: 9.2.0
+      universal-router: 9.2.1
 
   '@tarojs/router@4.0.9(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))':
     dependencies:
       '@tarojs/runtime': 4.0.9
       '@tarojs/shared': 4.0.9
       '@tarojs/taro': 4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25))
-      dingtalk-jsapi: 2.15.2
+      dingtalk-jsapi: 2.15.6
       history: 5.3.0
       mobile-detect: 1.4.5
-      query-string: 9.4.1
+      query-string: 9.5.0
       tslib: 2.8.1
-      universal-router: 9.2.0
+      universal-router: 9.2.1
+
+  '@tarojs/router@4.2.1(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))':
+    dependencies:
+      '@tarojs/runtime': 4.0.9
+      '@tarojs/shared': 4.0.9
+      '@tarojs/taro': 4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25))
+      dingtalk-jsapi: 2.15.6
+      history: 5.3.0
+      mobile-detect: 1.4.5
+      query-string: 9.5.0
+      tslib: 2.8.1
+      universal-router: 9.2.1
+
+  '@tarojs/router@4.2.1(@tarojs/runtime@4.0.9)(@tarojs/shared@4.0.9)(@tarojs/taro@4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))':
+    dependencies:
+      '@tarojs/runtime': 4.0.9
+      '@tarojs/shared': 4.0.9
+      '@tarojs/taro': 4.0.9(@tarojs/components@4.0.9(@tarojs/helper@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(react@19.0.0)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(@tarojs/helper@4.0.9)(@tarojs/shared@4.0.9)(@types/react@19.0.7)(html-webpack-plugin@5.6.8(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(postcss@8.5.25)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25)))(webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25))
+      dingtalk-jsapi: 2.15.6
+      history: 5.3.0
+      mobile-detect: 1.4.5
+      query-string: 9.5.0
+      tslib: 2.8.1
+      universal-router: 9.2.1
 
   '@tarojs/runner-utils@4.0.9':
     dependencies:
@@ -10441,7 +10488,7 @@ snapshots:
       jsonp-retry: 1.0.3
       lodash-es: 4.17.21
       platform: 1.3.6
-      query-string: 9.4.1
+      query-string: 9.5.0
       tslib: 2.8.1
       whatwg-fetch: 3.6.20
     transitivePeerDependencies:
@@ -10461,7 +10508,7 @@ snapshots:
       jsonp-retry: 1.0.3
       lodash-es: 4.17.21
       platform: 1.3.6
-      query-string: 9.4.1
+      query-string: 9.5.0
       tslib: 2.8.1
       whatwg-fetch: 3.6.20
     transitivePeerDependencies:
@@ -10712,7 +10759,7 @@ snapshots:
       dom-accessibility-api: 0.5.16
       lz-string: 1.5.0
       picocolors: 1.1.1
-      pretty-format: 27.0.2
+      pretty-format: 27.5.1
 
   '@testing-library/jest-dom@6.6.3':
     dependencies:
@@ -10785,7 +10832,7 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
 
-  '@types/eslint-scope@3.7.3':
+  '@types/eslint-scope@3.7.7':
     dependencies:
       '@types/eslint': 9.6.1
       '@types/estree': 1.0.9
@@ -10931,10 +10978,6 @@ snapshots:
   '@types/yargs-parser@21.0.3': {}
 
   '@types/yargs@15.0.20':
-    dependencies:
-      '@types/yargs-parser': 21.0.3
-
-  '@types/yargs@16.0.11':
     dependencies:
       '@types/yargs-parser': 21.0.3
 
@@ -11272,7 +11315,7 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
 
-  ansi-styles@5.0.0: {}
+  ansi-styles@5.2.0: {}
 
   ansi-styles@6.1.0: {}
 
@@ -12255,7 +12298,7 @@ snapshots:
 
   decimal.js@10.6.0: {}
 
-  decode-uri-component@0.4.1: {}
+  decode-uri-component@0.5.0: {}
 
   decompress-response@3.3.0:
     dependencies:
@@ -12358,7 +12401,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  dingtalk-jsapi@2.15.2:
+  dingtalk-jsapi@2.15.6:
     dependencies:
       promise-polyfill: 7.1.2
 
@@ -12615,9 +12658,9 @@ snapshots:
 
   es-module-lexer@0.10.5: {}
 
-  es-module-lexer@1.2.1: {}
-
   es-module-lexer@1.5.4: {}
+
+  es-module-lexer@1.7.0: {}
 
   es-object-atoms@1.1.2:
     dependencies:
@@ -13326,6 +13369,15 @@ snapshots:
       once: 1.4.0
       path-is-absolute: 1.0.1
 
+  glob@7.2.3:
+    dependencies:
+      fs.realpath: 1.0.0
+      inflight: 1.0.6
+      inherits: 2.0.4
+      minimatch: 3.1.5
+      once: 1.4.0
+      path-is-absolute: 1.0.1
+
   glob@9.3.5:
     dependencies:
       fs.realpath: 1.0.0
@@ -13355,7 +13407,7 @@ snapshots:
 
   globs@0.1.4:
     dependencies:
-      glob: 7.2.0
+      glob: 7.2.3
 
   gopd@1.2.0: {}
 
@@ -14333,8 +14385,6 @@ snapshots:
 
   mime-db@1.40.0: {}
 
-  mime-db@1.44.0: {}
-
   mime-db@1.48.0: {}
 
   mime-db@1.51.0: {}
@@ -14351,10 +14401,6 @@ snapshots:
   mime-types@2.1.24:
     dependencies:
       mime-db: 1.40.0
-
-  mime-types@2.1.27:
-    dependencies:
-      mime-db: 1.44.0
 
   mime-types@2.1.31:
     dependencies:
@@ -14420,7 +14466,7 @@ snapshots:
 
   miniprogram-compiler@0.2.3:
     dependencies:
-      glob: 7.2.0
+      glob: 7.2.3
       unescape-js: 1.1.4
 
   miniprogram-exparser@2.29.1: {}
@@ -14503,7 +14549,7 @@ snapshots:
     dependencies:
       object-assign: 4.1.1
       prepend-http: 1.0.4
-      query-string: 4.1.0
+      query-string: 4.3.4
       sort-keys: 1.0.0
 
   normalize-url@3.1.0: {}
@@ -14771,7 +14817,7 @@ snapshots:
 
   path-to-regexp@3.3.0: {}
 
-  path-to-regexp@6.2.0: {}
+  path-to-regexp@6.3.0: {}
 
   path-type@5.0.0: {}
 
@@ -14812,9 +14858,17 @@ snapshots:
 
   playwright-core@1.49.1: {}
 
+  playwright-core@1.62.1: {}
+
   playwright@1.49.1:
     dependencies:
       playwright-core: 1.49.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
     optionalDependencies:
       fsevents: 2.3.2
 
@@ -15083,12 +15137,11 @@ snapshots:
       ansi-styles: 4.0.0
       react-is: 16.12.0
 
-  pretty-format@27.0.2:
+  pretty-format@27.5.1:
     dependencies:
-      '@jest/types': 27.0.2
       ansi-regex: 5.0.1
-      ansi-styles: 5.0.0
-      react-is: 17.0.1
+      ansi-styles: 5.2.0
+      react-is: 17.0.2
 
   pretty-time@1.1.0: {}
 
@@ -15157,13 +15210,14 @@ snapshots:
   qs@6.5.5:
     optional: true
 
-  query-string@4.1.0:
+  query-string@4.3.4:
     dependencies:
+      object-assign: 4.1.1
       strict-uri-encode: 1.1.0
 
-  query-string@9.4.1:
+  query-string@9.5.0:
     dependencies:
-      decode-uri-component: 0.4.1
+      decode-uri-component: 0.5.0
       filter-obj: 5.1.0
       split-on-first: 3.0.0
 
@@ -15521,7 +15575,7 @@ snapshots:
 
   react-is@16.13.1: {}
 
-  react-is@17.0.1: {}
+  react-is@17.0.2: {}
 
   react-is@18.2.0: {}
 
@@ -16122,7 +16176,7 @@ snapshots:
 
   source-map@0.6.1: {}
 
-  source-map@0.7.3: {}
+  source-map@0.7.6: {}
 
   spawn-command@0.0.2: {}
 
@@ -16192,6 +16246,12 @@ snapshots:
       emoji-regex: 8.0.0
       is-fullwidth-code-point: 3.0.0
       strip-ansi: 6.0.0
+
+  string-width@4.2.3:
+    dependencies:
+      emoji-regex: 8.0.0
+      is-fullwidth-code-point: 3.0.0
+      strip-ansi: 6.0.1
 
   string-width@5.1.2:
     dependencies:
@@ -16332,7 +16392,7 @@ snapshots:
       debug: 4.4.3
       glob: 10.5.0
       sax: 1.4.4
-      source-map: 0.7.3
+      source-map: 0.7.6
     transitivePeerDependencies:
       - supports-color
 
@@ -16652,9 +16712,9 @@ snapshots:
 
   unicorn-magic@0.1.0: {}
 
-  universal-router@9.2.0:
+  universal-router@9.2.1:
     dependencies:
-      path-to-regexp: 6.2.0
+      path-to-regexp: 6.3.0
 
   universalify@0.1.2: {}
 
@@ -17027,7 +17087,7 @@ snapshots:
 
   webpack@5.91.0(@swc/core@1.3.96)(lightningcss@1.33.0)(postcss@8.5.25):
     dependencies:
-      '@types/eslint-scope': 3.7.3
+      '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.9
       '@webassemblyjs/ast': 1.14.1
       '@webassemblyjs/wasm-edit': 1.14.1
@@ -17037,14 +17097,14 @@ snapshots:
       browserslist: 4.28.7
       chrome-trace-event: 1.0.4
       enhanced-resolve: 5.24.5
-      es-module-lexer: 1.2.1
+      es-module-lexer: 1.7.0
       eslint-scope: 5.1.1
       events: 3.3.0
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
       json-parse-even-better-errors: 2.3.1
       loader-runner: 4.3.2
-      mime-types: 2.1.27
+      mime-types: 2.1.35
       neo-async: 2.6.2
       schema-utils: 3.3.0
       tapable: 2.3.3
@@ -17067,7 +17127,7 @@ snapshots:
 
   webpack@5.91.0(lightningcss@1.33.0)(postcss@8.5.25):
     dependencies:
-      '@types/eslint-scope': 3.7.3
+      '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.9
       '@webassemblyjs/ast': 1.14.1
       '@webassemblyjs/wasm-edit': 1.14.1
@@ -17077,14 +17137,14 @@ snapshots:
       browserslist: 4.28.7
       chrome-trace-event: 1.0.4
       enhanced-resolve: 5.24.5
-      es-module-lexer: 1.2.1
+      es-module-lexer: 1.7.0
       eslint-scope: 5.1.1
       events: 3.3.0
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
       json-parse-even-better-errors: 2.3.1
       loader-runner: 4.3.2
-      mime-types: 2.1.27
+      mime-types: 2.1.35
       neo-async: 2.6.2
       schema-utils: 3.3.0
       tapable: 2.3.3
