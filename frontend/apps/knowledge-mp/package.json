@@ -21,7 +21,7 @@
     "@tarojs/helper": "4.0.9",
     "@tarojs/plugin-framework-react": "4.0.9",
     "@tarojs/plugin-platform-weapp": "4.0.9",
-    "@tarojs/react": "4.0.9",
+    "@tarojs/react": "4.2.1",
     "@tarojs/runtime": "4.0.9",
     "@tarojs/shared": "4.0.9",
     "@tarojs/taro": "4.0.9",
