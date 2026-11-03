@@ -13,7 +13,7 @@
   <properties>
     <java.version>21</java.version>
     <dubbo.version>3.3.6</dubbo.version>
-    <nacos.client.version>3.1.1</nacos.client.version>
+    <nacos.client.version>3.2.3</nacos.client.version>
     <!-- D-115: JIB build port (portal-bff listens on 8090). -->
     <jib.container.port>8090</jib.container.port>
   </properties>
