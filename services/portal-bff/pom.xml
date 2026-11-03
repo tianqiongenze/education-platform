@@ -142,7 +142,7 @@
     <dependency>
       <groupId>net.logstash.logback</groupId>
       <artifactId>logstash-logback-encoder</artifactId>
-      <version>8.0</version>
+      <version>9.0</version>
     </dependency>
     <!-- D-006 (Iron Law 1): Redis-backed session state for CellRouter.
          RouteContext misroute counter + WriteHoldRegistry must live in Redis so
