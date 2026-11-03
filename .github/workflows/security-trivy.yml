@@ -14,7 +14,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run Trivy on full repository
         uses: aquasecurity/trivy-action@master
@@ -45,7 +45,7 @@ jobs:
   trivy-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run Trivy on frontend (npm)
         uses: aquasecurity/trivy-action@master
         with:
@@ -58,7 +58,7 @@ jobs:
   trivy-services:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run Trivy on services (Maven + Poetry)
         uses: aquasecurity/trivy-action@master
         with:

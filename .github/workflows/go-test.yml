@@ -22,7 +22,7 @@ jobs:
           - services/ws-gateway
           - services/ep-common-go
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -63,7 +63,7 @@ jobs:
     needs: test
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Go
         uses: actions/setup-go@v5
         with:

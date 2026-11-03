@@ -17,7 +17,7 @@ jobs:
       pull-requests: write
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:

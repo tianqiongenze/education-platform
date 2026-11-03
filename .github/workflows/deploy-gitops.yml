@@ -55,7 +55,7 @@ jobs:
           else
             echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITOPS_PAT }}
@@ -117,7 +117,7 @@ jobs:
     if: needs.update-manifests.result == 'success' && needs.update-manifests.outputs.pushed == 'true'
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITOPS_PAT }}
       - name: Authenticate to cluster
@@ -223,7 +223,7 @@ jobs:
     if: failure() && needs.update-manifests.outputs.pushed == 'true'
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITOPS_PAT }}
